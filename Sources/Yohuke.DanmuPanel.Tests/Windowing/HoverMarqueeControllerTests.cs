@@ -63,4 +63,30 @@ public sealed class HoverMarqueeControllerTests
         Assert.Equal(0, controller.MaxOffset);
         Assert.False(controller.CanScroll);
     }
+
+    /// <summary>自动循环在首尾停留，完整显示末尾后从起点开始下一轮。</summary>
+    [Fact]
+    public void RepeatingAdvanceWaitsAtBothEndsBeforeStartingNextCycle()
+    {
+        var controller = new HoverMarqueeController(START_DELAY, SCROLL_SPEED);
+        controller.UpdateViewport(160, 100);
+
+        Assert.Equal(0, controller.Advance(START_DELAY, repeat: true));
+        Assert.Equal(60, controller.Advance(TimeSpan.FromSeconds(1), repeat: true), 3);
+        Assert.Equal(60, controller.Advance(TimeSpan.FromMilliseconds(900), repeat: true), 3);
+        Assert.Equal(0, controller.Advance(TimeSpan.FromMilliseconds(100), repeat: true), 3);
+        Assert.Equal(0, controller.Advance(START_DELAY, repeat: true), 3);
+        Assert.Equal(30, controller.Advance(TimeSpan.FromMilliseconds(500), repeat: true), 3);
+    }
+
+    /// <summary>单次经过多个循环的时间与逐段推进得到一致位置。</summary>
+    [Fact]
+    public void RepeatingAdvancePreservesRemainderAcrossMultipleCycles()
+    {
+        var controller = new HoverMarqueeController(START_DELAY, SCROLL_SPEED);
+        controller.UpdateViewport(160, 100);
+
+        Assert.Equal(30, controller.Advance(TimeSpan.FromMilliseconds(5550), repeat: true), 3);
+        Assert.Equal(60, controller.Advance(TimeSpan.FromMilliseconds(500), repeat: true), 3);
+    }
 }

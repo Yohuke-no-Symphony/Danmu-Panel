@@ -26,6 +26,9 @@ public sealed class PanelSettings
     /// <summary>紧凑显示时 SC 正文是否自动换行。</summary>
     public bool CompactSuperChatWrap { get; set; } = true;
 
+    /// <summary>自动循环滚动超出单行宽度的消息正文与译文，默认关闭。</summary>
+    public bool AutoScrollLongMessages { get; set; }
+
     public string? DefaultAccountId { get; set; }
     public string? SelectedWorkspaceId { get; set; }
 }

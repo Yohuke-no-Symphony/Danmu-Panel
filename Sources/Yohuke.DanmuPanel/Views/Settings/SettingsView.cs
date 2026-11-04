@@ -41,6 +41,7 @@ public sealed class SettingsView : UserControl
     private readonly CheckBox compactDisplay;
     private readonly CheckBox compactDanmuWrap;
     private readonly CheckBox compactSuperChatWrap;
+    private readonly CheckBox autoScrollLongMessages;
     private readonly CheckBox windowMenuOnMac;
     private readonly ObservableCollection<GlossaryEntry> glossary;
     private readonly DataGrid glossaryGrid;
@@ -100,8 +101,11 @@ public sealed class SettingsView : UserControl
         compactDanmuWrap.Name = "CompactDanmuWrapCheckBox";
         compactSuperChatWrap = Check("Settings.CompactSuperChatWrap", settings.CompactSuperChatWrap);
         compactSuperChatWrap.Name = "CompactSuperChatWrapCheckBox";
+        autoScrollLongMessages = Check("Settings.AutoScrollLongMessages", settings.AutoScrollLongMessages);
+        autoScrollLongMessages.Name = "AutoScrollLongMessagesCheckBox";
         compactDanmuWrap.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
         compactSuperChatWrap.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
+        autoScrollLongMessages.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
         glossary = new(translation.Glossary);
         glossaryGrid = new()
         {
@@ -121,7 +125,11 @@ public sealed class SettingsView : UserControl
         AddSection("Settings.Appearance", "Settings.AppearanceDescription", BuildAppearance());
         AddSection("Settings.Reading", "Settings.ReadingDescription", Stack(
             Card("Settings.MessageDisplay", compactDisplay,
-                new StackPanel { Margin = new Thickness(24, 0, 0, 0), Spacing = 8, Children = { compactDanmuWrap, compactSuperChatWrap } }),
+                new StackPanel
+                {
+                    Margin = new Thickness(24, 0, 0, 0), Spacing = 8,
+                    Children = { compactDanmuWrap, compactSuperChatWrap, autoScrollLongMessages, Help("Settings.AutoScrollLongMessagesHelp") }
+                }),
             Card("Settings.Reading", Row("Settings.GiftMinimum", giftMinimum), Row("Settings.ComboPolicy", giftResetPolicy)),
             Card("Settings.UserPinyin", userPinyin, giftPinyin, Help("Settings.PinyinHelp"))));
         AddSection("Settings.Translation", "Settings.TranslationDescription", BuildTranslation());
@@ -189,6 +197,7 @@ public sealed class SettingsView : UserControl
             settings.CompactDanmuDisplay = compactDisplay.IsChecked == true;
             settings.CompactDanmuWrap = compactDanmuWrap.IsChecked == true;
             settings.CompactSuperChatWrap = compactSuperChatWrap.IsChecked == true;
+            settings.AutoScrollLongMessages = autoScrollLongMessages.IsChecked == true;
             if (accountsView is AccountSettingsView accountSettings)
             {
                 await accountSettings.SaveEditsAsync();

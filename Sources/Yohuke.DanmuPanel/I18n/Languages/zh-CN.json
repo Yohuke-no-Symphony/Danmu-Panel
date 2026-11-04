@@ -151,6 +151,8 @@
     "Settings.CompactDisplay": "紧凑显示",
     "Settings.CompactMessageWrap": "弹幕、礼物与上舰自动换行",
     "Settings.CompactSuperChatWrap": "SC 自动换行",
+    "Settings.AutoScrollLongMessages": "超长弹幕自动滚动（含译文）",
+    "Settings.AutoScrollLongMessagesHelp": "单行超长内容滚动到末尾后循环；换行内容不滚动。关闭后仍可悬停滚动。",
     "Settings.CustomProvider": "自定义（Custom）",
     "Settings.Dark": "深色",
     "Settings.Data": "数据管理",

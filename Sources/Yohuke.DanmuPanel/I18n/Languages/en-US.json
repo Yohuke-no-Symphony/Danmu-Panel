@@ -151,6 +151,8 @@
     "Settings.CompactDisplay": "Compact display",
     "Settings.CompactMessageWrap": "Wrap danmaku, gifts and memberships",
     "Settings.CompactSuperChatWrap": "Wrap Super Chats",
+    "Settings.AutoScrollLongMessages": "Auto-scroll long messages (including translations)",
+    "Settings.AutoScrollLongMessagesHelp": "Long single-line text scrolls to the end and repeats. Wrapped text stays still. Hover scrolling remains available when disabled.",
     "Settings.CustomProvider": "Custom",
     "Settings.Dark": "Dark",
     "Settings.Data": "Data",

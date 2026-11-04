@@ -192,6 +192,78 @@ public sealed class MessageFeedCompactTests
         }
     }
 
+    /// <summary>自动滚动同时作用于原文和译文，显示模式、换行与设置更新会正确启停。</summary>
+    [AvaloniaTheory]
+    [InlineData(MessageKind.Danmu)]
+    [InlineData(MessageKind.SuperChat)]
+    public async Task AutoScrollIncludesTranslationAndRespectsWrapping(MessageKind kind)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var runtime = CreateRuntime(directory);
+        var settings = runtime.Configuration.Settings;
+        settings.CompactDanmuDisplay = true;
+        settings.CompactDanmuWrap = false;
+        settings.CompactSuperChatWrap = false;
+        settings.Translation.DisplayMode = TranslationDisplayMode.Bilingual;
+        var message = CreateMessage(kind, longText: true);
+        var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation);
+        await runtime.Messages.AppendAsync(message, settings.Reading, fingerprint);
+        Assert.True(await runtime.Messages.ApplyTranslationAsync(message.Id, message.Generation, fingerprint,
+            string.Concat(Enumerable.Repeat("Long translated content. ", 12))));
+        var view = new MessageFeedView(runtime, kind, exception => throw exception);
+        var window = new Window { Width = 500, Height = 700, Content = view };
+        try
+        {
+            await view.Model.SelectRoomAsync(new() { Id = "tab", RoomId = "123" });
+            window.Show();
+            window.MouseMove(new(1, 1));
+            Pump(window);
+            var item = Assert.Single(view.Model.Items);
+            var marquees = VisibleBodyContents(FindRow(view, message.Id)).Cast<HoverMarqueeTextBlock>().ToArray();
+            Assert.Equal(2, marquees.Length);
+            var viewers = marquees.Select(marquee => Assert.Single(marquee.GetVisualDescendants().OfType<ScrollViewer>())).ToArray();
+            Assert.All(marquees, marquee => Assert.False(marquee.AutoScroll));
+
+            settings.AutoScrollLongMessages = true;
+            await view.Model.RefreshAsync();
+            await WaitUntilAsync(() => viewers.All(viewer => viewer.Offset.X > 0), window);
+            Assert.Same(item, Assert.Single(view.Model.Items));
+            Assert.All(marquees, marquee => Assert.True(marquee.AutoScroll));
+
+            settings.Translation.DisplayMode = TranslationDisplayMode.TranslationOnly;
+            await view.Model.RefreshAsync();
+            await WaitUntilAsync(() => viewers[0].Offset.X == 0, window);
+            Assert.False(marquees[0].IsEffectivelyVisible);
+            Assert.True(viewers[1].Offset.X > 0);
+
+            settings.Translation.DisplayMode = TranslationDisplayMode.Bilingual;
+            settings.CompactDanmuWrap = true;
+            settings.CompactSuperChatWrap = true;
+            await view.Model.RefreshAsync();
+            await WaitUntilAsync(() => viewers.All(viewer => viewer.Offset.X == 0), window);
+            Assert.All(marquees, marquee => Assert.False(marquee.IsEffectivelyVisible));
+            Assert.All(VisibleBodyContents(FindRow(view, message.Id)), content => Assert.IsAssignableFrom<TextBlock>(content));
+
+            settings.CompactDanmuWrap = false;
+            settings.CompactSuperChatWrap = false;
+            await view.Model.RefreshAsync();
+            await WaitUntilAsync(() => viewers.All(viewer => viewer.Offset.X > 0), window);
+
+            settings.AutoScrollLongMessages = false;
+            await view.Model.RefreshAsync();
+            Pump(window);
+            await Task.Delay(450);
+            Pump(window);
+            Assert.All(viewers, viewer => Assert.Equal(0, viewer.Offset.X));
+            Assert.Same(item, Assert.Single(view.Model.Items));
+        }
+        finally
+        {
+            view.Model.Dispose();
+            window.Close();
+        }
+    }
+
     /// <summary>明暗主题的置顶区与普通区分别从首行重新计算交替底色。</summary>
     [AvaloniaFact]
     public async Task DanmuAlternatingBackgroundFollowsThemeAndCurrentOrderAfterPinning()
@@ -336,6 +408,16 @@ public sealed class MessageFeedCompactTests
     private static Color BackgroundColor(Button row)
     {
         return Assert.IsAssignableFrom<ISolidColorBrush>(row.Background).Color;
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, Window window)
+    {
+        for (var attempt = 0; attempt < 100 && !condition(); attempt++)
+        {
+            await Task.Delay(20);
+            Pump(window);
+        }
+        Assert.True(condition());
     }
 
     private static void Pump(Window window)

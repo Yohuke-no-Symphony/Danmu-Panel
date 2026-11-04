@@ -102,6 +102,186 @@ public sealed class HoverMarqueeTextBlockTests
         }
     }
 
+    /// <summary>自动开关无需悬停即可启动，关闭后复位并保留原有悬停阅读。</summary>
+    [AvaloniaFact]
+    public async Task AutoScrollToggleStartsWithoutHoverAndRestoresHoverBehavior()
+    {
+        var marquee = new HoverMarqueeTextBlock
+        {
+            Text = new string('长', 80), Height = 32, Margin = new(10),
+            VerticalAlignment = VerticalAlignment.Top
+        };
+        var window = new Window { Width = 220, Height = 160, Content = marquee };
+        try
+        {
+            window.Show();
+            window.MouseMove(new(210, 150));
+            Pump(window);
+            var viewer = Assert.Single(marquee.GetVisualDescendants().OfType<ScrollViewer>());
+            await Task.Delay(450);
+            Pump(window);
+            Assert.Equal(0, viewer.Offset.X);
+
+            marquee.AutoScroll = true;
+            await WaitUntilAsync(() => viewer.Offset.X > 0, window);
+            var previousOffset = viewer.Offset.X;
+            window.MouseMove(marquee.TranslatePoint(new Point(20, 12), window)!.Value);
+            window.MouseMove(new(210, 150));
+            Pump(window);
+            Assert.True(viewer.Offset.X >= previousOffset);
+
+            marquee.AutoScroll = false;
+            Pump(window);
+            Assert.Equal(0, viewer.Offset.X);
+            await Task.Delay(450);
+            Pump(window);
+            Assert.Equal(0, viewer.Offset.X);
+
+            window.MouseMove(marquee.TranslatePoint(new Point(20, 12), window)!.Value);
+            await WaitUntilAsync(() => viewer.Offset.X > 0, window);
+            window.MouseMove(new(210, 150));
+            Pump(window);
+            Assert.Equal(0, viewer.Offset.X);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>隐藏、移除或滚出视口会停止自动滚动，恢复可见后重新开始。</summary>
+    [AvaloniaTheory]
+    [InlineData("hidden")]
+    [InlineData("ancestor")]
+    [InlineData("detach")]
+    [InlineData("offscreen")]
+    public async Task AutoScrollStopsOutsideVisibleViewportAndRestartsWhenShown(string change)
+    {
+        var marquee = new HoverMarqueeTextBlock
+        {
+            Text = new string('长', 80), AutoScroll = true, Height = 32, Margin = new(10)
+        };
+        var parent = new Border { Child = marquee };
+        var outerViewer = new ScrollViewer
+        {
+            Content = new StackPanel { Children = { parent, new Border { Height = 400 } } }
+        };
+        var window = new Window { Width = 220, Height = 160, Content = outerViewer };
+        try
+        {
+            window.Show();
+            Pump(window);
+            var viewer = Assert.Single(marquee.GetVisualDescendants().OfType<ScrollViewer>());
+            await WaitUntilAsync(() => viewer.Offset.X > 0, window);
+            switch (change)
+            {
+                case "hidden":
+                    marquee.IsVisible = false;
+                    break;
+                case "ancestor":
+                    parent.IsVisible = false;
+                    break;
+                case "detach":
+                    parent.Child = null;
+                    break;
+                case "offscreen":
+                    outerViewer.Offset = new(0, 250);
+                    break;
+            }
+            await WaitUntilAsync(() => viewer.Offset.X == 0, window);
+            await Task.Delay(450);
+            Pump(window);
+            Assert.Equal(0, viewer.Offset.X);
+
+            switch (change)
+            {
+                case "hidden":
+                    marquee.IsVisible = true;
+                    break;
+                case "ancestor":
+                    parent.IsVisible = true;
+                    break;
+                case "detach":
+                    parent.Child = marquee;
+                    break;
+                case "offscreen":
+                    outerViewer.Offset = default;
+                    break;
+            }
+            await WaitUntilAsync(() => viewer.Offset.X > 0, window);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>等宽的新内容也从头重新滚动，短文本停止且恢复长文本后继续。</summary>
+    [AvaloniaFact]
+    public async Task AutoScrollRestartsForEqualWidthReplacementAndStopsForShortText()
+    {
+        var marquee = new HoverMarqueeTextBlock { Text = new string('甲', 80), AutoScroll = true };
+        var window = new Window { Width = 220, Height = 100, Content = marquee };
+        try
+        {
+            window.Show();
+            Pump(window);
+            var viewer = Assert.Single(marquee.GetVisualDescendants().OfType<ScrollViewer>());
+            await WaitUntilAsync(() => viewer.Offset.X > 0, window);
+            var previousExtent = viewer.Extent.Width;
+
+            marquee.Text = new string('乙', 80);
+            Pump(window);
+            Assert.Equal(previousExtent, viewer.Extent.Width, 3);
+            Assert.Equal(0, viewer.Offset.X);
+            await WaitUntilAsync(() => viewer.Offset.X > 0, window);
+
+            marquee.Text = "短";
+            Pump(window);
+            Assert.Equal(0, viewer.Offset.X);
+            await Task.Delay(450);
+            Pump(window);
+            Assert.Equal(0, viewer.Offset.X);
+
+            marquee.Text = new string('长', 80);
+            await WaitUntilAsync(() => viewer.Offset.X > 0, window);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>尺寸变化后只在文字溢出时滚动，无需再次移动鼠标。</summary>
+    [AvaloniaFact]
+    public async Task AutoScrollStopsWhenTextFitsAndRestartsAfterViewportShrinks()
+    {
+        var marquee = new HoverMarqueeTextBlock { Text = new string('宽', 20), AutoScroll = true };
+        var window = new Window { Width = 160, Height = 100, Content = marquee };
+        try
+        {
+            window.Show();
+            Pump(window);
+            var viewer = Assert.Single(marquee.GetVisualDescendants().OfType<ScrollViewer>());
+            await WaitUntilAsync(() => viewer.Offset.X > 0, window);
+
+            window.Width = 1000;
+            Pump(window);
+            Assert.True(viewer.Extent.Width <= viewer.Viewport.Width);
+            Assert.Equal(0, viewer.Offset.X);
+            await Task.Delay(450);
+            Pump(window);
+            Assert.Equal(0, viewer.Offset.X);
+
+            window.Width = 160;
+            await WaitUntilAsync(() => viewer.Offset.X > 0, window);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     private static async Task WaitUntilAsync(Func<bool> condition, Window window)
     {
         for (var attempt = 0; attempt < 100 && !condition(); attempt++)

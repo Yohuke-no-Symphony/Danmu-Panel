@@ -238,6 +238,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions
         var text = new HoverMarqueeTextBlock();
         text.Classes.Add("compactFeedContent");
         text.Bind(HoverMarqueeTextBlock.TextProperty, new Binding(property));
+        text.Bind(HoverMarqueeTextBlock.AutoScrollProperty, new Binding(nameof(MessageItemViewModel.AutoScrollLongMessages)));
         return text;
     }
 

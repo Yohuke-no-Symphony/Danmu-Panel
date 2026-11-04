@@ -54,6 +54,7 @@ public sealed class MessageItemViewModel : ObservableObject
     public bool HasTranslation => Translation.Length > 0;
     public bool ShowOriginal => !HasTranslation || settings.Translation.DisplayMode == TranslationDisplayMode.Bilingual;
     public bool HasMedal => Medal.Length > 0;
+    public bool AutoScrollLongMessages => settings.AutoScrollLongMessages;
     public Avalonia.Media.IBrush BorderBrush => Avalonia.Media.Brush.Parse(Record.Kind switch
     {
         MessageKind.Guard => Record.GuardLevel switch { 1 => "#E9A23B", 2 => "#A46EE8", _ => "#4F8FDD" },

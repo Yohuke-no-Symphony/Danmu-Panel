@@ -2,9 +2,10 @@ namespace Yohuke.DanmuPanel.Views.Components;
 
 internal sealed class HoverMarqueeController
 {
+    private static readonly TimeSpan REPEAT_DELAY = TimeSpan.FromSeconds(1);
     private readonly TimeSpan startDelay;
     private readonly double scrollSpeed;
-    private TimeSpan hoverDuration;
+    private TimeSpan animationDuration;
 
     internal HoverMarqueeController(TimeSpan startDelay, double scrollSpeed)
     {
@@ -32,48 +33,46 @@ internal sealed class HoverMarqueeController
 
     internal void UpdateViewport(double extentWidth, double viewportWidth)
     {
-        if (!double.IsFinite(extentWidth) || !double.IsFinite(viewportWidth))
+        if (!double.IsFinite(extentWidth) || !double.IsFinite(viewportWidth) || viewportWidth <= 0)
         {
-            MaxOffset = 0;
-            Offset = 0;
+            Reset();
             return;
         }
 
-        MaxOffset = Math.Max(0, extentWidth - viewportWidth);
+        var maxOffset = Math.Max(0, extentWidth - viewportWidth);
+        if (MaxOffset == maxOffset)
+        {
+            return;
+        }
+
+        MaxOffset = maxOffset;
         Offset = Math.Min(Offset, MaxOffset);
+        animationDuration = Offset > 0 ? startDelay + TimeSpan.FromSeconds(Offset / scrollSpeed) : TimeSpan.Zero;
     }
 
-    internal double Advance(TimeSpan elapsed)
+    internal double Advance(TimeSpan elapsed, bool repeat = false)
     {
-        if (elapsed <= TimeSpan.Zero)
+        if (elapsed <= TimeSpan.Zero || !CanScroll || !repeat && IsComplete)
         {
             return Offset;
         }
 
-        var previousHoverDuration = hoverDuration;
-        hoverDuration += elapsed;
-
-        if (!CanScroll || IsComplete)
+        animationDuration += elapsed;
+        var seconds = animationDuration.TotalSeconds;
+        if (repeat)
         {
-            return Offset;
+            var cycleSeconds = startDelay.TotalSeconds + MaxOffset / scrollSpeed + REPEAT_DELAY.TotalSeconds;
+            seconds %= cycleSeconds;
         }
 
-        var previousScrollDuration = Max(TimeSpan.Zero, previousHoverDuration - startDelay);
-        var currentScrollDuration = Max(TimeSpan.Zero, hoverDuration - startDelay);
-        var scrollDuration = currentScrollDuration - previousScrollDuration;
-        Offset = Math.Min(MaxOffset, Offset + scrollDuration.TotalSeconds * scrollSpeed);
+        Offset = Math.Clamp((seconds - startDelay.TotalSeconds) * scrollSpeed, 0, MaxOffset);
         return Offset;
     }
 
     internal void Reset()
     {
-        hoverDuration = TimeSpan.Zero;
+        animationDuration = TimeSpan.Zero;
         Offset = 0;
         MaxOffset = 0;
-    }
-
-    private static TimeSpan Max(TimeSpan left, TimeSpan right)
-    {
-        return left >= right ? left : right;
     }
 }

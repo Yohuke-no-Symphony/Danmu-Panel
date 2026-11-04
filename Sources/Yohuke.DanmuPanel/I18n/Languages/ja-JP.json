@@ -151,6 +151,8 @@
     "Settings.CompactDisplay": "コンパクト表示",
     "Settings.CompactMessageWrap": "弾幕・ギフト・メンバー加入を折り返す",
     "Settings.CompactSuperChatWrap": "SC を折り返す",
+    "Settings.AutoScrollLongMessages": "長いメッセージを自動スクロール（翻訳を含む）",
+    "Settings.AutoScrollLongMessagesHelp": "1 行に収まらない内容を末尾までスクロールし、繰り返します。折り返し表示では動きません。オフでもマウスを重ねるとスクロールできます。",
     "Settings.CustomProvider": "カスタム（Custom）",
     "Settings.Dark": "ダーク",
     "Settings.Data": "データ管理",
