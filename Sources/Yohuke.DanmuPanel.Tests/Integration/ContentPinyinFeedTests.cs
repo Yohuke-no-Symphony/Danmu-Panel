@@ -250,17 +250,22 @@ public sealed class ContentPinyinFeedTests
         return original.TranslatePoint(bounds.Center, window)!.Value;
     }
 
-    /// <summary>紧凑单行中仅一列包含拼音时，姓名和正文仍共享汉字正文基线。</summary>
+    /// <summary>勋章、用户名与正文在拼音、翻译及显示模式切换后始终垂直居中。</summary>
     [AvaloniaTheory]
-    [InlineData("中文", "mua", 1.0)]
-    [InlineData("中文", "mua", 1.5)]
-    [InlineData("Latin", "你好", 1.0)]
-    [InlineData("Latin", "你好", 1.5)]
-    [InlineData("中文", "nano好", 1.0)]
-    [InlineData("中文", "nano好", 1.5)]
-    [InlineData("中文", "打call", 1.0)]
-    [InlineData("中文", "打call", 1.5)]
-    public async Task CompactSingleLineRowsShareTheNameAndContentBaseline(string userName, string content, double scale)
+    [InlineData("中文", "mua", 1.0, PinyinLayoutMode.Ruby)]
+    [InlineData("中文", "mua", 1.5, PinyinLayoutMode.Ruby)]
+    [InlineData("Latin", "你好", 1.0, PinyinLayoutMode.Ruby)]
+    [InlineData("Latin", "你好", 1.5, PinyinLayoutMode.Ruby)]
+    [InlineData("中文", "nano好", 1.0, PinyinLayoutMode.Ruby)]
+    [InlineData("中文", "nano好", 1.5, PinyinLayoutMode.Ruby)]
+    [InlineData("中文", "打call", 1.0, PinyinLayoutMode.Ruby)]
+    [InlineData("中文", "打call", 1.5, PinyinLayoutMode.Ruby)]
+    [InlineData("中文", "mua", 1.0, PinyinLayoutMode.SeparateLine)]
+    [InlineData("中文", "mua", 1.5, PinyinLayoutMode.SeparateLine)]
+    [InlineData("Latin", "你好", 1.0, PinyinLayoutMode.SeparateLine)]
+    [InlineData("Latin", "你好", 1.5, PinyinLayoutMode.SeparateLine)]
+    public async Task RowsKeepMedalNameAndBodyVerticallyCenteredAcrossDisplayChanges(string userName, string content,
+        double scale, PinyinLayoutMode layout)
     {
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = new PanelRuntime(new(directory.Path), new());
@@ -271,10 +276,14 @@ public sealed class ContentPinyinFeedTests
         settings.ShowUserPinyin = true;
         settings.ShowDanmuPinyin = true;
         settings.MessageTextScale = scale;
-        await runtime.Messages.AppendAsync(new()
+        settings.PinyinLayout = layout;
+        var record = new MessageRecord
         {
-            RoomTabId = "tab", RoomId = "123", Kind = MessageKind.Danmu, UserName = userName, Content = content
-        }, settings.Reading);
+            RoomTabId = "tab", RoomId = "123", Kind = MessageKind.Danmu, UserName = userName, Content = content,
+            MedalName = "粉丝牌", MedalLevel = 34
+        };
+        var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation);
+        await runtime.Messages.AppendAsync(record, settings.Reading, fingerprint);
         var view = new MessageFeedView(runtime, MessageKind.Danmu, exception => throw exception);
         var window = new Window { Width = 1000, Height = 400, Content = view };
         try
@@ -282,13 +291,24 @@ public sealed class ContentPinyinFeedTests
             await view.Model.SelectRoomAsync(new() { Id = "tab", RoomId = "123" });
             window.Show();
             Pump(window);
-            var name = view.GetVisualDescendants().OfType<EmoticonTextBlock>()
-                .Single(control => control.Classes.Contains("danmuFeedUser"));
-            var body = view.GetVisualDescendants().OfType<EmoticonTextBlock>()
-                .Single(control => control.ContentText == content && control.IsEffectivelyVisible);
-            var nameBaseline = MainBaseline(name, window);
-            var bodyBaseline = MainBaseline(body, window);
-            Assert.InRange(Math.Abs(nameBaseline - bodyBaseline), 0, 1);
+            var row = view.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.DataContext is MessageItemViewModel item && item.Record.Id == record.Id);
+            AssertVerticallyCentered(row);
+
+            Assert.True(await runtime.Messages.ApplyTranslationAsync(record.Id, record.Generation, fingerprint, "翻译内容"));
+            await view.Model.RefreshAsync();
+            Pump(window);
+            AssertVerticallyCentered(row);
+
+            settings.CompactDanmuWrap = true;
+            await view.Model.RefreshAsync();
+            Pump(window);
+            AssertVerticallyCentered(row);
+
+            settings.CompactDanmuDisplay = false;
+            await view.Model.RefreshAsync();
+            Pump(window);
+            AssertVerticallyCentered(row);
         }
         finally
         {
@@ -297,10 +317,21 @@ public sealed class ContentPinyinFeedTests
         }
     }
 
-    private static double MainBaseline(EmoticonTextBlock text, Window window)
+    private static void AssertVerticallyCentered(Button row)
     {
-        var original = text.GetVisualDescendants().OfType<PinyinRubySyllable>().FirstOrDefault()?.OriginalText ?? text;
-        return original.TranslatePoint(new(0, original.TextLayout.Baseline), window)!.Value.Y;
+        var layout = row.GetVisualDescendants().OfType<Grid>()
+            .Single(control => control.Classes.Contains("danmuFeedLayout"));
+        var controls = row.GetVisualDescendants().OfType<Control>().Where(control =>
+            control.Classes.Contains("danmuFeedIdentity") || control.Classes.Contains("danmuFeedUser") ||
+            control.Classes.Contains("danmuMedalBadge") || control.Classes.Contains("messageBody")).ToArray();
+        Assert.Equal(4, controls.Length);
+        foreach (var control in controls)
+        {
+            Assert.True(control.IsEffectivelyVisible);
+            Assert.True(control.Bounds.Height > 0);
+            var center = control.TranslatePoint(new(0, control.Bounds.Height / 2), layout)!.Value.Y;
+            Assert.InRange(Math.Abs(center - layout.Bounds.Height / 2), 0, 1);
+        }
     }
 
     private static EmoticonTextBlock Original(MessageFeedView view)

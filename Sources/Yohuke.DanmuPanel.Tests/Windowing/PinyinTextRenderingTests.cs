@@ -269,6 +269,69 @@ public sealed class PinyinTextRenderingTests
         }
     }
 
+    /// <summary>注音控件脱离可视树时清除悬停，重新挂载后仍能正确高亮。</summary>
+    [AvaloniaTheory]
+    [InlineData(PinyinLayoutMode.Ruby)]
+    [InlineData(PinyinLayoutMode.SeparateLine)]
+    public void HoverIgnoresDetachedInlineContentAndRecoversWhenReattached(PinyinLayoutMode layout)
+    {
+        var text = CreateText("你好", layout);
+        var window = CreateWindow(text);
+        try
+        {
+            window.Show();
+            Pump(window);
+            var point = FindHanziPoint(text, 1, 1, window);
+            window.MouseMove(point);
+            Assert.Equal(1, text.HighlightedSourceStart);
+            var local = window.TranslatePoint(point, text)!.Value;
+            var inlineCollection = text.Inlines!;
+            var inlines = inlineCollection.ToArray();
+            inlineCollection.Clear();
+            Assert.True(text.HasAnnotations);
+            Assert.Empty(text.GetVisualDescendants().OfType<PinyinRubySyllable>());
+            Assert.Empty(text.GetVisualDescendants().OfType<PinyinSeparateLinePresenter>());
+            text.UpdateHighlight(local);
+            Assert.Equal(-1, text.HighlightedSourceStart);
+
+            inlineCollection.AddRange(inlines);
+            Pump(window);
+            AssertNoHighlightedPronunciations(text);
+            window.MouseMove(new(290, 210));
+            window.MouseMove(FindHanziPoint(text, 1, 1, window));
+            Assert.Equal(1, text.HighlightedSourceStart);
+            AssertHighlightedPronunciation(text, "hǎo");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>正文省略导致注音单元被移出可视树时，悬停不会访问失效坐标。</summary>
+    [AvaloniaFact]
+    public void HoverIgnoresRubySyllablesRemovedByTextTrimming()
+    {
+        var text = CreateText("你好", PinyinLayoutMode.Ruby);
+        text.Width = 10;
+        text.TextWrapping = TextWrapping.NoWrap;
+        text.TextTrimming = TextTrimming.CharacterEllipsis;
+        var window = CreateWindow(text);
+        try
+        {
+            window.Show();
+            Pump(window);
+            Assert.True(text.HasAnnotations);
+            Assert.Empty(text.GetVisualDescendants().OfType<PinyinRubySyllable>());
+            text.UpdateHighlight(default);
+            Assert.Equal(-1, text.HighlightedSourceStart);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>整体缩放同时更新正文及拼音字号，并清理几何变化前的悬停定位。</summary>
     [AvaloniaTheory]
     [InlineData(PinyinLayoutMode.Ruby)]

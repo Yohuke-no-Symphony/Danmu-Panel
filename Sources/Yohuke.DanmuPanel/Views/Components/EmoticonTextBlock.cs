@@ -221,21 +221,21 @@ public sealed class EmoticonTextBlock : TextBlock
         var sourceStart = -1;
         foreach (var syllable in rubySyllables)
         {
-            var local = this.TranslatePoint(point, syllable.OriginalText)!.Value;
-            if (new Rect(syllable.OriginalText.Bounds.Size).Contains(local))
+            if (this.TranslatePoint(point, syllable.OriginalText) is { } local &&
+                new Rect(syllable.OriginalText.Bounds.Size).Contains(local))
             {
                 sourceStart = syllable.Annotation.SourceStart;
                 break;
             }
         }
 
-        if (separateLine is not null)
+        if (separateLine is not null &&
+            this.TranslatePoint(point, separateLine.OriginalText) is { } originalPoint)
         {
             var original = separateLine.OriginalText;
-            var local = this.TranslatePoint(point, original)!.Value;
-            var hit = original.TextLayout.HitTestPoint(local);
+            var hit = original.TextLayout.HitTestPoint(originalPoint);
             var textIndex = hit.CharacterHit.FirstCharacterIndex;
-            if (original.TextLayout.HitTestTextRange(textIndex, 1).Any(rectangle => rectangle.Contains(local)))
+            if (original.TextLayout.HitTestTextRange(textIndex, 1).Any(rectangle => rectangle.Contains(originalPoint)))
             {
                 var span = renderedSpans.FirstOrDefault(value => textIndex >= value.TextStart &&
                                                                 textIndex < value.TextStart + value.TextLength);

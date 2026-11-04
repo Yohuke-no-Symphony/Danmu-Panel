@@ -237,12 +237,6 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             Children = { originalRegion, translationRegion }
         };
         body.Classes.Add("messageBody");
-        if (item.Record.Kind != MessageKind.SuperChat)
-        {
-            identity.Bind(VerticalAlignmentProperty, CreateRowAlignmentBinding());
-            name.Bind(VerticalAlignmentProperty, CreateRowAlignmentBinding());
-            body.Bind(VerticalAlignmentProperty, CreateRowAlignmentBinding());
-        }
         var layout = new Grid();
         if (item.Record.Kind == MessageKind.SuperChat)
         {
@@ -318,26 +312,6 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         };
         button.ContextMenu = CreateMessageMenu(item);
         return button;
-    }
-
-    private MultiBinding CreateRowAlignmentBinding()
-    {
-        return new()
-        {
-            Bindings =
-            {
-                new Binding(nameof(MessageItemViewModel.HasNamePinyin)),
-                new Binding(nameof(MessageItemViewModel.HasContentPinyin)),
-                new Binding(nameof(FeedViewModel.IsCompactDisplay)) { Source = Model },
-                new Binding(nameof(FeedViewModel.IsCompactMessageWrap)) { Source = Model }
-            },
-            Converter = new FuncMultiValueConverter<bool, VerticalAlignment>(values =>
-            {
-                var options = values.ToArray();
-                return options.Length == 4 && (options[0] || options[1]) && options[2] && !options[3]
-                    ? VerticalAlignment.Bottom : VerticalAlignment.Center;
-            })
-        };
     }
 
     private Border CreateUnreadBadge()
