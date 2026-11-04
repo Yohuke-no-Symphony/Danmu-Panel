@@ -1,3 +1,5 @@
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
 using Yohuke.DanmuPanel.Models.Updates;
 using Yohuke.DanmuPanel.Services.Updates;
 using Xunit;
@@ -7,6 +9,34 @@ namespace Yohuke.DanmuPanel.Tests.Updates;
 /// <summary>验证更新判断独立于 HTTP，并正确区分无发布、已有新版及本地已最新。</summary>
 public sealed class AppUpdateServiceTests
 {
+    /// <summary>发布源在首次等待前的同步工作也不能占用 UI 线程。</summary>
+    [AvaloniaFact]
+    public async Task SynchronousSourceWorkDoesNotBlockTheUiThread()
+    {
+        using var release = new ManualResetEventSlim();
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var source = new AppUpdateReleaseSourceStub(_ =>
+        {
+            started.SetResult(Dispatcher.UIThread.CheckAccess());
+            release.Wait(TimeSpan.FromSeconds(5));
+            return Task.FromResult<AppUpdateInfo?>(Release("2.0"));
+        });
+        var check = new AppUpdateService(source).CheckAsync(new(1, 0));
+        try
+        {
+            Assert.False(await started.Task.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.False(check.IsCompleted);
+            var uiResponded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Dispatcher.UIThread.Post(() => uiResponded.SetResult());
+            await uiResponded.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            release.Set();
+            await check;
+        }
+    }
+
     /// <summary>规范化缺省数字段后比较版本，不使用字符串排序。</summary>
     [Theory]
     [InlineData("0.0.10", "0.0.9", AppUpdateCheckStatus.UPDATE_AVAILABLE)]
@@ -58,14 +88,14 @@ public sealed class AppUpdateServiceTests
     {
         using var cancellation = new CancellationTokenSource();
         var completion = new TaskCompletionSource<AppUpdateInfo?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var observedToken = CancellationToken.None;
+        var started = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
         var source = new AppUpdateReleaseSourceStub(token =>
         {
-            observedToken = token;
+            started.SetResult(token);
             return completion.Task;
         });
         var check = new AppUpdateService(source).CheckAsync(new(1, 0), cancellation.Token);
-        Assert.Equal(cancellation.Token, observedToken);
+        Assert.Equal(cancellation.Token, await started.Task.WaitAsync(TimeSpan.FromSeconds(10)));
 
         await cancellation.CancelAsync();
         completion.SetResult(Release("2.0"));

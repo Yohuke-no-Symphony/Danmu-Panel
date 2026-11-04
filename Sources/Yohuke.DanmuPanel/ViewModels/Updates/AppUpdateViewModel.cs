@@ -53,6 +53,7 @@ public sealed class AppUpdateViewModel : ObservableObject, IAsyncDisposable
     public bool HasReleaseNotes => HasUpdate && !string.IsNullOrWhiteSpace(ReleaseNotes);
     public bool IsChecking => isChecking;
     public bool IsDialogOpen => isDialogOpen;
+    public bool IsManualCheck => manualPresentation;
     public bool CanRetry => failed && !isChecking && !disposed;
     public bool HasBrowserError => hasBrowserError;
     public AsyncRelayCommand RetryCommand { get; }
@@ -146,7 +147,6 @@ public sealed class AppUpdateViewModel : ObservableObject, IAsyncDisposable
         isChecking = true;
         isDialogOpen = manual;
         messageKey = "Updates.Checking";
-        NotifyState();
         _ = RunCheckAsync(request);
         return request.Completion.Task;
     }
@@ -155,6 +155,20 @@ public sealed class AppUpdateViewModel : ObservableObject, IAsyncDisposable
     {
         try
         {
+            await CheckForUpdateAsync(request);
+            request.Completion.TrySetResult();
+        }
+        catch (Exception exception)
+        {
+            request.Completion.TrySetException(exception);
+        }
+    }
+
+    private async Task CheckForUpdateAsync(AppUpdateRequest request)
+    {
+        try
+        {
+            NotifyState();
             var result = await service.CheckAsync(currentVersion, request.Cancellation.Token);
             if (!Owns(request))
             {
@@ -191,15 +205,14 @@ public sealed class AppUpdateViewModel : ObservableObject, IAsyncDisposable
         }
         finally
         {
+            requests.Remove(request);
+            request.Cancellation.Dispose();
             if (ReferenceEquals(pending, request))
             {
                 pending = null;
                 isChecking = false;
                 NotifyState();
             }
-            requests.Remove(request);
-            request.Cancellation.Dispose();
-            request.Completion.TrySetResult();
         }
     }
 

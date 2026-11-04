@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Net;
 using Avalonia.Headless.XUnit;
 using Yohuke.DanmuPanel.I18n;
@@ -9,6 +10,72 @@ namespace Yohuke.DanmuPanel.Tests.Updates;
 /// <summary>验证启动与手动检查的共享请求、反馈、取消和资源释放。</summary>
 public sealed class AppUpdateViewModelTests
 {
+    /// <summary>检查中提示失败时也会释放请求，不留下无法取消的检查。</summary>
+    [AvaloniaFact]
+    public async Task CheckingPresentationFailureReleasesTheRequest()
+    {
+        var context = new AppUpdateTestContext();
+        var failure = new InvalidOperationException("Checking presentation failed.");
+        PropertyChangedEventHandler onChanged = (_, _) =>
+        {
+            if (context.Model.IsChecking)
+            {
+                throw failure;
+            }
+        };
+        context.Model.PropertyChanged += onChanged;
+        try
+        {
+            await context.Model.CheckManuallyAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Same(failure, context.Failure);
+            Assert.False(context.Model.IsChecking);
+            Assert.Equal(0, context.Service.CallCount);
+        }
+        finally
+        {
+            context.Model.PropertyChanged -= onChanged;
+            await context.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    /// <summary>提示窗口的状态通知失败也必须结束请求，允许后续清理和重试。</summary>
+    [AvaloniaFact]
+    public async Task PresentationFailureCompletesTheRequestAndAllowsRetry()
+    {
+        var context = new AppUpdateTestContext();
+        var failure = new InvalidOperationException("Update presentation failed.");
+        PropertyChangedEventHandler onChanged = (_, _) =>
+        {
+            if (!context.Model.IsChecking && context.Model.IsDialogOpen)
+            {
+                throw failure;
+            }
+        };
+        context.Model.PropertyChanged += onChanged;
+        try
+        {
+            var check = context.Model.CheckManuallyAsync();
+            context.Service.Response.SetResult(new(AppUpdateCheckStatus.UPDATE_AVAILABLE, AppUpdateTestContext.Update));
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => check.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Same(failure, error);
+            context.Model.PropertyChanged -= onChanged;
+            await context.Model.CancelPendingAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+            context.Service.Response = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            var retry = context.Model.CheckManuallyAsync();
+            context.Service.Response.SetResult(new(AppUpdateCheckStatus.NO_RELEASE, null));
+            await retry.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(context.Model.IsChecking);
+            Assert.Equal(2, context.Service.CallCount);
+        }
+        finally
+        {
+            context.Model.PropertyChanged -= onChanged;
+            await context.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        }
+    }
+
     /// <summary>构造不访问网络；启动检查只执行一次且不会重复已关闭的提示。</summary>
     [AvaloniaFact]
     public async Task StartupChecksOnceAndDoesNotRepeatDismissedResult()

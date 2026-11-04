@@ -10,7 +10,8 @@ public sealed class AppUpdateService(IAppUpdateReleaseSource source) : IAppUpdat
     public async Task<AppUpdateCheckResult> CheckAsync(Version currentVersion, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var release = await source.GetLatestAsync(cancellationToken).ConfigureAwait(false);
+        var release = await Task.Run(() => source.GetLatestAsync(cancellationToken), cancellationToken)
+            .ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         if (release is null)
         {

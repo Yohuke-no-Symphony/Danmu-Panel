@@ -13,6 +13,61 @@ namespace Yohuke.DanmuPanel.Tests.Updates;
 /// <summary>验证更新窗口的唯一性、所属窗口、模态交互和清理。</summary>
 public sealed class AppUpdateWindowTests
 {
+    /// <summary>检查未完成、失败或发现新版时，主窗始终可用且自动提示不会抢焦点。</summary>
+    [AvaloniaTheory]
+    [InlineData("available")]
+    [InlineData("offline")]
+    [InlineData("timeout")]
+    public async Task AutomaticChecksLeaveTheMainWindowInteractive(string outcome)
+    {
+        await using var context = new AppUpdateTestContext();
+        var clicks = 0;
+        var action = new Button { Content = "工作区操作" };
+        action.Click += (_, _) => clicks++;
+        var main = new Window { Content = action };
+        await using var coordinator = new AppUpdateWindowCoordinator(main, context.Model);
+        try
+        {
+            main.Show();
+            var check = coordinator.CheckOnStartupAsync();
+            Assert.False(check.IsCompleted);
+            Assert.Null(coordinator.CurrentWindow);
+            Assert.True(main.IsEnabled);
+            Assert.True(action.IsEffectivelyEnabled);
+            await Dispatcher.UIThread.InvokeAsync(() => action.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
+            Assert.Equal(1, clicks);
+
+            if (outcome == "available")
+            {
+                context.Service.Response.SetResult(new(AppUpdateCheckStatus.UPDATE_AVAILABLE, AppUpdateTestContext.Update));
+            }
+            else
+            {
+                context.Service.Response.SetException(outcome == "offline"
+                    ? new HttpRequestException("offline") : new TimeoutException());
+            }
+            await check;
+
+            if (outcome == "available")
+            {
+                Assert.False(Assert.IsType<AppUpdateWindow>(coordinator.CurrentWindow).ShowActivated);
+            }
+            else
+            {
+                Assert.Null(coordinator.CurrentWindow);
+                Assert.NotNull(context.Failure);
+            }
+            Assert.True(main.IsEnabled);
+            Assert.True(action.IsEffectivelyEnabled);
+            action.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(2, clicks);
+        }
+        finally
+        {
+            main.Close();
+        }
+    }
+
     /// <summary>手动检查归属设置窗口，检查中重复点击复用请求与窗口。</summary>
     [AvaloniaFact]
     public async Task ManualWindowUsesTheSettingsOwnerAndIsReused()
@@ -29,6 +84,7 @@ public sealed class AppUpdateWindowTests
             var first = Assert.IsType<AppUpdateWindow>(coordinator.CurrentWindow);
             Assert.Same(settings, first.Owner);
             Assert.True(first.IsEnabled);
+            Assert.True(first.ShowActivated);
             Assert.Same(check, coordinator.CheckManuallyAsync(settings));
             Assert.Same(first, coordinator.CurrentWindow);
             context.Service.Response.SetResult(new(AppUpdateCheckStatus.UPDATE_AVAILABLE, AppUpdateTestContext.Update));

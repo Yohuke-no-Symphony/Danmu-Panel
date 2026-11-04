@@ -91,7 +91,11 @@ internal sealed class AppUpdateWindowCoordinator : IAsyncDisposable
             return;
         }
 
-        var window = new AppUpdateWindow(model) { Topmost = presentationOwner.Topmost };
+        var window = new AppUpdateWindow(model)
+        {
+            Topmost = presentationOwner.Topmost,
+            ShowActivated = model.IsManualCheck
+        };
         CurrentWindow = window;
         window.Closed += OnUpdateWindowClosed;
         window.Show(presentationOwner);

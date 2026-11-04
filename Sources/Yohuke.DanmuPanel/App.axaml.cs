@@ -81,14 +81,6 @@ public partial class App : Application
                     UseWindowMenuOnMac = configuration.Settings.UseWindowMenuOnMac
                 };
                 NativeMenu.GetMenu(this)!.Items.OfType<NativeMenuItem>().First().Command = shell.AboutCommand;
-                updateHttp = new(new HttpClientHandler { UseCookies = false });
-                updateModel = new(new AppUpdateService(new GitHubAppUpdateReleaseSource(updateHttp)),
-                    configuration.Settings, AppUpdateVersion.Current,
-                    uri => (updates?.CurrentWindow?.Launcher ?? shell.Launcher).LaunchUriAsync(uri),
-                    exception => StartupLog.Append(Localization.Get("Updates.CheckFailed"),
-                        Models.Logging.AppLogLevel.WARNING, Localization.Get("Updates.Title"), exception));
-                updates = new(shell, updateModel, () => shell.IsInteractionBlocked);
-                shell.InteractionChanged += updates.RefreshPresentation;
                 workspace.HostWindow = shell;
                 workspace.SelectedRoomChanged += SelectRoom;
                 Localization.LanguageChanged += RefreshLanguage;
@@ -99,7 +91,10 @@ public partial class App : Application
                 shell.Closed += OnShellClosed;
                 shell.BeforeCloseAsync = async () =>
                 {
-                    await updateModel.CancelPendingAsync();
+                    if (updateModel is not null)
+                    {
+                        await updateModel.CancelPendingAsync();
+                    }
                     await testMessages.FinishPendingAsync();
                     await runtime.DisposeAsync();
                     foreach (var feed in feeds)
@@ -110,7 +105,6 @@ public partial class App : Application
                     testMessages.Dispose();
                     Localization.LanguageChanged -= RefreshLanguage;
                 };
-                shell.Opened += CheckStartupUpdates;
                 shell.Opened += async (_, _) =>
                 {
                     try
@@ -123,16 +117,12 @@ public partial class App : Application
                         ReportFailure(exception);
                     }
                 };
+                shell.Opened += CheckStartupUpdates;
                 desktop.MainWindow = shell;
             }
             catch (Exception exception)
             {
                 StartupLog.Append(exception.Message, Models.Logging.AppLogLevel.ERROR, error: exception);
-                if (updates is not null)
-                {
-                    _ = updates.DisposeAsync();
-                }
-                updateHttp?.Dispose();
                 DisposeLog();
                 desktop.MainWindow = new Window
                 {
@@ -188,7 +178,7 @@ public partial class App : Application
             dialog.WindowMenuOnMacChanged += value => shell.UseWindowMenuOnMac = value;
             dialog.ClearRequested += Clear;
             dialog.CheckForUpdatesRequested += () => CheckUpdatesManually(dialog);
-            dialog.StartupUpdatePreferenceChanged += updateModel!.SetStartupCheckEnabled;
+            dialog.StartupUpdatePreferenceChanged += enabled => updateModel?.SetStartupCheckEnabled(enabled);
             await shell.ShowModalAsync<object?>(dialog);
             await Task.WhenAll(feeds.Select(feed => feed.Model.RefreshAsync()));
         }
@@ -238,11 +228,15 @@ public partial class App : Application
     {
         try
         {
-            await updates!.CheckOnStartupAsync();
+            if (runtime!.Configuration.Settings.CheckForUpdatesOnStartup)
+            {
+                var coordinator = await EnsureUpdatesAsync();
+                await coordinator.CheckOnStartupAsync();
+            }
         }
         catch (Exception exception)
         {
-            ReportFailure(exception);
+            ReportUpdateFailure(exception);
         }
     }
 
@@ -250,12 +244,53 @@ public partial class App : Application
     {
         try
         {
-            await updates!.CheckManuallyAsync(owner);
+            var coordinator = await EnsureUpdatesAsync();
+            await coordinator.CheckManuallyAsync(owner);
         }
         catch (Exception exception)
         {
-            ReportFailure(exception);
+            ReportUpdateFailure(exception);
         }
+    }
+
+    private async Task<AppUpdateWindowCoordinator> EnsureUpdatesAsync()
+    {
+        if (updates is { } existing)
+        {
+            return existing;
+        }
+
+        var owner = shell!;
+        var http = new HttpClient(new HttpClientHandler { UseCookies = false });
+        AppUpdateViewModel? model = null;
+        try
+        {
+            model = new(new AppUpdateService(new GitHubAppUpdateReleaseSource(http)),
+                runtime!.Configuration.Settings, AppUpdateVersion.Current,
+                uri => (updates?.CurrentWindow?.Launcher ?? owner.Launcher).LaunchUriAsync(uri),
+                ReportUpdateFailure);
+            var coordinator = new AppUpdateWindowCoordinator(owner, model, () => owner.IsInteractionBlocked);
+            owner.InteractionChanged += coordinator.RefreshPresentation;
+            updateHttp = http;
+            updateModel = model;
+            updates = coordinator;
+            return coordinator;
+        }
+        catch
+        {
+            http.Dispose();
+            if (model is not null)
+            {
+                await model.DisposeAsync();
+            }
+            throw;
+        }
+    }
+
+    private static void ReportUpdateFailure(Exception exception)
+    {
+        StartupLog.Append(Localization.Get("Updates.CheckFailed"), Models.Logging.AppLogLevel.WARNING,
+            Localization.Get("Updates.Title"), exception);
     }
 
     private async void OnShellClosed(object? sender, EventArgs args)
