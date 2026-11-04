@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Yohuke.DanmuPanel.Views.Settings.AccountCookieEditorSurface"
+             x:CompileBindings="False">
+    <Grid RowDefinitions="Auto,Auto">
+        <StackPanel Margin="20" Spacing="10">
+            <TextBlock x:Name="AccountCaption" Classes="sectionTitle" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Loc Key=Panel.Cookie}" />
+            <TextBox x:Name="AccountCookieInput" PasswordChar="●" MinHeight="92" TextWrapping="Wrap"
+                     AutomationProperties.Name="{Loc Key=Panel.Cookie}" />
+        </StackPanel>
+        <Border Grid.Row="1" Background="{DynamicResource AppSettingsFooterBrush}" Padding="20,12">
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                <Button x:Name="CancelCookieEdit" Content="{Loc Key=Panel.Cancel}" IsCancel="True" />
+                <Button x:Name="SaveCookieEdit" Classes="primaryButton" IsDefault="True">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <LucideIcon Kind="Save" />
+                        <TextBlock Text="{Loc Key=Panel.Save}" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

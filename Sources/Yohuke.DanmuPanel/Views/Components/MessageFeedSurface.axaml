@@ -1,0 +1,22 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Yohuke.DanmuPanel.ViewModels"
+             x:Class="Yohuke.DanmuPanel.Views.Components.MessageFeedSurface"
+             x:DataType="vm:FeedViewModel">
+    <Border Padding="8">
+        <Grid RowDefinitions="Auto,*"
+              Classes.compactDanmu="{Binding IsCompactDisplay}"
+              Classes.compactDanmuWrap="{Binding IsCompactMessageWrap}"
+              Classes.compactSuperChatWrap="{Binding IsCompactSuperChatWrap}">
+            <Border IsVisible="{Binding HasPinnedItems}" BorderBrush="{DynamicResource AppBorderBrush}"
+                    BorderThickness="0,0,0,1" Padding="0,0,0,4" Margin="0,0,0,4">
+                <ContentControl x:Name="PinnedHost"
+                                HorizontalContentAlignment="Stretch"
+                                VerticalContentAlignment="Stretch" />
+            </Border>
+            <ContentControl x:Name="FeedHost" Grid.Row="1"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Stretch" />
+        </Grid>
+    </Border>
+</UserControl>

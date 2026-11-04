@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Yohuke.DanmuPanel.Views.WorkspaceCreateSurface" x:CompileBindings="False">
+    <Border Background="{DynamicResource AppCardBrush}" Padding="22">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="14">
+            <StackPanel Spacing="6">
+                <TextBlock x:Name="Heading" FontSize="26" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                <TextBlock x:Name="Subtitle" Classes="muted" HorizontalAlignment="Center" TextWrapping="Wrap" />
+            </StackPanel>
+            <TextBox Grid.Row="1" x:Name="WorkspaceNameInput" Watermark="{Loc Key=Panel.Name}" />
+            <TextBlock Grid.Row="2" x:Name="ErrorText" TextWrapping="Wrap" Foreground="{DynamicResource AppErrorBrush}" />
+            <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <Button x:Name="CancelButton" Grid.Column="1" Content="{Loc Key=Panel.Cancel}" />
+                <Button x:Name="SaveButton" Grid.Column="2" Classes="primaryButton" Content="{Loc Key=Workspace.Add}" />
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>

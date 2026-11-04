@@ -1,0 +1,208 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Markup.Xaml;
+using Avalonia.Styling;
+using Avalonia.Threading;
+using Yohuke.DanmuPanel.I18n;
+using Yohuke.DanmuPanel.Models.Messages;
+using Yohuke.DanmuPanel.Models.State;
+using Yohuke.DanmuPanel.Services;
+using Yohuke.DanmuPanel.Views;
+using Yohuke.DanmuPanel.Views.Settings;
+
+namespace Yohuke.DanmuPanel;
+
+/// <summary>组装阅读台及其持久化生命周期。</summary>
+public partial class App : Application
+{
+    private ShellWindow? shell;
+    private PanelRuntime? runtime;
+    private WorkspaceView? workspace;
+    private TestMessagesView? testMessages;
+    private readonly List<MessageFeedView> feeds = [];
+    private bool settingsOpen;
+
+    /// <inheritdoc/>
+    public override void Initialize()
+    {
+        AvaloniaXamlLoader.Load(this);
+        Localization.Initialize(Path.Combine(AppContext.BaseDirectory, "i18n"));
+    }
+
+    /// <inheritdoc/>
+    public override void OnFrameworkInitializationCompleted()
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            try
+            {
+                var configStore = new ConfigurationService();
+                var configuration = configStore.Load();
+                Localization.SetLanguage(configuration.Settings.Language);
+                RequestedThemeVariant = configuration.Settings.Theme switch
+                {
+                    "light" => ThemeVariant.Light,
+                    "dark" => ThemeVariant.Dark,
+                    _ => ThemeVariant.Default
+                };
+                if (configuration.Workspaces.Count == 0)
+                {
+                    configuration.Workspaces.Add(new() { Name = Localization.Get("Panel.DefaultWorkspace") });
+                }
+                runtime = new(configStore, configuration);
+                workspace = new(runtime, ReportFailure);
+                var panels = new Dictionary<string, Control> { ["workspace"] = workspace };
+                foreach (var (id, kind) in new[] { ("danmu", MessageKind.Danmu), ("superChat", MessageKind.SuperChat), ("gift", MessageKind.Gift), ("guard", MessageKind.Guard) })
+                {
+                    var view = new MessageFeedView(runtime, kind, ReportFailure);
+                    feeds.Add(view);
+                    panels.Add(id, view);
+                }
+                testMessages = new(runtime, ReportFailure);
+                panels.Add("testMessages", testMessages);
+                shell = new(panels, workspace.Toolbar, configStore.DirectoryPath)
+                {
+                    UseWindowMenuOnMac = configuration.Settings.UseWindowMenuOnMac
+                };
+                workspace.HostWindow = shell;
+                workspace.SelectedRoomChanged += SelectRoom;
+                Localization.LanguageChanged += RefreshLanguage;
+                shell.SettingsRequested += OpenSettings;
+                shell.ClearRoomRequested += () => Clear(false);
+                shell.ClearAllRequested += () => Clear(true);
+                shell.OperationFailed += ReportFailure;
+                runtime.Error += text => Dispatcher.UIThread.Post(() => shell.ShowError(PanelErrorText.Render(text)));
+                shell.BeforeCloseAsync = async () =>
+                {
+                    await testMessages.FinishPendingAsync();
+                    await runtime.DisposeAsync();
+                    foreach (var feed in feeds)
+                    {
+                        feed.Model.Dispose();
+                    }
+                    workspace.Dispose();
+                    testMessages.Dispose();
+                    Localization.LanguageChanged -= RefreshLanguage;
+                };
+                shell.Opened += async (_, _) =>
+                {
+                    try
+                    {
+                        await runtime.InitializeAsync();
+                        await SelectRoomAsync(workspace.SelectedRoom);
+                    }
+                    catch (Exception exception)
+                    {
+                        ReportFailure(exception);
+                    }
+                };
+                desktop.MainWindow = shell;
+            }
+            catch (Exception exception)
+            {
+                StartupLog.Append(exception.Message, Models.Logging.AppLogLevel.ERROR, error: exception);
+                desktop.MainWindow = new Window
+                {
+                    Title = Localization.Get("Panel.StartupFailed"), Width = 650, Height = 300,
+                    Content = new TextBox { IsReadOnly = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                        Text = AppLogSanitizer.Sanitize(exception.ToString()), Margin = new Thickness(20) }
+                };
+            }
+        }
+        base.OnFrameworkInitializationCompleted();
+    }
+
+    private async void SelectRoom(RoomTabState? room)
+    {
+        try
+        {
+            await SelectRoomAsync(room);
+        }
+        catch (Exception exception)
+        {
+            ReportFailure(exception);
+        }
+    }
+
+    private Task SelectRoomAsync(RoomTabState? room)
+    {
+        testMessages?.SelectRoom(room);
+        return Task.WhenAll(feeds.Select(feed => feed.Model.SelectRoomAsync(room)));
+    }
+
+    private async void RefreshLanguage(object? sender, EventArgs args)
+    {
+        try
+        {
+            await Task.WhenAll(feeds.Select(feed => feed.Model.RefreshAsync()));
+        }
+        catch (Exception exception)
+        {
+            ReportFailure(exception);
+        }
+    }
+
+    private async void OpenSettings()
+    {
+        if (settingsOpen || runtime is null || shell is null)
+        {
+            return;
+        }
+        settingsOpen = true;
+        try
+        {
+            var dialog = new SettingsWindow(runtime, new AccountSettingsView(runtime));
+            dialog.WindowMenuOnMacChanged += value => shell.UseWindowMenuOnMac = value;
+            dialog.ClearRequested += Clear;
+            await shell.ShowModalAsync<object?>(dialog);
+            await Task.WhenAll(feeds.Select(feed => feed.Model.RefreshAsync()));
+        }
+        catch (Exception exception)
+        {
+            ReportFailure(exception);
+        }
+        finally
+        {
+            settingsOpen = false;
+        }
+    }
+
+    private async void Clear(bool all)
+    {
+        if (runtime is null || shell is null || !all && workspace?.SelectedRoom is null)
+        {
+            return;
+        }
+        try
+        {
+            var room = all ? null : workspace!.SelectedRoom;
+            var detail = all ? Localization.Get("Panel.ClearAllConfirm") : Localization.Format("Panel.ClearRoomConfirm", room!.Name);
+            if (await shell.ShowModalAsync<bool>(new ConfirmationWindow(Localization.Get(all ? "Shell.ClearAll" : "Shell.ClearRoom"), detail)))
+            {
+                await runtime.ClearAsync(room);
+                await SelectRoomAsync(workspace?.SelectedRoom);
+            }
+        }
+        catch (Exception exception)
+        {
+            ReportFailure(exception);
+        }
+    }
+
+    private void ReportFailure(Exception exception)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            var message = exception.Message;
+            var key = runtime?.Configuration.Settings.Translation.ApiKey;
+            if (!string.IsNullOrEmpty(key))
+            {
+                message = message.Replace(key, "[REDACTED]", StringComparison.Ordinal);
+            }
+            var safe = AppLogSanitizer.Sanitize(message);
+            StartupLog.Append(safe, Models.Logging.AppLogLevel.ERROR);
+            shell?.ShowError(safe);
+        });
+    }
+}

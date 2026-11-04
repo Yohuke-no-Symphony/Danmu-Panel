@@ -1,0 +1,23 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Yohuke.DanmuPanel.Views.Settings.AccountSettingsSurface"
+             x:CompileBindings="False">
+    <StackPanel Spacing="18">
+        <Border Classes="panel" Padding="14">
+            <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBlock Text="{Loc Key=Settings.Accounts}" Classes="sectionTitle" VerticalAlignment="Center" />
+                    <Button x:Name="BrowserAddAccount" Grid.Column="1">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <LucideIcon Kind="UserPlus" />
+                            <TextBlock Text="{Loc Key=Panel.AddAccount}" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+                <StackPanel x:Name="AccountRows" />
+                <TextBlock x:Name="AccountOperationStatus" TextWrapping="Wrap"
+                           Foreground="{DynamicResource AppErrorBrush}" IsVisible="False" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

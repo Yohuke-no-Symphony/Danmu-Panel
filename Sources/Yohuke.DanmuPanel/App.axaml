@@ -1,0 +1,12 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Yohuke.DanmuPanel.App"
+             Name="Danmu Panel"
+             RequestedThemeVariant="Default">
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
+        <DockFluentTheme />
+        <StyleInclude Source="avares://Yohuke.DanmuPanel/Views/Styles/WorkbenchTheme.axaml" />
+    </Application.Styles>
+</Application>
