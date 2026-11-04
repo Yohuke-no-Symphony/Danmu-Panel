@@ -217,6 +217,7 @@
     "Services.BilibiliRoomSearch.SearchFailed": "Streamer search failed",
     "Services.BilibiliWbi.ImageKeysMissing": "Bilibili WBI image keys were not returned.",
     "Services.BilibiliWebSocket.ConnectionClosed": "The live danmu connection has closed.",
+    "Services.BilibiliWebSocket.InvalidMessage": "Could not parse {1} in room {0}; skipped the message and continued receiving ({2}).",
     "Services.BilibiliWebSocket.DecompressionFailed": "Failed to decompress the Brotli danmu packet.",
     "Services.BilibiliWebSocket.HeartbeatStopped": "The live danmu heartbeat has stopped.",
     "Services.BilibiliWebSocket.HeartbeatTimeout": "The live danmu connection has not received a heartbeat response for too long.",

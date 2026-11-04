@@ -217,6 +217,7 @@
     "Services.BilibiliRoomSearch.SearchFailed": "配信者の検索に失敗しました",
     "Services.BilibiliWbi.ImageKeysMissing": "Bilibili の WBI 画像キーを取得できませんでした。",
     "Services.BilibiliWebSocket.ConnectionClosed": "ライブコメントの接続が閉じられました。",
+    "Services.BilibiliWebSocket.InvalidMessage": "ルーム {0} の {1} メッセージを解析できませんでした。このメッセージをスキップして受信を続行します（{2}）。",
     "Services.BilibiliWebSocket.DecompressionFailed": "Brotli 形式のコメントデータを展開できませんでした。",
     "Services.BilibiliWebSocket.HeartbeatStopped": "ライブコメントのハートビートが停止しました。",
     "Services.BilibiliWebSocket.HeartbeatTimeout": "ライブコメントのハートビート応答が長時間ありません。",

@@ -24,6 +24,9 @@ public static class RoomMessageMapper
     /// <summary>转换礼物，价格统一转换为人民币元。</summary>
     public static MessageRecord Map(BilibiliGiftMessage value, string tabId, long generation)
     {
+        var unitPrice = string.Equals(value.CoinType, "gold", StringComparison.OrdinalIgnoreCase)
+            ? value.UnitPrice / 1000m
+            : 0;
         return new()
         {
             RoomTabId = tabId, Generation = generation, RoomId = value.RoomId,
@@ -31,7 +34,8 @@ public static class RoomMessageMapper
             HasSourceTimestamp = value.Timestamp > 0,
             UserUid = value.Uid, UserName = value.UserName, GiftName = value.GiftName,
             GiftId = value.GiftId, Quantity = value.Quantity, BatchComboCount = value.BatchComboCount,
-            UnitPrice = value.UnitPrice / 1000m, TotalPrice = value.UnitPrice / 1000m * value.Quantity,
+            GiftCoinType = value.CoinType, GiftTransactionId = value.TransactionId,
+            UnitPrice = unitPrice, TotalPrice = unitPrice * value.Quantity,
             ComboId = value.BatchComboId
         };
     }

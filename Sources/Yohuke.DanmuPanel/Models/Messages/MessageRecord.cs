@@ -31,6 +31,8 @@ public sealed record MessageRecord
     public bool IsMedalLighted { get; init; }
     public string GiftName { get; init; } = "";
     public string GiftId { get; init; } = "";
+    public string GiftCoinType { get; init; } = "gold";
+    public string GiftTransactionId { get; init; } = "";
     public int Quantity { get; init; } = 1;
     public int BatchComboCount { get; init; }
     public decimal UnitPrice { get; init; }

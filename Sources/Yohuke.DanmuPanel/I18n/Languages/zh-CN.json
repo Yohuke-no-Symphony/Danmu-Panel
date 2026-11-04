@@ -216,6 +216,7 @@
     "Services.BilibiliRoomSearch.SearchFailed": "主播搜索失败",
     "Services.BilibiliWbi.ImageKeysMissing": "没有获取到 B 站 WBI 图片键。",
     "Services.BilibiliWebSocket.ConnectionClosed": "直播弹幕连接已关闭。",
+    "Services.BilibiliWebSocket.InvalidMessage": "直播间 {0} 的 {1} 消息解析失败，已跳过该消息并继续接收（{2}）。",
     "Services.BilibiliWebSocket.DecompressionFailed": "Brotli 弹幕包解压失败。",
     "Services.BilibiliWebSocket.HeartbeatStopped": "直播弹幕心跳已停止。",
     "Services.BilibiliWebSocket.HeartbeatTimeout": "直播弹幕连接长时间未收到心跳响应。",

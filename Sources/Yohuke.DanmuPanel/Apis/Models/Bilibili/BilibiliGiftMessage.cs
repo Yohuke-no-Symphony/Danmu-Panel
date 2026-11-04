@@ -10,6 +10,9 @@ public class BilibiliGiftMessage
     /// </summary>
     public string MessageId { get; set; } = "";
 
+    /// <summary>原始送礼事务 ID，同一事务可以包含多种礼物。</summary>
+    public string TransactionId { get; set; } = "";
+
     /// <summary>
     /// 直播间 ID。
     /// </summary>
@@ -51,9 +54,12 @@ public class BilibiliGiftMessage
     public int BatchComboCount { get; set; }
 
     /// <summary>
-    /// 单个礼物的价格，单位为千分之一元。
+    /// 单个礼物的原始瓜子价格，只有金币可按千分之一元换算。
     /// </summary>
     public decimal UnitPrice { get; set; }
+
+    /// <summary>协议币种：gold 为金币，silver 为银瓜子，其他值不折算人民币。</summary>
+    public string CoinType { get; set; } = "gold";
 
     /// <summary>
     /// 服务器事件时间的 Unix 秒；协议未提供时为 0。

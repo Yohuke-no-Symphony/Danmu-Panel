@@ -34,6 +34,12 @@
         <PackageReference Include="Dock.Model.Mvvm" Version="11.3.12.1" />
         <PackageReference Include="Lucide.Avalonia" Version="0.2.0" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+        <PackageReference Include="Google.Protobuf" Version="3.36.2" />
+        <PackageReference Include="Grpc.Tools" Version="2.85.0" PrivateAssets="all" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Protobuf Include="Apis/Protocols/Bilibili/*.proto" ProtoRoot="Apis/Protocols/Bilibili" GrpcServices="None" Access="Internal" />
     </ItemGroup>
 
     <ItemGroup>

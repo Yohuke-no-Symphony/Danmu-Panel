@@ -308,8 +308,13 @@ public sealed partial class SqliteMessageStore
     private static MessageAppendResult MergeGift(SqliteConnection connection, SqliteTransaction transaction,
         MessageRecord incoming, MessageReadOptions options)
     {
-        var key = JsonSerializer.Serialize(new[] { incoming.RoomId, incoming.UserUid.ToString(CultureInfo.InvariantCulture),
-            string.IsNullOrEmpty(incoming.GiftId) ? incoming.GiftName : incoming.GiftId, incoming.ComboId });
+        var keyParts = new List<string> { incoming.RoomId, incoming.UserUid.ToString(CultureInfo.InvariantCulture),
+            string.IsNullOrEmpty(incoming.GiftId) ? incoming.GiftName : incoming.GiftId, incoming.ComboId };
+        if (!string.Equals(incoming.GiftCoinType, "gold", StringComparison.OrdinalIgnoreCase))
+        {
+            keyParts.Add(incoming.GiftCoinType);
+        }
+        var key = JsonSerializer.Serialize(keyParts);
         GiftComboState? combo = null;
         using (var command = Command(connection, transaction,
                    "SELECT quantity,total_price,cleared_quantity,cleared_total_price,message_id FROM message_combos WHERE room_tab_id=$room AND combo_key=$key;",

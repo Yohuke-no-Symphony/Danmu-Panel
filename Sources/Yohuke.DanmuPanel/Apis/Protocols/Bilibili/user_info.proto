@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+option csharp_namespace = "Yohuke.DanmuPanel.Apis.Protocols.Bilibili";
+
+import "user_base.proto";
+
+message UserInfo {
+  uint64 uid = 1;
+  UserBase base = 2;
+}
