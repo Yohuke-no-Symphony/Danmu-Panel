@@ -23,6 +23,7 @@
 - **Multiple rooms**: organize workspaces and live rooms with independent reading states; import and export Danmu Neo workspace files.
 - **Translation and pinyin**: translate chat and Super Chats through an OpenAI-compatible API, with glossaries and caching; show local pinyin for usernames and gift names.
 - **Ready to resume**: SQLite preserves messages, translations, pins, and read states. Includes light/dark themes and English, Chinese, and Japanese interfaces.
+- **Update checks**: checks for new official releases after startup. Settings → Updates provides a startup toggle and manual check; update prompts open the GitHub release page for downloads.
 
 ## Development Quick Start
 

@@ -14,10 +14,11 @@ using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Services;
 using Yohuke.DanmuPanel.Services.Translation;
+using Yohuke.DanmuPanel.Services.Updates;
 
 namespace Yohuke.DanmuPanel.Views.Settings;
 
-/// <summary>阅读台的外观、阅读、翻译、账号和数据设置。</summary>
+/// <summary>阅读台的外观、阅读、翻译、账号、数据和更新设置。</summary>
 public sealed class SettingsView : UserControl
 {
     private readonly SettingsDialogSurface surface = new();
@@ -51,6 +52,7 @@ public sealed class SettingsView : UserControl
     private bool saving;
 
     internal Task PendingMenuPreferenceSave { get; private set; } = Task.CompletedTask;
+    internal Task PendingUpdatePreferenceSave { get; private set; } = Task.CompletedTask;
 
     private string SelectedBaseUrl => ((TranslationProviderOption)provider.SelectedItem!).BaseUrl ?? baseUrl.Text?.Trim() ?? "";
     private string SelectedTargetLanguage => ((TranslationLanguageOption)targetLanguage.SelectedItem!).Code;
@@ -60,6 +62,12 @@ public sealed class SettingsView : UserControl
 
     /// <summary>通知应用即时切换 macOS 菜单位置。</summary>
     public event Action<bool>? WindowMenuOnMacChanged;
+
+    /// <summary>请求在当前设置窗口中手动检查更新，不保存其他页的草稿。</summary>
+    public event Action? CheckForUpdatesRequested;
+
+    /// <summary>通知应用即时启用或取消启动更新检查。</summary>
+    public event Action<bool>? StartupUpdatePreferenceChanged;
 
     /// <summary>创建设置面板，账号界面由应用提供。</summary>
     public SettingsView(PanelRuntime runtime, Control accountsView)
@@ -82,7 +90,7 @@ public sealed class SettingsView : UserControl
         {
             settings.UseWindowMenuOnMac = windowMenuOnMac.IsChecked == true;
             WindowMenuOnMacChanged?.Invoke(settings.UseWindowMenuOnMac);
-            PendingMenuPreferenceSave = SaveMenuPreferenceAsync();
+            PendingMenuPreferenceSave = SavePreferenceAsync();
         };
         var translation = TranslationRequestFactory.Snapshot(settings.Translation);
         enabled = Check("Settings.TranslationEnabled", translation.Enabled);
@@ -150,6 +158,7 @@ public sealed class SettingsView : UserControl
         AddSection("Settings.Translation", "Settings.TranslationDescription", BuildTranslation());
         AddSection("Settings.Accounts", "Settings.AccountsDescription", accountsView);
         AddSection("Settings.Data", "Settings.DataDescription", BuildData());
+        AddSection("Settings.Updates", "Settings.UpdatesDescription", BuildUpdates());
         save = surface.FindControl<Button>("SaveSettingsButton")!;
         save.Click += async (_, _) => await SaveAsync();
 
@@ -167,7 +176,7 @@ public sealed class SettingsView : UserControl
         save.IsEnabled = false;
         try
         {
-            await PendingMenuPreferenceSave;
+            await Task.WhenAll(PendingMenuPreferenceSave, PendingUpdatePreferenceSave);
             if (!colorSchemeEditor.TryCommit(out var colorError))
             {
                 SetStatus(colorError ?? Localization.Get("Colors.InvalidColor"));
@@ -278,7 +287,7 @@ public sealed class SettingsView : UserControl
             colorSchemeEditor);
     }
 
-    private async Task SaveMenuPreferenceAsync()
+    private async Task SavePreferenceAsync()
     {
         try
         {
@@ -392,6 +401,30 @@ public sealed class SettingsView : UserControl
         };
         return Stack(Card("Settings.Data", Help("Settings.HistoryHelp"), clearCurrent, clearAll),
             Card("Settings.ClearCache", Help("Settings.CacheHelp"), cache));
+    }
+
+    private Control BuildUpdates()
+    {
+        var startup = Check("Settings.CheckForUpdatesOnStartup", runtime.Configuration.Settings.CheckForUpdatesOnStartup);
+        startup.Name = "CheckForUpdatesOnStartupCheckBox";
+        startup.IsCheckedChanged += (_, _) =>
+        {
+            var startupEnabled = startup.IsChecked == true;
+            runtime.Configuration.Settings.CheckForUpdatesOnStartup = startupEnabled;
+            StartupUpdatePreferenceChanged?.Invoke(startupEnabled);
+            PendingUpdatePreferenceSave = SavePreferenceAsync();
+        };
+        var check = ActionButton("Settings.CheckForUpdates", LucideIconKind.RefreshCw);
+        check.Name = "CheckForUpdatesButton";
+        check.Click += (_, _) => CheckForUpdatesRequested?.Invoke();
+        return Stack(Card("Settings.Updates",
+            Row("Updates.CurrentVersion", new TextBlock
+            {
+                Name = "CurrentAppVersion",
+                Text = AppUpdateVersion.Current.ToString(),
+                VerticalAlignment = VerticalAlignment.Center
+            }),
+            startup, Help("Settings.UpdatesHelp"), check));
     }
 
     private void AddSection(string key, string descriptionKey, Control content)

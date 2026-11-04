@@ -8,9 +8,12 @@ using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Services;
+using Yohuke.DanmuPanel.Services.Updates;
+using Yohuke.DanmuPanel.ViewModels.Updates;
 using Yohuke.DanmuPanel.Views;
 using Yohuke.DanmuPanel.Views.Components;
 using Yohuke.DanmuPanel.Views.Settings;
+using Yohuke.DanmuPanel.Views.Updates;
 
 namespace Yohuke.DanmuPanel;
 
@@ -26,6 +29,9 @@ public partial class App : Application
     private LogPanelView? logPanel;
     private readonly List<MessageFeedView> feeds = [];
     private bool settingsOpen;
+    private HttpClient? updateHttp;
+    private AppUpdateViewModel? updateModel;
+    private AppUpdateWindowCoordinator? updates;
 
     /// <inheritdoc/>
     public override void Initialize()
@@ -74,6 +80,14 @@ public partial class App : Application
                 {
                     UseWindowMenuOnMac = configuration.Settings.UseWindowMenuOnMac
                 };
+                updateHttp = new(new HttpClientHandler { UseCookies = false });
+                updateModel = new(new AppUpdateService(new GitHubAppUpdateReleaseSource(updateHttp)),
+                    configuration.Settings, AppUpdateVersion.Current,
+                    uri => (updates?.CurrentWindow?.Launcher ?? shell.Launcher).LaunchUriAsync(uri),
+                    exception => StartupLog.Append(Localization.Get("Updates.CheckFailed"),
+                        Models.Logging.AppLogLevel.WARNING, Localization.Get("Updates.Title"), exception));
+                updates = new(shell, updateModel, () => shell.IsInteractionBlocked);
+                shell.InteractionChanged += updates.RefreshPresentation;
                 workspace.HostWindow = shell;
                 workspace.SelectedRoomChanged += SelectRoom;
                 Localization.LanguageChanged += RefreshLanguage;
@@ -84,6 +98,7 @@ public partial class App : Application
                 shell.Closed += OnShellClosed;
                 shell.BeforeCloseAsync = async () =>
                 {
+                    await updateModel.CancelPendingAsync();
                     await testMessages.FinishPendingAsync();
                     await runtime.DisposeAsync();
                     foreach (var feed in feeds)
@@ -94,6 +109,7 @@ public partial class App : Application
                     testMessages.Dispose();
                     Localization.LanguageChanged -= RefreshLanguage;
                 };
+                shell.Opened += CheckStartupUpdates;
                 shell.Opened += async (_, _) =>
                 {
                     try
@@ -111,6 +127,11 @@ public partial class App : Application
             catch (Exception exception)
             {
                 StartupLog.Append(exception.Message, Models.Logging.AppLogLevel.ERROR, error: exception);
+                if (updates is not null)
+                {
+                    _ = updates.DisposeAsync();
+                }
+                updateHttp?.Dispose();
                 DisposeLog();
                 desktop.MainWindow = new Window
                 {
@@ -165,6 +186,8 @@ public partial class App : Application
             var dialog = new SettingsWindow(runtime, new AccountSettingsView(runtime));
             dialog.WindowMenuOnMacChanged += value => shell.UseWindowMenuOnMac = value;
             dialog.ClearRequested += Clear;
+            dialog.CheckForUpdatesRequested += () => CheckUpdatesManually(dialog);
+            dialog.StartupUpdatePreferenceChanged += updateModel!.SetStartupCheckEnabled;
             await shell.ShowModalAsync<object?>(dialog);
             await Task.WhenAll(feeds.Select(feed => feed.Model.RefreshAsync()));
         }
@@ -210,9 +233,50 @@ public partial class App : Application
         });
     }
 
-    private void OnShellClosed(object? sender, EventArgs args)
+    private async void CheckStartupUpdates(object? sender, EventArgs args)
     {
-        DisposeLog();
+        try
+        {
+            await updates!.CheckOnStartupAsync();
+        }
+        catch (Exception exception)
+        {
+            ReportFailure(exception);
+        }
+    }
+
+    private async void CheckUpdatesManually(Window owner)
+    {
+        try
+        {
+            await updates!.CheckManuallyAsync(owner);
+        }
+        catch (Exception exception)
+        {
+            ReportFailure(exception);
+        }
+    }
+
+    private async void OnShellClosed(object? sender, EventArgs args)
+    {
+        try
+        {
+            if (updates is not null)
+            {
+                shell!.InteractionChanged -= updates.RefreshPresentation;
+                await updates.DisposeAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            StartupLog.Append(exception.Message, Models.Logging.AppLogLevel.ERROR,
+                Localization.Get("Updates.Title"), exception);
+        }
+        finally
+        {
+            updateHttp?.Dispose();
+            DisposeLog();
+        }
     }
 
     private void DisposeLog()

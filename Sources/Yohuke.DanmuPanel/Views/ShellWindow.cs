@@ -132,6 +132,14 @@ public sealed class ShellWindow : Window
     /// <summary>获取当前窗口是否已完成关闭前持久化。</summary>
     public bool CanClose => canClose;
 
+    internal bool IsInteractionBlocked => windows.IsInteractionBlocked;
+
+    internal event Action? InteractionChanged
+    {
+        add => windows.InteractionChanged += value;
+        remove => windows.InteractionChanged -= value;
+    }
+
     /// <summary>在 macOS 上即时切换主窗口内菜单，并同步所有业务窗口的原生菜单显隐。</summary>
     public bool UseWindowMenuOnMac
     {

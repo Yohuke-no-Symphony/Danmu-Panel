@@ -14,6 +14,9 @@ public sealed class PanelSettings
     /// <summary>在 macOS 主窗口内显示菜单；默认使用系统菜单栏。</summary>
     public bool UseWindowMenuOnMac { get; set; }
 
+    /// <summary>启动后后台检查 GitHub 正式发布，旧配置默认开启。</summary>
+    public bool CheckForUpdatesOnStartup { get; set; } = true;
+
     public TranslationSettings Translation { get; set; } = new();
     public MessageReadOptions Reading { get; set; } = new();
     public bool ShowUserPinyin { get; set; }

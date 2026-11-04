@@ -22,6 +22,20 @@ public sealed class SettingsWindow : Window
         remove => view.WindowMenuOnMacChanged -= value;
     }
 
+    /// <summary>请求由应用在当前窗口下显示手动更新检查。</summary>
+    public event Action? CheckForUpdatesRequested
+    {
+        add => view.CheckForUpdatesRequested += value;
+        remove => view.CheckForUpdatesRequested -= value;
+    }
+
+    /// <summary>转发启动更新检查偏好的即时变化。</summary>
+    public event Action<bool>? StartupUpdatePreferenceChanged
+    {
+        add => view.StartupUpdatePreferenceChanged += value;
+        remove => view.StartupUpdatePreferenceChanged -= value;
+    }
+
     /// <summary>创建设置窗口及账号页容器。</summary>
     public SettingsWindow(PanelRuntime runtime, Control accountsView)
     {
