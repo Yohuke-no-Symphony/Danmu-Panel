@@ -730,14 +730,21 @@ public class BilibiliLiveWebSocket : BaseApi, ILiveDanmuSocket
     /// </summary>
     public static BilibiliSuperChatMessage? ParseSuperChatMessage(string roomId, JObject json)
     {
-        var data = json["data"];
+        var command = json.Value<string>("cmd")?.Split(':', 2)[0];
 
-        if (data is null)
+        if (command is not ("SUPER_CHAT_MESSAGE" or "SUPER_CHAT_MESSAGE_JPN") ||
+            json["data"] is not JObject data)
         {
             return null;
         }
 
-        var price = data["price"]?.Value<decimal>() ?? 0;
+        var price = ReadDecimal(data["price"]);
+
+        if (price <= 0)
+        {
+            return null;
+        }
+
         var priceText = data["price_text"]?.Value<string>();
 
         return new()
