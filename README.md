@@ -2,9 +2,7 @@
 
 面向 B 站主播的跨平台阅读台。基于 .NET 10、Avalonia 和 Dock，按模块复用 Danmu Neo 的窗口、主题、监听、登录及发布机制。
 
-![工作台界面（演示消息）](Screenshots/1.png)
-
-界面预览：[工作区右键菜单](Screenshots/WorkspaceMenu.png) · [工作区设置](Screenshots/WorkspaceSettings.png) · [翻译设置](Screenshots/TranslationSettings.png) · [测试面板](Screenshots/TestMessages.png)
+![](Screenshots/1.png)
 
 ## 阅读工作台
 
@@ -26,7 +24,7 @@
 
 不同工作区中的同一直播间标签拥有独立阅读状态。清空会删除对应消息和翻译任务，保留账号、设置及布局；共享翻译缓存可单独清理。
 
-向下翻阅时保留已加载的历史消息与阅读位置；回到顶部后恢复跟随新消息。更多历史仍通过面板右键菜单加载。
+向下翻阅时保留已加载的历史消息与阅读位置；回到顶部后恢复跟随新消息。更多历史仍通过面板右键菜单加载。 
 
 工作区分享使用 `.dnworkspace.json`，兼容 Danmu Neo 的工作区名称和房间资料；导入创建独立工作区，不带入账号、消息和阅读状态。分享文件不包含 Cookie 或翻译 API Key。
 
