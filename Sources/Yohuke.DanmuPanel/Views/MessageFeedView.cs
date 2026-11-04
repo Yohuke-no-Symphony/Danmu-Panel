@@ -43,8 +43,8 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         list = CreateList(Model.ScrollingItems, kind, "ScrollingMessages");
         pinnedList = CreateList(Model.PinnedItems, kind, "PinnedMessages");
         pinnedList.MaxHeight = 0;
-        list.TemplateApplied += (_, _) => AttachScroll(list);
-        list.AttachedToVisualTree += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => AttachScroll(list));
+        list.TemplateApplied += (_, _) => AttachScroll(list, kind);
+        list.AttachedToVisualTree += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => AttachScroll(list, kind));
         list.DetachedFromVisualTree += (_, _) => { scroll?.Dispose(); scroll = null; };
         HeaderActionsTemplate = new FuncDataTemplate<MessageFeedView>((_, _) =>
         {
@@ -129,11 +129,11 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         return result;
     }
 
-    private void AttachScroll(ListBox list)
+    private void AttachScroll(ListBox list, MessageKind kind)
     {
         if (scroll is null && list.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault() is { } viewer)
         {
-            scroll = new(viewer, list);
+            scroll = new(viewer, list, followNewMessages: kind == MessageKind.Danmu);
             scroll.FollowingLatestChanged += following => Model.IsReadingHistory = !following;
             scroll.Attach(Model.ScrollingItems);
         }
@@ -378,6 +378,10 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     private async Task ActivateMessageAsync(MessageItemViewModel item)
     {
         var record = item.Record;
+        if (record.Kind == MessageKind.Danmu || !record.IsRead)
+        {
+            scroll?.PrepareForItemMove(item);
+        }
         if (record.Kind == MessageKind.Danmu)
         {
             var updated = await runtime.Messages.TogglePinAsync(record.Id);

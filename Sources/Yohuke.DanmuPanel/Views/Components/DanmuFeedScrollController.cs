@@ -17,6 +17,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
     private const double LATEST_OFFSET_THRESHOLD = 1;
     private readonly ScrollViewer scrollViewer;
     private readonly ItemsControl itemsControl;
+    private readonly bool followNewMessages;
     private readonly HashSet<INotifyPropertyChanged> observedItems = [];
     private INotifyCollectionChanged? items;
     private object? readingItem;
@@ -27,6 +28,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
     private bool isFollowingLatest;
     private bool isFollowPending;
     private bool isAnchorCorrectionPending;
+    private bool isReadingAnchorPrepared;
     private bool isUpdatingScroll;
     private bool isDisposed;
 
@@ -34,10 +36,11 @@ internal sealed class DanmuFeedScrollController : IDisposable
     public event Action<bool>? FollowingLatestChanged;
 
     /// <summary>连接虚拟化列表及滚动宿主，用户输入始终优先于消息更新。</summary>
-    public DanmuFeedScrollController(ScrollViewer scrollViewer, ItemsControl itemsControl)
+    public DanmuFeedScrollController(ScrollViewer scrollViewer, ItemsControl itemsControl, bool followNewMessages = true)
     {
         this.scrollViewer = scrollViewer;
         this.itemsControl = itemsControl;
+        this.followNewMessages = followNewMessages;
         scrollViewer.PropertyChanged += OnScrollPropertyChanged;
         scrollViewer.LayoutUpdated += OnLayoutUpdated;
         scrollViewer.AddHandler(InputElement.PointerWheelChangedEvent, OnPointerWheelChanged,
@@ -75,7 +78,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
         }
     }
 
-    /// <summary>立即回到底部并恢复随后新消息的跟随。</summary>
+    /// <summary>立即回到底部，并按面板策略决定是否继续跟随新消息。</summary>
     public void ScrollToLatest()
     {
         ObjectDisposedException.ThrowIf(isDisposed, this);
@@ -83,6 +86,23 @@ internal sealed class DanmuFeedScrollController : IDisposable
         {
             ResetToLatest();
         }
+    }
+
+    /// <summary>在消息移组前选择可见的邻近行，避免阅读位置追随即将移走的消息。</summary>
+    public void PrepareForItemMove(object movingItem)
+    {
+        if (items is null || isFollowingLatest && followNewMessages)
+        {
+            return;
+        }
+        CancelPendingFollow();
+        SetFollowingLatest(false);
+        CaptureReadingAnchor(movingItem, requireFullyVisible: true);
+        if (readingItem is null)
+        {
+            CaptureReadingAnchor(movingItem);
+        }
+        isReadingAnchorPrepared = readingItem is not null;
     }
 
     /// <inheritdoc/>
@@ -135,23 +155,25 @@ internal sealed class DanmuFeedScrollController : IDisposable
         {
             return;
         }
-        if (isFollowingLatest)
+        if (isFollowingLatest && followNewMessages)
         {
             QueueFollowLatest();
         }
         else
         {
+            SetFollowingLatest(false);
             QueueAnchorCorrection();
+            isReadingAnchorPrepared = false;
         }
     }
 
     private void OnLayoutUpdated(object? sender, EventArgs e)
     {
-        if (items is null || isUpdatingScroll || isAnchorCorrectionPending)
+        if (items is null || isUpdatingScroll || isAnchorCorrectionPending || isReadingAnchorPrepared)
         {
             return;
         }
-        if (isFollowingLatest && !IsAtLatest())
+        if (isFollowingLatest && followNewMessages && !IsAtLatest())
         {
             QueueFollowLatest();
         }
@@ -172,7 +194,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
             CancelPendingFollow();
             readingItem = null;
             SetFollowingLatest(scrollingPointer is null && IsAtLatest());
-            if (isFollowingLatest)
+            if (isFollowingLatest && followNewMessages)
             {
                 QueueFollowLatest();
             }
@@ -234,7 +256,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
         CancelPendingFollow();
         readingItem = null;
         SetFollowingLatest(IsAtLatest());
-        if (isFollowingLatest)
+        if (isFollowingLatest && followNewMessages)
         {
             QueueFollowLatest();
         }
@@ -255,6 +277,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
         {
             isUpdatingScroll = false;
         }
+        CaptureReadingAnchor();
         QueueFollowLatest();
     }
 
@@ -263,6 +286,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
         session++;
         isFollowPending = false;
         isAnchorCorrectionPending = false;
+        isReadingAnchorPrepared = false;
     }
 
     private bool IsAtLatest()
@@ -291,23 +315,29 @@ internal sealed class DanmuFeedScrollController : IDisposable
         FollowingLatestChanged?.Invoke(value);
     }
 
-    private void CaptureReadingAnchor()
+    private void CaptureReadingAnchor(object? excludedItem = null, bool requireFullyVisible = false)
     {
         readingItem = null;
-        if (isFollowingLatest)
+        if (isFollowingLatest && followNewMessages)
         {
             return;
         }
         var nearest = double.MaxValue;
         foreach (var container in itemsControl.GetRealizedContainers())
         {
+            var item = itemsControl.ItemFromContainer(container);
+            if (ReferenceEquals(item, excludedItem))
+            {
+                continue;
+            }
             if (container.TranslatePoint(default, scrollViewer) is not { } position ||
                 position.Y + container.Bounds.Height <= 0 || position.Y >= scrollViewer.Viewport.Height ||
+                requireFullyVisible && (position.Y < 0 || position.Y + container.Bounds.Height > scrollViewer.Viewport.Height) ||
                 Math.Abs(position.Y) >= nearest)
             {
                 continue;
             }
-            readingItem = itemsControl.ItemFromContainer(container);
+            readingItem = item;
             readingY = position.Y;
             nearest = Math.Abs(position.Y);
         }
@@ -402,7 +432,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
 
     private void QueueFollowLatest()
     {
-        if (isFollowPending)
+        if (!isFollowingLatest || isFollowPending)
         {
             return;
         }

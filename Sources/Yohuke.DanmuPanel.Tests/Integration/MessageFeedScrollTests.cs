@@ -15,16 +15,16 @@ using Xunit;
 
 namespace Yohuke.DanmuPanel.Tests.Integration;
 
-/// <summary>验证四类真实消息列表的底部追加、历史保位及阅读状态更新。</summary>
+/// <summary>验证消息类型对应的底部跟随、历史保位及阅读状态更新。</summary>
 public sealed class MessageFeedScrollTests
 {
-    /// <summary>四类消息在底部跟随，离开底部后追加和已读更新都保留当前阅读位置。</summary>
+    /// <summary>仅弹幕在底部跟随，其他消息追加和已读更新保留当前阅读位置。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.Danmu)]
     [InlineData(MessageKind.SuperChat)]
     [InlineData(MessageKind.Gift)]
     [InlineData(MessageKind.Guard)]
-    public async Task AppendingMessagesPreservesHistoryAndFollowsOnlyAtBottom(MessageKind kind)
+    public async Task AppendingMessagesPreservesHistoryAndFollowsOnlyDanmuAtBottom(MessageKind kind)
     {
         using var directory = new MessageStoreTestDirectory();
         var configuration = new PanelConfiguration();
@@ -48,12 +48,25 @@ public sealed class MessageFeedScrollTests
             AssertAtBottom(viewer);
             Assert.False(view.Model.IsReadingHistory);
             Assert.Equal(view.Model.ScrollingItems.OrderBy(item => item.Record.Time), view.Model.ScrollingItems);
+            var bottomAnchor = Assert.IsAssignableFrom<Control>(viewer.CurrentAnchor);
+            var bottomItem = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(bottomAnchor));
+            var bottomY = bottomAnchor.TranslatePoint(default, viewer)!.Value.Y;
             var latest = Message(kind, time.AddSeconds(140));
             await runtime.Messages.AppendAsync(latest, new());
             await view.Model.RefreshAsync();
             Pump(window);
             Assert.Equal(latest.Id, view.Model.ScrollingItems[^1].Record.Id);
-            AssertAtBottom(viewer);
+            if (kind == MessageKind.Danmu)
+            {
+                AssertAtBottom(viewer);
+            }
+            else
+            {
+                var retained = Assert.IsAssignableFrom<Control>(list.ContainerFromItem(bottomItem));
+                Assert.InRange(Math.Abs(retained.TranslatePoint(default, viewer)!.Value.Y - bottomY), 0, 1);
+                Assert.True(viewer.ScrollBarMaximum.Y - viewer.Offset.Y > 1);
+                Assert.True(view.Model.IsReadingHistory);
+            }
 
             viewer.Offset = new(0, viewer.ScrollBarMaximum.Y / 2);
             Pump(window);
@@ -95,6 +108,23 @@ public sealed class MessageFeedScrollTests
             Pump(window);
             AssertAtBottom(viewer);
             Assert.False(view.Model.IsReadingHistory);
+            bottomAnchor = Assert.IsAssignableFrom<Control>(viewer.CurrentAnchor);
+            bottomItem = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(bottomAnchor));
+            bottomY = bottomAnchor.TranslatePoint(default, viewer)!.Value.Y;
+            await runtime.Messages.AppendAsync(Message(kind, time.AddSeconds(145)), new());
+            await view.Model.RefreshAsync();
+            Pump(window);
+            if (kind == MessageKind.Danmu)
+            {
+                AssertAtBottom(viewer);
+            }
+            else
+            {
+                var retained = Assert.IsAssignableFrom<Control>(list.ContainerFromItem(bottomItem));
+                Assert.InRange(Math.Abs(retained.TranslatePoint(default, viewer)!.Value.Y - bottomY), 0, 1);
+                Assert.True(viewer.ScrollBarMaximum.Y - viewer.Offset.Y > 1);
+                Assert.True(view.Model.IsReadingHistory);
+            }
             Assert.Empty(errors);
         }
         finally
