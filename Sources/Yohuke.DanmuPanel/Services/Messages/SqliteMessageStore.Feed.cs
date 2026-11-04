@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Yohuke.DanmuPanel.Models.Messages;
 
 namespace Yohuke.DanmuPanel.Services.Messages;
@@ -39,15 +40,31 @@ public sealed partial class SqliteMessageStore
             }
             var totalLimit = pinnedCount + Math.Max(retainedCount, historyLimit);
             using var command = Command(connection, transaction, """
-                SELECT payload FROM (
-                    SELECT payload,priority,occurred_ms,sequence FROM message_records
+                SELECT messages.payload,jobs.status FROM (
+                    SELECT id,generation,payload,priority,occurred_ms,sequence FROM message_records
                     WHERE room_tab_id=$room AND kind=$kind
                     ORDER BY priority DESC,pinned_ms DESC,occurred_ms DESC,sequence DESC LIMIT $limit
-                ) ORDER BY priority DESC,occurred_ms ASC,sequence ASC;
+                ) AS messages
+                LEFT JOIN translation_jobs AS jobs ON jobs.id=messages.id AND jobs.generation=messages.generation
+                    AND jobs.fingerprint=json_extract(messages.payload,'$.TranslationFingerprint')
+                ORDER BY messages.priority DESC,messages.occurred_ms ASC,messages.sequence ASC;
                 """, ("$room", roomTabId), ("$kind", (int)kind), ("$limit", totalLimit));
-            var records = ReadMessages(command);
+            var records = new List<MessageRecord>();
+            var pending = new HashSet<string>(StringComparer.Ordinal);
+            using (var reader = command.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    var record = JsonSerializer.Deserialize<MessageRecord>(reader.GetString(0))!;
+                    records.Add(record);
+                    if (!reader.IsDBNull(1) && reader.GetInt32(1) == 0)
+                    {
+                        pending.Add(record.Id);
+                    }
+                }
+            }
             transaction.Commit();
-            return new MessageFeedSnapshot(records, unreadCount);
+            return new MessageFeedSnapshot(records, unreadCount) { PendingTranslationIds = pending };
         }, cancellationToken);
     }
 }

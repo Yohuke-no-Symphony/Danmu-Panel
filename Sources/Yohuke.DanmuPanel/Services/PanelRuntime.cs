@@ -51,6 +51,7 @@ public sealed class PanelRuntime : IAsyncDisposable
         TestMessages = new(Messages, () => Configuration.Settings, roomId => MessagesChanged?.Invoke(roomId, null),
             () => scheduler.NotifyWorkAvailable());
         scheduler.Completed += (_, args) => MessagesChanged?.Invoke(args.RoomTabId, null);
+        scheduler.PendingChanged += roomId => MessagesChanged?.Invoke(roomId, null);
         scheduler.Error += message => ReportError(message, I18n.Localization.Get("Panel.Log.Translation"));
         Emoticons = new(new AppDirectoryService(configurationStore.DirectoryPath));
         Avatars = new(new AppDirectoryService(configurationStore.DirectoryPath));

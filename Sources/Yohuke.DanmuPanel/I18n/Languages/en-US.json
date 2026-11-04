@@ -186,6 +186,7 @@
     "Panel.ReceiveQueueFull": "The receive queue is full. Listening stopped while accepted messages are saved.",
     "Panel.Reconnecting": "Reconnecting",
     "Panel.RetryTranslation": "Translate again",
+    "Panel.Translating": "Translating",
     "Panel.RoomId": "Room ID",
     "Panel.RoomSearchHint": "Name, UID or room ID; leave empty for followed live rooms",
     "Panel.Save": "Save",

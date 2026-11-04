@@ -988,6 +988,12 @@
         <Setter Property="Foreground" Value="{DynamicResource MessageTranslationBrush}" />
     </Style>
 
+    <Style Selector="components|ShimmerTextBlock.translationPending">
+        <Setter Property="Foreground" Value="{DynamicResource MessageTranslationBrush}" />
+        <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeBody}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
     <Style Selector="components|HoverMarqueeTextBlock.originalText">
         <Setter Property="Foreground" Value="{DynamicResource MessageOriginalBrush}" />
     </Style>
@@ -1060,6 +1066,10 @@
     <Style Selector="Grid.compactDanmu TextBlock.danmuFeedContent">
         <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeCompact}" />
         <Setter Property="LineSpacing" Value="0" />
+    </Style>
+
+    <Style Selector="Grid.compactDanmu components|ShimmerTextBlock.translationPending">
+        <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeCompact}" />
     </Style>
 
     <Style Selector="Grid.compactDanmu TextBlock.regularFeedContent">

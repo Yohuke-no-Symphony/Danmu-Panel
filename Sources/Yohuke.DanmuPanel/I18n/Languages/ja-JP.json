@@ -186,6 +186,7 @@
     "Panel.ReceiveQueueFull": "受信キューがいっぱいのため、受信を停止しました。受信済みのメッセージを保存しています。",
     "Panel.Reconnecting": "再接続中",
     "Panel.RetryTranslation": "再翻訳",
+    "Panel.Translating": "翻訳中",
     "Panel.RoomId": "ルーム ID",
     "Panel.RoomSearchHint": "名前、UID、ルーム ID。空欄で配信中のフォロー済みルームを検索",
     "Panel.Save": "保存",

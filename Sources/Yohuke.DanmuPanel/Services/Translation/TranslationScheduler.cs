@@ -32,6 +32,7 @@ public sealed class TranslationScheduler : ITranslationScheduler
 
     public event EventHandler<TranslationCompletedEventArgs>? Completed;
     public event Action<string>? Error;
+    public event Action<string>? PendingChanged;
 
     /// <summary>恢复待办并启动唯一调度循环。</summary>
     public async Task StartAsync(TranslationSettings settings, CancellationToken cancellationToken = default)
@@ -138,8 +139,12 @@ public sealed class TranslationScheduler : ITranslationScheduler
                     {
                         if (settings.BacklogMode == TranslationBacklogMode.Realtime)
                         {
-                            await store.TrimPendingAsync(timeProvider.GetUtcNow() - MAX_ORDINARY_AGE,
+                            var trimmed = await store.TrimPendingAsync(timeProvider.GetUtcNow() - MAX_ORDINARY_AGE,
                                 MAX_ORDINARY_PENDING, running.Keys.ToArray(), lifetime.Token).ConfigureAwait(false);
+                            if (trimmed > 0)
+                            {
+                                PendingChanged?.Invoke("");
+                            }
                         }
 
                         var pending = await store.GetPendingAsync(MAX_ORDINARY_PENDING + MAX_CONCURRENCY, lifetime.Token).ConfigureAwait(false);
@@ -191,7 +196,10 @@ public sealed class TranslationScheduler : ITranslationScheduler
             var request = TranslationRequestFactory.Create(snapshot, job.Text, job.EmoticonTexts);
             if (request is null)
             {
-                await store.FailAsync(job, "skipped:emoticon", cancellationToken).ConfigureAwait(false);
+                if (await store.FailAsync(job, "skipped:emoticon", cancellationToken).ConfigureAwait(false))
+                {
+                    PendingChanged?.Invoke(job.RoomTabId);
+                }
                 return;
             }
 
@@ -222,6 +230,7 @@ public sealed class TranslationScheduler : ITranslationScheduler
             {
                 if (await store.FailAsync(job, message, cancellationToken).ConfigureAwait(false))
                 {
+                    PendingChanged?.Invoke(job.RoomTabId);
                     Error?.Invoke(message);
                 }
             }

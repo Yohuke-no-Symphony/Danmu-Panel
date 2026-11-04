@@ -27,6 +27,8 @@ public sealed class MessageItemViewModel : ObservableObject
     private string? detail;
     private string price = "";
     private string translation = "";
+    private bool translationPending;
+    private bool hasTranslatableContent;
     private IBrush borderBrush = Brushes.Transparent;
     private IBrush medalBorderBrush = Brushes.Transparent;
     private IReadOnlyList<DanmuEmoticon> emoticons = [];
@@ -51,6 +53,8 @@ public sealed class MessageItemViewModel : ObservableObject
     public string Price => price;
     public string Translation => translation;
     public bool HasTranslation => Translation.Length > 0;
+    public bool IsTranslating => settings.TranslationEnabled && translationPending && hasTranslatableContent && !HasTranslation;
+    public bool ShowTranslation => HasTranslation || IsTranslating;
     public bool ShowOriginal => !HasTranslation || settings.TranslationDisplayMode == TranslationDisplayMode.Bilingual;
     public bool HasMedal => Medal.Length > 0;
     public bool AutoScrollLongMessages => settings.AutoScrollLongMessages;
@@ -67,12 +71,13 @@ public sealed class MessageItemViewModel : ObservableObject
     {
     }
 
-    private MessageItemViewModel(MessageRecord record, MessageDisplaySettings settings, IPinyinService pinyin)
+    private MessageItemViewModel(MessageRecord record, MessageDisplaySettings settings, IPinyinService pinyin,
+        bool isTranslationPending = false)
     {
         Record = record;
         this.settings = settings;
         this.pinyin = pinyin;
-        Update(record, settings, true);
+        Update(record, settings, true, isTranslationPending);
     }
 
     /// <summary>原位更新，保留列表容器及阅读位置。</summary>
@@ -81,17 +86,18 @@ public sealed class MessageItemViewModel : ObservableObject
         Apply(record, MessageDisplaySettings.Capture(currentSettings, settings));
     }
 
-    internal static MessageItemViewModel Create(MessageRecord record, MessageDisplaySettings settings, IPinyinService pinyin)
+    internal static MessageItemViewModel Create(MessageRecord record, MessageDisplaySettings settings, IPinyinService pinyin,
+        bool isTranslationPending = false)
     {
-        return new(record, settings, pinyin);
+        return new(record, settings, pinyin, isTranslationPending);
     }
 
-    internal void Apply(MessageRecord record, MessageDisplaySettings currentSettings)
+    internal void Apply(MessageRecord record, MessageDisplaySettings currentSettings, bool isTranslationPending = false)
     {
-        Update(record, currentSettings, false);
+        Update(record, currentSettings, false, isTranslationPending);
     }
 
-    private void Update(MessageRecord record, MessageDisplaySettings currentSettings, bool initialize)
+    private void Update(MessageRecord record, MessageDisplaySettings currentSettings, bool initialize, bool isTranslationPending)
     {
         var previous = Record;
         var previousSettings = settings;
@@ -100,11 +106,21 @@ public sealed class MessageItemViewModel : ObservableObject
         var hadContentPinyin = HasContentPinyin;
         var hadMedal = HasMedal;
         var hadTranslation = HasTranslation;
+        var wasTranslating = IsTranslating;
+        var showedTranslation = ShowTranslation;
         var showedOriginal = ShowOriginal;
         var showedPin = ShowPinBadge;
         var showedUnread = ShowUnreadDot;
         Record = record;
         settings = currentSettings;
+        translationPending = isTranslationPending;
+
+        if (initialize || previous.Kind != record.Kind || previous.Content != record.Content ||
+            !previous.Emoticons.SequenceEqual(record.Emoticons))
+        {
+            hasTranslatableContent = record.Kind is MessageKind.Danmu or MessageKind.SuperChat &&
+                TranslationTextExtractor.Extract(record.Content, record.Emoticons.Select(emoticon => emoticon.Text)).Length > 0;
+        }
 
         NotifyChange(previous.UserName, record.UserName, nameof(Name));
         NotifyChange(previous.MedalLevel, record.MedalLevel, nameof(MedalLevel));
@@ -172,6 +188,8 @@ public sealed class MessageItemViewModel : ObservableObject
         NotifyChange(hadContentPinyin, HasContentPinyin, nameof(HasContentPinyin));
         NotifyChange(hadMedal, HasMedal, nameof(HasMedal));
         NotifyChange(hadTranslation, HasTranslation, nameof(HasTranslation));
+        NotifyChange(wasTranslating, IsTranslating, nameof(IsTranslating));
+        NotifyChange(showedTranslation, ShowTranslation, nameof(ShowTranslation));
         NotifyChange(showedOriginal, ShowOriginal, nameof(ShowOriginal));
     }
 

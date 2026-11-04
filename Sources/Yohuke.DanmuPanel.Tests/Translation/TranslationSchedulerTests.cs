@@ -17,9 +17,11 @@ public sealed class TranslationSchedulerTests
         store.Pending.Add(Job("important", 1, DateTimeOffset.UtcNow.AddMinutes(-1)));
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var count = 0;
+        var pendingChanges = new ConcurrentQueue<string>();
         await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient((request, _) => Task.FromResult(request.Text)), cache);
         await using var scheduler = new TranslationScheduler(store, service);
+        scheduler.PendingChanged += pendingChanges.Enqueue;
         scheduler.Completed += (_, _) =>
         {
             if (Interlocked.Increment(ref count) == completed)
@@ -30,6 +32,8 @@ public sealed class TranslationSchedulerTests
         await scheduler.StartAsync(new() { Enabled = true, Model = "test", BacklogMode = mode });
         await completion.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(skipped, store.Skipped);
+        Assert.Equal(skipped, pendingChanges.Count);
+        Assert.All(pendingChanges, room => Assert.Equal("", room));
         Assert.Equal("important", store.Results["important"]);
     }
 
@@ -127,6 +131,27 @@ public sealed class TranslationSchedulerTests
         await completed.Task.WaitAsync(TimeSpan.FromSeconds(3));
         Assert.Equal(1, client.Calls);
         Assert.False(client.WasCancelled);
+    }
+
+    /// <summary>翻译失败或纯表情被跳过时通知对应房间刷新等待状态。</summary>
+    [Theory]
+    [InlineData("hello")]
+    [InlineData("😀")]
+    public async Task FailedOrSkippedJobsNotifyPendingChange(string text)
+    {
+        var store = new MemoryTranslationJobStore();
+        store.Pending.Add(Job("message", 1, DateTimeOffset.UtcNow) with { Text = text });
+        var changed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var cache = new SqliteTranslationCache(":memory:");
+        await using var service = new TranslationService(new DelegateTranslationClient((_, _) =>
+            throw new TranslationException("translation.failed")), cache);
+        await using var scheduler = new TranslationScheduler(store, service);
+        scheduler.PendingChanged += room => changed.TrySetResult(room);
+
+        await scheduler.StartAsync(new() { Enabled = true, Model = "test" });
+
+        Assert.Equal("room", await changed.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Empty(await store.GetPendingAsync(1));
     }
 
     private static TranslationJob Job(string id, int priority, DateTimeOffset createdAt)

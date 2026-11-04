@@ -224,11 +224,17 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         originalMarquee.Bind(HoverMarqueeTextBlock.PinyinFontSizeProperty, new DynamicResourceExtension("MessageFontSizePinyin"));
         var translationMarquee = CreateMarquee(nameof(MessageItemViewModel.Translation));
         translationMarquee.Classes.Add("translatedText");
+        var translatedContent = new Grid { Children = { translation, translationMarquee } };
+        translatedContent.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.HasTranslation)));
+        var pendingTranslation = new ShimmerTextBlock { HorizontalAlignment = HorizontalAlignment.Left };
+        pendingTranslation.Classes.Add("translationPending");
+        pendingTranslation.Bind(ShimmerTextBlock.TextProperty, Localization.Observe("Panel.Translating"));
+        pendingTranslation.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.IsTranslating)));
         var originalRegion = new Grid { Children = { original, originalMarquee } };
         originalRegion.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.ShowOriginal)));
-        var translationRegion = new Grid { Children = { translation, translationMarquee } };
+        var translationRegion = new Grid { Children = { translatedContent, pendingTranslation } };
         translationRegion.Classes.Add("translationLine");
-        translationRegion.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.HasTranslation)));
+        translationRegion.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.ShowTranslation)));
         var price = BoundText(nameof(MessageItemViewModel.Price));
         price.Classes.Add("scFeedPrice");
         price.HorizontalAlignment = HorizontalAlignment.Right;
@@ -369,6 +375,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
                     await runtime.Messages.UpsertTranslationJobAsync(item.Record.Id, item.Record.Generation,
                         TranslationRequestFactory.GetConfigurationFingerprint(runtime.Configuration.Settings.Translation));
                     runtime.NotifyTranslation(retryAuthentication: true);
+                    await Model.RefreshAsync();
                 }
             });
             retry.IsEnabled = runtime.Configuration.Settings.Translation.Enabled;

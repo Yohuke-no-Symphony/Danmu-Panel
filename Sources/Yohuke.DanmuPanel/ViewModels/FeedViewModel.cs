@@ -183,22 +183,25 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
             for (var index = 0; index < records.Count; index++)
             {
                 var record = records[index];
+                var translationPending = record.TranslationFingerprint == displaySettings.TranslationFingerprint &&
+                    snapshot.PendingTranslationIds.Contains(record.Id);
                 if (translationEnabled && record.Kind is MessageKind.Danmu or MessageKind.SuperChat)
                 {
                     var fingerprint = displaySettings.TranslationFingerprint;
                     if (record.TranslationFingerprint != fingerprint && translationRequested.Add(record.Id + fingerprint))
                     {
-                        await runtime.Messages.UpsertTranslationJobAsync(record.Id, record.Generation, fingerprint, cancellationToken);
+                        var queued = await runtime.Messages.UpsertTranslationJobAsync(record.Id, record.Generation, fingerprint, cancellationToken);
                         if (disposed || version != revision || cancellationToken.IsCancellationRequested)
                         {
                             return;
                         }
-                        translationWorkCreated = true;
+                        translationPending = queued;
+                        translationWorkCreated |= queued;
                     }
                 }
                 if (!existingItems.TryGetValue(record.Id, out var existing))
                 {
-                    var item = MessageItemViewModel.Create(record, displaySettings, runtime.Pinyin);
+                    var item = MessageItemViewModel.Create(record, displaySettings, runtime.Pinyin, translationPending);
                     Items.Insert(index, item);
                     _ = LoadEmoticonsAsync(item, cancellationToken);
                 }
@@ -209,7 +212,7 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
                         var oldIndex = Items.IndexOf(existing);
                         Items.Move(oldIndex, index);
                     }
-                    existing.Apply(record, displaySettings);
+                    existing.Apply(record, displaySettings, translationPending);
                 }
             }
             if (translationWorkCreated)

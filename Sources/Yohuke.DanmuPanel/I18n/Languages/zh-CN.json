@@ -185,6 +185,7 @@
     "Panel.ReceiveQueueFull": "消息队列已满，监听已停止；正在保存已接收消息。",
     "Panel.Reconnecting": "重连中",
     "Panel.RetryTranslation": "重新翻译",
+    "Panel.Translating": "翻译中",
     "Panel.RoomId": "房间号",
     "Panel.RoomSearchHint": "昵称、UID 或房间号；留空查找正在直播的关注",
     "Panel.Save": "保存",

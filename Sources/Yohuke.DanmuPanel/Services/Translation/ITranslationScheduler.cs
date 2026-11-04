@@ -7,6 +7,7 @@ public interface ITranslationScheduler : IAsyncDisposable
 {
     event EventHandler<TranslationCompletedEventArgs>? Completed;
     event Action<string>? Error;
+    event Action<string>? PendingChanged;
     Task StartAsync(TranslationSettings settings, CancellationToken cancellationToken = default);
     Task UpdateSettingsAsync(TranslationSettings settings, CancellationToken cancellationToken = default);
     void NotifyWorkAvailable(bool retryAuthentication = false);

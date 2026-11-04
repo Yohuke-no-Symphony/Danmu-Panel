@@ -14,6 +14,7 @@ internal sealed class MessageDisplaySettings
     private readonly Dictionary<string, IBrush> brushes = new(StringComparer.Ordinal);
 
     internal string TranslationFingerprint { get; }
+    internal bool TranslationEnabled { get; }
     internal TranslationDisplayMode TranslationDisplayMode { get; }
     internal bool ShowUserPinyin { get; }
     internal bool ShowGiftPinyin { get; }
@@ -27,6 +28,7 @@ internal sealed class MessageDisplaySettings
     private MessageDisplaySettings(PanelSettings settings, string fingerprint, string languageId)
     {
         TranslationFingerprint = fingerprint;
+        TranslationEnabled = settings.Translation.Enabled;
         TranslationDisplayMode = settings.Translation.DisplayMode;
         ShowUserPinyin = settings.ShowUserPinyin;
         ShowGiftPinyin = settings.ShowGiftPinyin;
@@ -44,6 +46,7 @@ internal sealed class MessageDisplaySettings
         var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation);
         var languageId = Localization.IsInitialized ? Localization.CurrentLanguageID : "";
         if (previous is not null && previous.TranslationFingerprint == fingerprint &&
+            previous.TranslationEnabled == settings.Translation.Enabled &&
             previous.TranslationDisplayMode == settings.Translation.DisplayMode &&
             previous.ShowUserPinyin == settings.ShowUserPinyin && previous.ShowGiftPinyin == settings.ShowGiftPinyin &&
             previous.ShowDanmuPinyin == settings.ShowDanmuPinyin &&
