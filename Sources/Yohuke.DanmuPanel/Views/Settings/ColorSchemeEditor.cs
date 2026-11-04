@@ -1,8 +1,10 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Lucide.Avalonia;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.Appearance;
 using Yohuke.DanmuPanel.Models.State;
@@ -44,25 +46,32 @@ public sealed class ColorSchemeEditor : UserControl
         };
         schemeName = new() { Name = "ColorSchemeName", HorizontalAlignment = HorizontalAlignment.Stretch };
         schemeName.Bind(TextBox.WatermarkProperty, Localization.Observe("Colors.SchemeName"));
-        var saveAs = ActionButton("Colors.SaveAs", "SaveColorSchemeAs", SaveAs);
-        update = ActionButton("Colors.UpdateScheme", "UpdateColorScheme", UpdateScheme);
-        delete = ActionButton("Colors.DeleteScheme", "DeleteColorScheme", DeleteScheme);
-        var reset = ActionButton("Colors.ResetAll", "ResetAllColors", ResetAll);
+        var saveAs = ActionButton("Colors.SaveAs", "SaveColorSchemeAs", LucideIconKind.CopyPlus, SaveAs);
+        update = ActionButton("Colors.UpdateScheme", "UpdateColorScheme", LucideIconKind.Save, UpdateScheme);
+        delete = ActionButton("Colors.DeleteScheme", "DeleteColorScheme", LucideIconKind.Trash2, DeleteScheme);
+        var reset = ActionButton("Colors.ResetAll", "ResetAllColors", LucideIconKind.RotateCcw, ResetAll);
         status = new() { Name = "ColorSchemeStatus", TextWrapping = TextWrapping.Wrap, IsVisible = false };
-        var actions = new WrapPanel
+        var actions = new StackPanel
         {
             Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            VerticalAlignment = VerticalAlignment.Center,
             Children = { saveAs, update, delete, reset }
         };
         var heading = Label("Colors.Title");
         heading.Classes.Add("sectionTitle");
+        heading.VerticalAlignment = VerticalAlignment.Center;
+        var header = new Grid { ColumnDefinitions = new("*,Auto"), ColumnSpacing = 12 };
+        header.Children.Add(heading);
+        Grid.SetColumn(actions, 1);
+        header.Children.Add(actions);
         var help = Label("Colors.Help");
         help.Classes.Add("muted");
         help.FontSize = 12;
         var content = new StackPanel
         {
             Spacing = 12,
-            Children = { heading, help, Row("Colors.Scheme", schemes), Row("Colors.SchemeName", schemeName), actions, status }
+            Children = { header, help, Row("Colors.Scheme", schemes), Row("Colors.SchemeName", schemeName), status }
         };
         foreach (var group in ColorSettingCatalog.Definitions.GroupBy(definition => definition.GroupKey))
         {
@@ -332,9 +341,17 @@ public sealed class ColorSchemeEditor : UserControl
         return row;
     }
 
-    private static Button ActionButton(string key, string name, Action action)
+    private static Button ActionButton(string key, string name, LucideIconKind icon, Action action)
     {
-        var button = new Button { Name = name, Content = Label(key), Margin = new Thickness(0, 0, 8, 6) };
+        var button = new Button
+        {
+            Name = name,
+            Content = new LucideIcon { Kind = icon, Size = 16 },
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        button.Classes.Add("iconButton");
+        button.Bind(ToolTip.TipProperty, Localization.Observe(key));
+        button.Bind(AutomationProperties.NameProperty, Localization.Observe(key));
         button.Click += (_, _) => action();
         return button;
     }

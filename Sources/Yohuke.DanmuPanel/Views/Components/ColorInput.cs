@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Lucide.Avalonia;
 using Yohuke.DanmuPanel.I18n;
 
 namespace Yohuke.DanmuPanel.Views.Components;
@@ -42,7 +43,14 @@ public sealed class ColorInput : UserControl
         pickerButton.Bind(ToolTip.TipProperty, Localization.Observe("Colors.PickColor"));
         pickerButton.Bind(AutomationProperties.NameProperty, Localization.Observe("Colors.PickColor"));
         pickerButton.Click += (_, _) => OpenPicker(pickerButton);
-        var reset = new Button { Name = "ResetColorButton", Content = "↺", Width = 36, Padding = new Thickness(0) };
+        var reset = new Button
+        {
+            Name = "ResetColorButton",
+            Content = new LucideIcon { Kind = LucideIconKind.RotateCcw, Size = 16 },
+            Width = 36,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        reset.Classes.Add("iconButton");
         reset.Bind(ToolTip.TipProperty, Localization.Observe("Colors.ResetColor"));
         reset.Bind(AutomationProperties.NameProperty, Localization.Observe("Colors.ResetColor"));
         reset.Click += (_, _) =>
