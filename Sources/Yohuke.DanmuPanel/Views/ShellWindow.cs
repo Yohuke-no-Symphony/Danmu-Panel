@@ -2,7 +2,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Lucide.Avalonia;
@@ -21,7 +20,6 @@ public sealed class ShellWindow : Window
     private readonly WorkspaceLayoutStore layoutStore;
     private readonly ShellWindowRegistry windows;
     private readonly ContentControl dockHost;
-    private readonly TextBlock errorText;
     private readonly Menu menu;
     private readonly Button pinButton;
     private readonly LucideIcon pinIcon;
@@ -35,7 +33,7 @@ public sealed class ShellWindow : Window
     private bool canClose;
     private bool useWindowMenuOnMac;
 
-    /// <summary>创建工作台；面板键为 workspace、danmu、superChat、gift、guard、testMessages。</summary>
+    /// <summary>创建工作台；面板键为 workspace、danmu、superChat、gift、guard、testMessages、log。</summary>
     public ShellWindow(IReadOnlyDictionary<string, Control> panels, Control roomToolbar, string configDirectory)
         : this(panels, roomToolbar, configDirectory, OperatingSystem.IsMacOS())
     {
@@ -92,13 +90,7 @@ public sealed class ShellWindow : Window
                 VerticalAlignment = VerticalAlignment.Center
             }
         };
-        errorText = new() { Margin = new(12, 0, 12, 8), TextWrapping = TextWrapping.Wrap, IsVisible = false };
-        errorText[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("AppErrorBrush");
-        var body = new Grid { RowDefinitions = new("*,Auto") };
-        body.Children.Add(dockHost);
-        Grid.SetRow(errorText, 1);
-        body.Children.Add(errorText);
-        Content = body;
+        Content = dockHost;
         var titleBar = WindowChrome.AttachFrame(this, pinButton);
         var header = new Grid { ColumnDefinitions = new("Auto,Auto,*"), Margin = new(12, 0, 8, 0) };
         header.Children.Add(new TextBlock
@@ -179,14 +171,6 @@ public sealed class ShellWindow : Window
     public Task<T> ShowModalAsync<T>(Window dialog)
     {
         return windows.ShowDialogAsync<T>(dialog);
-    }
-
-    /// <summary>显示调用方已经处理过的错误文本，不再触发错误事件。</summary>
-    public void ShowError(string text)
-    {
-        Dispatcher.UIThread.VerifyAccess();
-        errorText.Text = text;
-        errorText.IsVisible = !string.IsNullOrWhiteSpace(text);
     }
 
     /// <summary>保存布局及应用状态后关闭，失败时允许重试。</summary>
@@ -416,7 +400,6 @@ public sealed class ShellWindow : Window
             Dispatcher.UIThread.Post(() => ReportFailure(exception));
             return;
         }
-        ShowError(exception.Message);
         OperationFailed?.Invoke(exception);
     }
 }

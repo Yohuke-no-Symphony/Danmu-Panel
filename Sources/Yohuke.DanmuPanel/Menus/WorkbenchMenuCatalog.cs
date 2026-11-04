@@ -153,6 +153,7 @@ internal sealed class WorkbenchMenuCatalog : IDisposable
             WorkbenchPanelIds.GIFT => LucideIconKind.Gift,
             WorkbenchPanelIds.GUARD => LucideIconKind.Ship,
             WorkbenchPanelIds.TEST_MESSAGES => LucideIconKind.FlaskConical,
+            WorkbenchPanelIds.LOG => LucideIconKind.Logs,
             _ => throw new ArgumentOutOfRangeException(nameof(id))
         };
     }

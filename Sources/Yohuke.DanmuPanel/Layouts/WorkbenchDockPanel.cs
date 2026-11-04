@@ -31,6 +31,7 @@ internal sealed class WorkbenchDockPanel : Tool, IDeferredContentPresentation
             WorkbenchPanelIds.GIFT => "Workbench.Panel.Gift",
             WorkbenchPanelIds.GUARD => "Workbench.Panel.Guard",
             WorkbenchPanelIds.TEST_MESSAGES => "Workbench.Panel.TestMessages",
+            WorkbenchPanelIds.LOG => "Workbench.Panel.Log",
             _ => throw new ArgumentOutOfRangeException(nameof(panelId))
         });
     }

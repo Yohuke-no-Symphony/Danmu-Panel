@@ -389,6 +389,21 @@
     "TestMessages.Failed": "测试消息操作失败，请查看错误信息。",
     "TestMessages.SampleUser": "测试观众",
     "TestMessages.SampleContent": "这是一条用于检查显示、置顶和滚动的测试消息。",
-    "TestMessages.SampleGift": "测试礼物"
+    "TestMessages.SampleGift": "测试礼物",
+    "UI.LogPanelView.Clear": "清空日志",
+    "UI.LogPanelView.CopyFailed": "复制日志失败。",
+    "UI.LogPanelView.CopyFiltered": "复制筛选结果",
+    "UI.LogPanelView.CopySelected": "复制选中日志",
+    "UI.LogPanelView.Level": "日志级别",
+    "UI.LogPanelView.LogSource": "日志",
+    "UI.LogPanelView.NoMatchingLogs": "暂无符合条件的日志",
+    "UI.LogPanelView.Search": "搜索日志",
+    "UI.LogPanelView.SearchHint": "搜索时间、级别、来源、内容和异常详情",
+    "Workbench.Log.AllLevels": "全部级别",
+    "Workbench.Panel.Log": "日志",
+    "Panel.Log.Translation": "翻译",
+    "Panel.Log.Reception": "监听 · {0}（房间 {1}）",
+    "Panel.Log.Operation": "应用操作",
+    "Colors.Help": "颜色修改会立即预览。留空使用主题默认值。八位颜色格式为 #AARRGGBB。"
   }
 }

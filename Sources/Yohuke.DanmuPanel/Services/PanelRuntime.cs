@@ -29,7 +29,6 @@ public sealed class PanelRuntime : IAsyncDisposable
     public BilibiliAccountSessionService AccountSessions { get; } = new();
     public IPinyinService Pinyin { get; } = new PinyinService();
     public event Action<string>? Changed;
-    public event Action<string>? Error;
 
     /// <summary>组合应用依赖，不自动连接直播间。</summary>
     public PanelRuntime(ConfigurationService configurationStore, PanelConfiguration configuration)
@@ -49,7 +48,7 @@ public sealed class PanelRuntime : IAsyncDisposable
         TestMessages = new(Messages, () => Configuration.Settings, roomId => Changed?.Invoke(roomId),
             () => scheduler.NotifyWorkAvailable());
         scheduler.Completed += (_, args) => Changed?.Invoke(args.RoomTabId);
-        scheduler.Error += ReportError;
+        scheduler.Error += message => ReportError(message, I18n.Localization.Get("Panel.Log.Translation"));
         Emoticons = new(new AppDirectoryService(configurationStore.DirectoryPath));
         Avatars = new(new AppDirectoryService(configurationStore.DirectoryPath));
     }
@@ -236,11 +235,12 @@ public sealed class PanelRuntime : IAsyncDisposable
             statuses[room.Id] = status;
             Changed?.Invoke(room.Id);
         };
-        session.Failed += exception => ReportError(exception.Message);
+        var logSource = I18n.Localization.Format("Panel.Log.Reception", room.Name, room.RoomId);
+        session.Failed += exception => ReportError(exception.Message, logSource);
         session.TerminalFailure += exception =>
         {
             statuses[room.Id] = "Panel.ListenerFailed";
-            ReportError(exception.Message);
+            ReportError(exception.Message, logSource);
             Changed?.Invoke(room.Id);
         };
         sessions.Add(room.Id, session);
@@ -266,11 +266,9 @@ public sealed class PanelRuntime : IAsyncDisposable
         Changed?.Invoke(id);
     }
 
-    private void ReportError(string message)
+    private void ReportError(string message, string source)
     {
         var key = Configuration.Settings.Translation.ApiKey;
-        var sanitized = AppLogSanitizer.Sanitize(string.IsNullOrEmpty(key) ? message : message.Replace(key, "[REDACTED]", StringComparison.Ordinal));
-        StartupLog.Append(sanitized, Models.Logging.AppLogLevel.ERROR);
-        Error?.Invoke(sanitized);
+        StartupLog.Append(message, Models.Logging.AppLogLevel.ERROR, source, sensitiveValues: [key]);
     }
 }

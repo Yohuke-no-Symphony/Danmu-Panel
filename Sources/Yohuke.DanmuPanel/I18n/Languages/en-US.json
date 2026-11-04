@@ -390,6 +390,20 @@
     "TestMessages.Failed": "The test message operation failed. See the error details.",
     "TestMessages.SampleUser": "Test viewer",
     "TestMessages.SampleContent": "This test message helps check the display, pinning, and scrolling.",
-    "TestMessages.SampleGift": "Test gift"
+    "TestMessages.SampleGift": "Test gift",
+    "UI.LogPanelView.Clear": "Clear logs",
+    "UI.LogPanelView.CopyFailed": "Failed to copy logs.",
+    "UI.LogPanelView.CopyFiltered": "Copy filtered logs",
+    "UI.LogPanelView.CopySelected": "Copy selected logs",
+    "UI.LogPanelView.Level": "Log level",
+    "UI.LogPanelView.LogSource": "Logs",
+    "UI.LogPanelView.NoMatchingLogs": "No matching logs",
+    "UI.LogPanelView.Search": "Search logs",
+    "UI.LogPanelView.SearchHint": "Search time, level, source, message, and exception details",
+    "Workbench.Log.AllLevels": "All levels",
+    "Workbench.Panel.Log": "Log",
+    "Panel.Log.Translation": "Translation",
+    "Panel.Log.Reception": "Reception · {0} (room {1})",
+    "Panel.Log.Operation": "Application operation"
   }
 }

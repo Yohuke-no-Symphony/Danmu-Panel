@@ -390,6 +390,20 @@
     "TestMessages.Failed": "テストメッセージの操作に失敗しました。エラー情報を確認してください。",
     "TestMessages.SampleUser": "テスト視聴者",
     "TestMessages.SampleContent": "表示、固定、スクロールを確認するためのテストメッセージです。",
-    "TestMessages.SampleGift": "テストギフト"
+    "TestMessages.SampleGift": "テストギフト",
+    "Panel.Log.Translation": "翻訳",
+    "Panel.Log.Reception": "受信 · {0}（ルーム {1}）",
+    "UI.LogPanelView.Clear": "ログを消去",
+    "UI.LogPanelView.CopyFailed": "ログのコピーに失敗しました。",
+    "UI.LogPanelView.CopyFiltered": "絞り込み結果をコピー",
+    "UI.LogPanelView.CopySelected": "選択したログをコピー",
+    "UI.LogPanelView.Level": "ログレベル",
+    "UI.LogPanelView.LogSource": "ログ",
+    "UI.LogPanelView.NoMatchingLogs": "条件に一致するログはありません",
+    "UI.LogPanelView.Search": "ログを検索",
+    "UI.LogPanelView.SearchHint": "時刻、レベル、出所、内容、例外の詳細を検索",
+    "Workbench.Log.AllLevels": "すべてのレベル",
+    "Workbench.Panel.Log": "ログ",
+    "Panel.Log.Operation": "アプリ操作"
   }
 }

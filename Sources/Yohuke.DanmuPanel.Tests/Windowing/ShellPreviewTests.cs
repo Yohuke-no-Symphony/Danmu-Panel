@@ -41,6 +41,8 @@ public sealed class ShellPreviewTests
         Localization.SetLanguage("zh-CN");
         Application.Current.RequestedThemeVariant = ThemeVariant.Light;
         var workspaceView = new WorkspaceView(runtime, errors.Add, new Workspace.FakeRoomAvatarService());
+        using var log = new AppLogService();
+        using var logView = new LogPanelView(log);
         using var testView = new TestMessagesView(runtime, errors.Add);
         testView.SelectRoom(room);
         var kinds = new[] { MessageKind.Danmu, MessageKind.SuperChat, MessageKind.Gift, MessageKind.Guard };
@@ -48,7 +50,7 @@ public sealed class ShellPreviewTests
         var panels = new Dictionary<string, Control>
         {
             ["workspace"] = workspaceView, ["danmu"] = feeds[0], ["superChat"] = feeds[1],
-            ["gift"] = feeds[2], ["guard"] = feeds[3], ["testMessages"] = testView
+            ["gift"] = feeds[2], ["guard"] = feeds[3], ["testMessages"] = testView, ["log"] = logView
         };
         var shell = new ShellWindow(panels, workspaceView.Toolbar, directory);
         workspaceView.HostWindow = shell;

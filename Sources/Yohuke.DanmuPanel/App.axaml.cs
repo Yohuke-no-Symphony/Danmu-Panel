@@ -9,6 +9,7 @@ using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Services;
 using Yohuke.DanmuPanel.Views;
+using Yohuke.DanmuPanel.Views.Components;
 using Yohuke.DanmuPanel.Views.Settings;
 
 namespace Yohuke.DanmuPanel;
@@ -20,6 +21,9 @@ public partial class App : Application
     private PanelRuntime? runtime;
     private WorkspaceView? workspace;
     private TestMessagesView? testMessages;
+    private readonly AppLogService log = new();
+    private AppLogRuntimeBridge? logBridge;
+    private LogPanelView? logPanel;
     private readonly List<MessageFeedView> feeds = [];
     private bool settingsOpen;
 
@@ -35,6 +39,8 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            logBridge = new(log,
+                () => [runtime?.Configuration.Settings.Translation.ApiKey ?? string.Empty]);
             try
             {
                 var configStore = new ConfigurationService();
@@ -62,6 +68,8 @@ public partial class App : Application
                 }
                 testMessages = new(runtime, ReportFailure);
                 panels.Add("testMessages", testMessages);
+                logPanel = new(log);
+                panels.Add("log", logPanel);
                 shell = new(panels, workspace.Toolbar, configStore.DirectoryPath)
                 {
                     UseWindowMenuOnMac = configuration.Settings.UseWindowMenuOnMac
@@ -73,7 +81,7 @@ public partial class App : Application
                 shell.ClearRoomRequested += () => Clear(false);
                 shell.ClearAllRequested += () => Clear(true);
                 shell.OperationFailed += ReportFailure;
-                runtime.Error += text => Dispatcher.UIThread.Post(() => shell.ShowError(PanelErrorText.Render(text)));
+                shell.Closed += OnShellClosed;
                 shell.BeforeCloseAsync = async () =>
                 {
                     await testMessages.FinishPendingAsync();
@@ -103,6 +111,7 @@ public partial class App : Application
             catch (Exception exception)
             {
                 StartupLog.Append(exception.Message, Models.Logging.AppLogLevel.ERROR, error: exception);
+                DisposeLog();
                 desktop.MainWindow = new Window
                 {
                     Title = Localization.Get("Panel.StartupFailed"), Width = 650, Height = 300,
@@ -195,15 +204,21 @@ public partial class App : Application
     {
         Dispatcher.UIThread.Post(() =>
         {
-            var message = exception.Message;
             var key = runtime?.Configuration.Settings.Translation.ApiKey;
-            if (!string.IsNullOrEmpty(key))
-            {
-                message = message.Replace(key, "[REDACTED]", StringComparison.Ordinal);
-            }
-            var safe = AppLogSanitizer.Sanitize(message);
-            StartupLog.Append(safe, Models.Logging.AppLogLevel.ERROR);
-            shell?.ShowError(safe);
+            StartupLog.Append(exception.Message, Models.Logging.AppLogLevel.ERROR,
+                Localization.Get("Panel.Log.Operation"), exception, [key ?? string.Empty]);
         });
+    }
+
+    private void OnShellClosed(object? sender, EventArgs args)
+    {
+        DisposeLog();
+    }
+
+    private void DisposeLog()
+    {
+        logPanel?.Dispose();
+        logBridge?.Dispose();
+        log.Dispose();
     }
 }

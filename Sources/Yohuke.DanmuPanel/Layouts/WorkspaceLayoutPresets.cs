@@ -54,7 +54,7 @@ internal static class WorkspaceLayoutPresets
                 ]
             },
             FocusedPanelId = WorkbenchPanelIds.DANMU,
-            HiddenPanelIds = [WorkbenchPanelIds.TEST_MESSAGES]
+            HiddenPanelIds = [WorkbenchPanelIds.TEST_MESSAGES, WorkbenchPanelIds.LOG]
         };
     }
 

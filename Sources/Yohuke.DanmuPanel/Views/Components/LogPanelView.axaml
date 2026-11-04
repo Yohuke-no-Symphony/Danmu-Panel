@@ -1,0 +1,160 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Yohuke.DanmuPanel.ViewModels"
+             xmlns:logging="clr-namespace:Yohuke.DanmuPanel.Models.Logging"
+             x:Class="Yohuke.DanmuPanel.Views.Components.LogPanelView"
+             x:DataType="vm:LogPanelViewModel"
+             x:CompileBindings="True">
+    <UserControl.Resources>
+        <ControlTheme x:Key="LogEntryHeaderTheme" TargetType="ToggleButton">
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="Transparent">
+                        <ContentPresenter Name="PART_ContentPresenter"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
+        <ControlTheme x:Key="LogEntryExpanderTheme" TargetType="Expander">
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <StackPanel>
+                        <ToggleButton Name="ExpanderHeader"
+                                      Theme="{StaticResource LogEntryHeaderTheme}"
+                                      Content="{TemplateBinding Header}"
+                                      ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                      Foreground="{TemplateBinding Foreground}"
+                                      IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}" />
+                        <ContentPresenter Name="PART_ContentPresenter"
+                                          IsVisible="{TemplateBinding IsExpanded}"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                    </StackPanel>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
+    </UserControl.Resources>
+    <UserControl.Styles>
+        <Style Selector="ListBox#LogEntries ListBoxItem">
+            <Setter Property="Padding" Value="6,5" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="TextBlock.logSummary">
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.logSummary.error">
+            <Setter Property="Foreground" Value="{DynamicResource AppErrorBrush}" />
+        </Style>
+        <Style Selector="TextBlock.logSummary.warning">
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Path.logDetailsTriangle">
+            <Setter Property="Data" Value="M 2,0 L 6,4 L 2,8 Z" />
+        </Style>
+        <Style Selector="Expander:expanded Path.logDetailsTriangle">
+            <Setter Property="Data" Value="M 0,2 L 8,2 L 4,6 Z" />
+        </Style>
+    </UserControl.Styles>
+    <Border Padding="{StaticResource WorkbenchPanelPadding}">
+        <Grid RowDefinitions="Auto,*" RowSpacing="8">
+            <WrapPanel Orientation="Horizontal">
+                <ComboBox Name="LogLevelFilter"
+                          Width="116"
+                          Margin="0,0,6,6"
+                          ToolTip.Tip="{Loc Key=UI.LogPanelView.Level}"
+                          ItemsSource="{Binding Levels}"
+                          SelectedIndex="{Binding FilterIndex, Mode=TwoWay}" />
+                <TextBox Name="LogSearch"
+                         Width="{Binding $parent[WrapPanel].Bounds.Width}"
+                         MaxWidth="160"
+                         MinWidth="0"
+                         Margin="0,0,6,6"
+                         Watermark="{Loc Key=UI.LogPanelView.Search}"
+                         ToolTip.Tip="{Loc Key=UI.LogPanelView.SearchHint}"
+                         Text="{Binding FilterText, Mode=TwoWay}" />
+                <Button Name="CopyLogSelected"
+                        Margin="0,0,6,6"
+                        Classes="iconButton"
+                        ToolTip.Tip="{Loc Key=UI.LogPanelView.CopySelected}"
+                        IsEnabled="{Binding HasSelection}"
+                        Click="CopySelected_OnClick">
+                    <LucideIcon Kind="Copy" />
+                </Button>
+                <Button Name="CopyLogVisible"
+                        Margin="0,0,6,6"
+                        Classes="iconButton"
+                        ToolTip.Tip="{Loc Key=UI.LogPanelView.CopyFiltered}"
+                        Click="CopyVisible_OnClick">
+                    <LucideIcon Kind="CopyCheck" />
+                </Button>
+                <Button Name="ClearLog"
+                        Margin="0,0,0,6"
+                        Classes="iconButton"
+                        ToolTip.Tip="{Loc Key=UI.LogPanelView.Clear}"
+                        Command="{Binding ClearCommand}">
+                    <LucideIcon Kind="Trash2" />
+                </Button>
+            </WrapPanel>
+            <Grid Grid.Row="1">
+                <ListBox Name="LogEntries"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ItemsSource="{Binding Entries}"
+                         SelectedItem="{Binding SelectedEntry, Mode=TwoWay}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="logging:AppLogEntry">
+                            <StackPanel Spacing="4">
+                                <TextBlock Classes="logSummary"
+                                           Classes.error="{Binding IsError}"
+                                           Classes.warning="{Binding IsWarning}"
+                                           IsVisible="{Binding !HasDetails}"
+                                           Text="{Binding Summary}" />
+                                <Expander Theme="{StaticResource LogEntryExpanderTheme}"
+                                          IsVisible="{Binding HasDetails}">
+                                    <Expander.Header>
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                            <TextBlock Classes="logSummary"
+                                                       Classes.error="{Binding IsError}"
+                                                       Classes.warning="{Binding IsWarning}"
+                                                       Text="{Binding Summary}" />
+                                            <Path Grid.Column="1"
+                                                  Classes="logDetailsTriangle"
+                                                  Width="8"
+                                                  Height="8"
+                                                  VerticalAlignment="Center"
+                                                  Fill="{DynamicResource AppMutedTextBrush}" />
+                                        </Grid>
+                                    </Expander.Header>
+                                    <SelectableTextBlock Text="{Binding Details}"
+                                                         TextWrapping="Wrap"
+                                                         FontFamily="monospace"
+                                                         Margin="0,4,0,0" />
+                                </Expander>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Name="LogEmptyLabel"
+                           Text="{Loc Key=UI.LogPanelView.NoMatchingLogs}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource AppMutedTextBrush}"
+                           IsVisible="{Binding IsEmpty}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>

@@ -4,23 +4,25 @@ internal static class WorkspaceLayoutMigration
 {
     internal static WorkspaceLayoutFile Upgrade(WorkspaceLayoutFile file)
     {
-        return file.Version switch
+        if (file.Version is not (1 or 2))
         {
-            1 => file with
+            throw new ArgumentOutOfRangeException(nameof(file));
+        }
+
+        var addedPanels = WorkbenchPanelIds.All.Except(WorkbenchPanelIds.ForVersion(file.Version)).ToArray();
+        return file with
+        {
+            Version = WorkspaceLayoutFile.CURRENT_VERSION,
+            CurrentLayout = AddHiddenPanels(file.CurrentLayout, addedPanels),
+            UserPresets = file.UserPresets.Select(preset => preset with
             {
-                Version = WorkspaceLayoutFile.CURRENT_VERSION,
-                CurrentLayout = AddHiddenTestPanel(file.CurrentLayout),
-                UserPresets = file.UserPresets.Select(preset => preset with
-                {
-                    Layout = AddHiddenTestPanel(preset.Layout)
-                }).ToList()
-            },
-            _ => throw new ArgumentOutOfRangeException(nameof(file))
+                Layout = AddHiddenPanels(preset.Layout, addedPanels)
+            }).ToList()
         };
     }
 
-    private static WorkspaceLayoutSnapshot AddHiddenTestPanel(WorkspaceLayoutSnapshot snapshot)
+    private static WorkspaceLayoutSnapshot AddHiddenPanels(WorkspaceLayoutSnapshot snapshot, string[] panelIds)
     {
-        return snapshot with { HiddenPanelIds = [.. snapshot.HiddenPanelIds, WorkbenchPanelIds.TEST_MESSAGES] };
+        return snapshot with { HiddenPanelIds = [.. snapshot.HiddenPanelIds, .. panelIds] };
     }
 }

@@ -17,9 +17,10 @@ public static class StartupLog
     /// 追加启动日志。
     /// </summary>
     public static void Append(string message, AppLogLevel level = AppLogLevel.INFO,
-        string? source = null, Exception? error = null)
+        string? source = null, Exception? error = null, IEnumerable<string>? sensitiveValues = null)
     {
-        var safeMessage = AppLogSanitizer.Sanitize(message);
+        var secrets = sensitiveValues?.ToArray();
+        var safeMessage = AppLogSanitizer.Sanitize(message, secrets);
 
         try
         {
@@ -41,7 +42,7 @@ public static class StartupLog
                     isInitialized = true;
                 }
 
-                var details = error is null ? "" : Environment.NewLine + AppLogSanitizer.Sanitize(error.ToString());
+                var details = error is null ? "" : Environment.NewLine + AppLogSanitizer.Sanitize(error.ToString(), secrets);
                 File.AppendAllText(path, $"{DateTimeOffset.Now:O} {level} {safeMessage}{details}{Environment.NewLine}");
             }
         }
