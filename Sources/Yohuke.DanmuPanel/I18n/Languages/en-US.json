@@ -260,6 +260,8 @@
     "Settings.CompactSuperChatWrap": "Wrap Super Chats",
     "Settings.AutoScrollLongMessages": "Auto-scroll long messages (including translations)",
     "Settings.AutoScrollLongMessagesHelp": "Long single-line text scrolls to the end and repeats. Wrapped text stays still. Hover scrolling remains available when disabled.",
+    "Settings.HideEmoticonDanmu": "Hide emoticon-only danmu",
+    "Settings.HideEmoticonDanmuHelp": "Hide ordinary danmu containing only emoticons. Messages with text remain visible. Turn off to show them again.",
     "Settings.CustomProvider": "Custom",
     "Settings.Dark": "Dark",
     "Settings.Data": "Data",

@@ -10,6 +10,18 @@ public static partial class TranslationTextExtractor
     /// <summary>移除协议表情和 Unicode 表情字素，纯表情返回空字符串。</summary>
     public static string Extract(string text, IEnumerable<string>? emoticonTexts = null)
     {
+        var value = Whitespace().Replace(RemoveEmoticons(text, emoticonTexts).Normalize(NormalizationForm.FormC), " ").Trim();
+        return value.EnumerateRunes().Any(Rune.IsLetterOrDigit) ? value : "";
+    }
+
+    /// <summary>判断正文是否仅包含协议表情、Unicode 表情及空白，不将标点或空消息视为表情。</summary>
+    public static bool IsEmoticonOnly(string text, IEnumerable<string>? emoticonTexts = null)
+    {
+        return !string.IsNullOrWhiteSpace(text) && string.IsNullOrWhiteSpace(RemoveEmoticons(text, emoticonTexts));
+    }
+
+    private static string RemoveEmoticons(string text, IEnumerable<string>? emoticonTexts)
+    {
         foreach (var token in (emoticonTexts ?? []).Where(token => !string.IsNullOrEmpty(token)).OrderByDescending(token => token.Length))
         {
             text = text.Replace(token, " ", StringComparison.Ordinal);
@@ -23,8 +35,7 @@ public static partial class TranslationTextExtractor
             result.Append(IsEmoji(element) ? " " : element);
         }
 
-        var value = Whitespace().Replace(result.ToString().Normalize(NormalizationForm.FormC), " ").Trim();
-        return value.EnumerateRunes().Any(Rune.IsLetterOrDigit) ? value : "";
+        return result.ToString();
     }
 
     private static bool IsEmoji(string element)

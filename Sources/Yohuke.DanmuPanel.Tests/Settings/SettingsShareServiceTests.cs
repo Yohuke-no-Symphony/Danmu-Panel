@@ -375,6 +375,7 @@ public sealed class SettingsShareServiceTests
             CompactDanmuWrap = true,
             CompactSuperChatWrap = false,
             AutoScrollLongMessages = false,
+            HideEmoticonDanmu = true,
             DefaultAccountId = "local-account",
             SelectedWorkspaceId = "local-workspace"
         };

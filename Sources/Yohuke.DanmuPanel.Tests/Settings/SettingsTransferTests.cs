@@ -49,6 +49,7 @@ public sealed class SettingsTransferTests
             SelectSection(view, "Reading");
             Find<NumericUpDown>(view, "MessageTextScaleInput").Value = 150;
             Find<CheckBox>(view, "ShowDanmuPinyinCheckBox").IsChecked = true;
+            Find<CheckBox>(view, "HideEmoticonDanmuCheckBox").IsChecked = true;
             SelectSection(view, "Data");
             CaptureDataPageIfRequested(window);
 
@@ -61,6 +62,7 @@ public sealed class SettingsTransferTests
             Assert.Equal("  draft-key-测试  ", exported.GetProperty("Translation").GetProperty("ApiKey").GetString());
             Assert.Equal(1.5, exported.GetProperty("MessageTextScale").GetDouble());
             Assert.True(exported.GetProperty("ShowDanmuPinyin").GetBoolean());
+            Assert.True(exported.GetProperty("HideEmoticonDanmu").GetBoolean());
             Assert.Equal(original, JsonSerializer.Serialize(configuration.Settings));
             Assert.Equal(original, JsonSerializer.Serialize(store.Load().Settings));
             Assert.False(saved);

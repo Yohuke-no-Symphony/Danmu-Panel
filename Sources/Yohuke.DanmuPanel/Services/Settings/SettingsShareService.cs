@@ -54,6 +54,7 @@ public sealed class SettingsShareService
         target.CompactDanmuWrap = settings.CompactDanmuWrap;
         target.CompactSuperChatWrap = settings.CompactSuperChatWrap;
         target.AutoScrollLongMessages = settings.AutoScrollLongMessages;
+        target.HideEmoticonDanmu = settings.HideEmoticonDanmu;
     }
 
     /// <summary>将包含原始 API Key 的设置快照写入调用方持有的流。</summary>

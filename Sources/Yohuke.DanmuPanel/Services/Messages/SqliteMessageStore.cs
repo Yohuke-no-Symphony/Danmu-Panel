@@ -70,6 +70,10 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
 
     private static void Initialize(SqliteConnection connection)
     {
+        connection.CreateFunction<string, string, bool>("is_emoticon_only", (content, emoticons) =>
+            TranslationTextExtractor.IsEmoticonOnly(content,
+                JsonSerializer.Deserialize<MessageEmoticon[]>(emoticons)!.Select(emoticon => emoticon.Text)),
+            isDeterministic: true);
         Execute(connection, null, "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;");
         using var version = Command(connection, null, "PRAGMA user_version;");
         var databaseVersion = Convert.ToInt32(version.ExecuteScalar(), CultureInfo.InvariantCulture);

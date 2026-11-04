@@ -8,11 +8,12 @@ public sealed partial class SqliteMessageStore
 {
     /// <summary>在同一读取事务中取得完整未读条数和消息窗口，并保留历史边界。</summary>
     public Task<MessageFeedSnapshot> LoadFeedAsync(string roomTabId, MessageKind kind, int historyLimit,
-        string? oldestHistoryId, CancellationToken cancellationToken = default)
+        string? oldestHistoryId, CancellationToken cancellationToken = default, bool hideEmoticonDanmu = false)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(historyLimit);
         return EnqueueAsync(connection =>
         {
+            var hideEmoticons = hideEmoticonDanmu && kind == MessageKind.Danmu;
             using var transaction = connection.BeginTransaction(deferred: true);
             var retainedCount = 0;
             if (oldestHistoryId is not null)
@@ -20,14 +21,18 @@ public sealed partial class SqliteMessageStore
                 using var count = Command(connection, transaction, """
                     SELECT COUNT(*) FROM message_records
                     WHERE room_tab_id=$room AND kind=$kind AND priority=0
+                        AND ($hide=0 OR is_emoticon_only(json_extract(payload,'$.Content'),
+                            COALESCE(json_extract(payload,'$.Emoticons'),'[]'))=0)
                         AND (occurred_ms,sequence)>=(
                             SELECT occurred_ms,sequence FROM message_records WHERE id=$oldest);
-                    """, ("$room", roomTabId), ("$kind", (int)kind), ("$oldest", oldestHistoryId));
+                    """, ("$room", roomTabId), ("$kind", (int)kind), ("$oldest", oldestHistoryId), ("$hide", hideEmoticons));
                 retainedCount = Convert.ToInt32(count.ExecuteScalar(), CultureInfo.InvariantCulture);
             }
-            using var priorityCount = Command(connection, transaction,
-                "SELECT COUNT(*) FROM message_records WHERE room_tab_id=$room AND kind=$kind AND priority=1;",
-                ("$room", roomTabId), ("$kind", (int)kind));
+            using var priorityCount = Command(connection, transaction, """
+                SELECT COUNT(*) FROM message_records WHERE room_tab_id=$room AND kind=$kind AND priority=1
+                    AND ($hide=0 OR is_emoticon_only(json_extract(payload,'$.Content'),
+                        COALESCE(json_extract(payload,'$.Emoticons'),'[]'))=0);
+                """, ("$room", roomTabId), ("$kind", (int)kind), ("$hide", hideEmoticons));
             var pinnedCount = Convert.ToInt32(priorityCount.ExecuteScalar(), CultureInfo.InvariantCulture);
             var unreadCount = 0;
             if (kind != MessageKind.Danmu)
@@ -43,12 +48,14 @@ public sealed partial class SqliteMessageStore
                 SELECT messages.payload,jobs.status FROM (
                     SELECT id,generation,payload,priority,occurred_ms,sequence FROM message_records
                     WHERE room_tab_id=$room AND kind=$kind
+                        AND ($hide=0 OR is_emoticon_only(json_extract(payload,'$.Content'),
+                            COALESCE(json_extract(payload,'$.Emoticons'),'[]'))=0)
                     ORDER BY priority DESC,pinned_ms DESC,occurred_ms DESC,sequence DESC LIMIT $limit
                 ) AS messages
                 LEFT JOIN translation_jobs AS jobs ON jobs.id=messages.id AND jobs.generation=messages.generation
                     AND jobs.fingerprint=json_extract(messages.payload,'$.TranslationFingerprint')
                 ORDER BY messages.priority DESC,messages.occurred_ms ASC,messages.sequence ASC;
-                """, ("$room", roomTabId), ("$kind", (int)kind), ("$limit", totalLimit));
+                """, ("$room", roomTabId), ("$kind", (int)kind), ("$limit", totalLimit), ("$hide", hideEmoticons));
             var records = new List<MessageRecord>();
             var pending = new HashSet<string>(StringComparer.Ordinal);
             using (var reader = command.ExecuteReader())

@@ -53,6 +53,7 @@ public sealed class SettingsView : UserControl
     private readonly CheckBox compactDanmuWrap;
     private readonly CheckBox compactSuperChatWrap;
     private readonly CheckBox autoScrollLongMessages;
+    private readonly CheckBox hideEmoticonDanmu;
     private readonly CheckBox windowMenuOnMac;
     private readonly ObservableCollection<GlossaryRow> glossary;
     private readonly TextBlock glossaryLanguage;
@@ -141,6 +142,8 @@ public sealed class SettingsView : UserControl
         compactSuperChatWrap.Name = "CompactSuperChatWrapCheckBox";
         autoScrollLongMessages = Check("Settings.AutoScrollLongMessages", settings.AutoScrollLongMessages);
         autoScrollLongMessages.Name = "AutoScrollLongMessagesCheckBox";
+        hideEmoticonDanmu = Check("Settings.HideEmoticonDanmu", settings.HideEmoticonDanmu);
+        hideEmoticonDanmu.Name = "HideEmoticonDanmuCheckBox";
         compactDanmuWrap.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
         compactSuperChatWrap.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
         autoScrollLongMessages.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
@@ -175,7 +178,7 @@ public sealed class SettingsView : UserControl
         AddSection("Settings.Appearance", "Settings.AppearanceDescription", BuildAppearance());
         AddSection("Settings.Reading", "Settings.ReadingDescription", Stack(
             Card("Settings.MessageDisplay", Row("Settings.MessageTextScale", messageTextScale),
-                Help("Settings.MessageTextScaleHelp"), compactDisplay,
+                Help("Settings.MessageTextScaleHelp"), hideEmoticonDanmu, Help("Settings.HideEmoticonDanmuHelp"), compactDisplay,
                 new StackPanel
                 {
                     Margin = new Thickness(24, 0, 0, 0), Spacing = 8,
@@ -402,7 +405,8 @@ public sealed class SettingsView : UserControl
             CompactDanmuDisplay = compactDisplay.IsChecked == true,
             CompactDanmuWrap = compactDanmuWrap.IsChecked == true,
             CompactSuperChatWrap = compactSuperChatWrap.IsChecked == true,
-            AutoScrollLongMessages = autoScrollLongMessages.IsChecked == true
+            AutoScrollLongMessages = autoScrollLongMessages.IsChecked == true,
+            HideEmoticonDanmu = hideEmoticonDanmu.IsChecked == true
         };
         return true;
     }

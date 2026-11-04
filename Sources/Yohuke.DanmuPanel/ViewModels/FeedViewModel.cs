@@ -161,7 +161,7 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
         {
             var snapshot = await runtime.Messages.LoadFeedAsync(current.Id, kind, limit,
                 IsReadingHistory ? ScrollingItems.FirstOrDefault(item => !item.Record.IsPriority)?.Record.Id : null,
-                cancellationToken);
+                cancellationToken, hideEmoticonDanmu: runtime.Configuration.Settings.HideEmoticonDanmu);
             if (disposed || version != revision || cancellationToken.IsCancellationRequested)
             {
                 return;

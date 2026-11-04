@@ -259,6 +259,8 @@
     "Settings.CompactSuperChatWrap": "SC 自动换行",
     "Settings.AutoScrollLongMessages": "超长弹幕自动滚动（含译文）",
     "Settings.AutoScrollLongMessagesHelp": "单行超长内容滚动到末尾后循环；换行内容不滚动。关闭后仍可悬停滚动。",
+    "Settings.HideEmoticonDanmu": "隐藏纯表情弹幕",
+    "Settings.HideEmoticonDanmuHelp": "仅隐藏全部由表情组成的普通弹幕，保留含文字的消息。关闭后恢复显示。",
     "Settings.CustomProvider": "自定义（Custom）",
     "Settings.Dark": "深色",
     "Settings.Data": "数据管理",
