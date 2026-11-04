@@ -940,7 +940,7 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <Style Selector="Border.danmuMedalBadge">
+    <Style Selector="Border.danmuMedalBadge, Border.danmuMedalPlaceholder">
         <Setter Property="Background" Value="{DynamicResource MedalBackgroundBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="3" />
@@ -948,8 +948,14 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <Style Selector="TextBlock.danmuMedalPlaceholder">
+    <Style Selector="Border.danmuMedalPlaceholder">
+        <Setter Property="Background" Value="{DynamicResource AppBorderBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppMutedTextBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.danmuMedalText.danmuMedalPlaceholder">
         <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource AppMutedTextBrush}" />
     </Style>
 
     <Style Selector="Grid.danmuMedalLayout">

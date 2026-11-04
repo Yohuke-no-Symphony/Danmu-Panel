@@ -180,11 +180,13 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         var noMedal = Ui.Text("Panel.NoMedal");
         noMedal.Classes.Add("danmuMedalText");
         noMedal.Classes.Add("danmuMedalPlaceholder");
-        noMedal.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.HasMedal))
+        var noMedalFrame = new Border { Child = noMedal };
+        noMedalFrame.Classes.Add("danmuMedalPlaceholder");
+        noMedalFrame.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.HasMedal))
         {
             Converter = BoolConverters.Not
         });
-        var medalSlot = new Grid { Children = { medalFrame, noMedal } };
+        var medalSlot = new Grid { Children = { medalFrame, noMedalFrame } };
         medalSlot.Classes.Add("danmuMedalSlot");
         identity.Children.Add(medalSlot);
         var name = new EmoticonTextBlock();
