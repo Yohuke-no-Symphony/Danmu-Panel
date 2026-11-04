@@ -45,6 +45,12 @@ public static class ColorSettingCatalog
         Define("GuardAdmiralBrush", "Borders", color: GUARD_ADMIRAL_COLOR),
         Define("GuardGovernorBrush", "Borders", color: GUARD_GOVERNOR_COLOR),
         Define("SuperChatBorderBrush", "Borders"),
+        Define("GiftValueUnder50Brush", "Borders", color: "#3171D2"),
+        Define("GiftValue50Brush", "Borders", color: "#427D9E"),
+        Define("GiftValue100Brush", "Borders", color: "#E2B52B"),
+        Define("GiftValue500Brush", "Borders", color: "#E09443"),
+        Define("GiftValue1000Brush", "Borders", color: "#E54D4D"),
+        Define("GiftValue2000Brush", "Borders", color: "#AB1A32"),
         Define("PriorityMessageBorderBrush", "Borders", color: PRIORITY_MESSAGE_COLOR)
     ]);
 
@@ -55,6 +61,19 @@ public static class ColorSettingCatalog
     public static ColorSettingDefinition Get(string key)
     {
         return definitionsByKey[key];
+    }
+
+    internal static ColorSettingDefinition GetGiftBorder(decimal totalPrice)
+    {
+        return Get(totalPrice switch
+        {
+            >= 2000 => "GiftValue2000Brush",
+            >= 1000 => "GiftValue1000Brush",
+            >= 500 => "GiftValue500Brush",
+            >= 100 => "GiftValue100Brush",
+            >= 50 => "GiftValue50Brush",
+            _ => "GiftValueUnder50Brush"
+        });
     }
 
     internal static bool Contains(string key)

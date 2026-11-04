@@ -62,6 +62,7 @@ public sealed class MessageItemViewModel : ObservableObject
     public bool AutoScrollLongMessages => settings.AutoScrollLongMessages;
     public Avalonia.Media.IBrush BorderBrush => Record.Kind switch
     {
+        MessageKind.Gift => GetGiftBorderBrush(),
         MessageKind.Guard => Record.GuardLevel switch
         {
             1 => GetColor("GuardGovernorBrush", ColorSettingCatalog.GUARD_GOVERNOR_COLOR),
@@ -96,6 +97,12 @@ public sealed class MessageItemViewModel : ObservableObject
     private Avalonia.Media.IBrush GetColor(string key, string fallback)
     {
         return Avalonia.Media.Brush.Parse(settings.ColorScheme.Overrides.GetValueOrDefault(key, fallback));
+    }
+
+    private Avalonia.Media.IBrush GetGiftBorderBrush()
+    {
+        var definition = ColorSettingCatalog.GetGiftBorder(Record.TotalPrice);
+        return GetColor(definition.Key, definition.DefaultColor!);
     }
 
     private string GetAnnotation(string text, bool enabled)

@@ -5,6 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using CommunityToolkit.Mvvm.Input;
 using Yohuke.DanmuPanel.Layouts;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
@@ -44,6 +45,9 @@ public sealed class UnreadIndicatorTests
             Pump(window);
             var item = Assert.Single(view.Model.Items);
             var row = FindRow(view, message.Id);
+            var card = Assert.Single(row.GetVisualDescendants().OfType<Border>(), control => control.Classes.Contains("messageCard"));
+            Assert.Equal(new Thickness(2), card.BorderThickness);
+            Assert.Equal(new CornerRadius(7), card.CornerRadius);
             var dot = Assert.Single(row.GetVisualDescendants().OfType<Border>(), control => control.Classes.Contains("messageUnreadDot"));
             var identity = Assert.Single(row.GetVisualDescendants().OfType<DockPanel>(), control => control.Classes.Contains("danmuFeedIdentity"));
             var body = Assert.Single(row.GetVisualDescendants().OfType<StackPanel>(), control => control.Classes.Contains("messageBody"));
@@ -77,16 +81,18 @@ public sealed class UnreadIndicatorTests
     /// <summary>计数覆盖超过一页的未读记录，点击、浮动、切房和清空都会更新标题。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.SuperChat, WorkbenchPanelIds.SUPER_CHAT)]
+    [InlineData(MessageKind.Gift, WorkbenchPanelIds.GIFT)]
     [InlineData(MessageKind.Guard, WorkbenchPanelIds.GUARD)]
     public async Task TitleBadgeTracksUnreadRecordsAcrossHostsAndRooms(MessageKind kind, string panelId)
     {
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = CreateRuntime(directory);
+        var options = new MessageReadOptions { GiftAutoPinMinimum = 50 };
         for (var index = 0; index < 105; index++)
         {
-            await runtime.Messages.AppendAsync(Message(kind) with { Quantity = 3 }, new());
+            await runtime.Messages.AppendAsync(Message(kind) with { Quantity = 3 }, options);
         }
-        await runtime.Messages.AppendAsync(Message(kind) with { RoomTabId = "second" }, new());
+        await runtime.Messages.AppendAsync(Message(kind) with { RoomTabId = "second" }, options);
         var errors = new List<Exception>();
         var view = new MessageFeedView(runtime, kind, errors.Add);
         var panels = WorkbenchPanelIds.All.ToDictionary(id => id, id => (Control)new TextBlock { Text = id });
@@ -132,9 +138,23 @@ public sealed class UnreadIndicatorTests
             await view.Model.SelectRoomAsync(new() { Id = "tab" });
             Pump(floating);
             AssertBadge(floatingBadge, "104");
+            var markAllRead = Assert.Single(floating.GetVisualDescendants().OfType<Button>(), button => button.Name == "MarkAllReadButton");
+            Assert.True(markAllRead.IsEffectivelyEnabled);
+            await Assert.IsAssignableFrom<IAsyncRelayCommand>(markAllRead.Command).ExecuteAsync(null);
+            Pump(floating);
+            Assert.False(floatingBadge.IsVisible);
+            Assert.False(markAllRead.IsEffectivelyEnabled);
+            Assert.All(await runtime.Messages.LoadPageAsync("tab", kind, 0, 200), record => Assert.True(record.IsRead));
+
+            await runtime.Messages.AppendAsync(Message(kind), options);
+            await view.Model.RefreshAsync();
+            Pump(floating);
+            AssertBadge(floatingBadge, "1");
+            Assert.True(markAllRead.IsEffectivelyEnabled);
             await view.Model.SelectRoomAsync(null);
             Pump(floating);
             Assert.False(floatingBadge.IsVisible);
+            Assert.False(markAllRead.IsEffectivelyEnabled);
             Assert.Empty(errors);
         }
         finally
@@ -143,6 +163,30 @@ public sealed class UnreadIndicatorTests
             await shell.CloseAsync();
             Dispatcher.UIThread.RunJobs();
         }
+    }
+
+    /// <summary>全部已读期间切换房间，只确认原房间，新的房间保留自身未读计数。</summary>
+    [AvaloniaTheory]
+    [InlineData(MessageKind.SuperChat)]
+    [InlineData(MessageKind.Gift)]
+    [InlineData(MessageKind.Guard)]
+    public async Task SwitchingRoomDuringMarkAllReadKeepsNewRoomUnread(MessageKind kind)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var runtime = CreateRuntime(directory);
+        await runtime.Messages.AppendAsync(Message(kind), new());
+        await runtime.Messages.AppendAsync(Message(kind) with { RoomTabId = "second" }, new());
+        await runtime.Messages.AppendAsync(Message(kind) with { RoomTabId = "second" }, new());
+        using var model = new FeedViewModel(runtime, kind);
+        await model.SelectRoomAsync(new() { Id = "tab" });
+        var marking = model.MarkAllReadAsync();
+        await model.SelectRoomAsync(new() { Id = "second" });
+        await marking;
+
+        Assert.Equal(2, model.UnreadCount);
+        Assert.All(model.Items, item => Assert.Equal("second", item.Record.RoomTabId));
+        Assert.All(model.Items, item => Assert.False(item.Record.IsRead));
+        Assert.True(Assert.Single(await runtime.Messages.LoadPageAsync("tab", kind, 0, 10)).IsRead);
     }
 
     private static PanelRuntime CreateRuntime(MessageStoreTestDirectory directory)

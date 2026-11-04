@@ -2,6 +2,13 @@
   "LanguageName": "简体中文",
   "LanguageID": "zh-CN",
   "Strings": {
+    "Panel.MarkAllRead": "全部已读",
+    "Colors.GiftValueUnder50Brush": "礼物边框：低于 ￥50",
+    "Colors.GiftValue50Brush": "礼物边框：￥50–99.99",
+    "Colors.GiftValue100Brush": "礼物边框：￥100–499.99",
+    "Colors.GiftValue500Brush": "礼物边框：￥500–999.99",
+    "Colors.GiftValue1000Brush": "礼物边框：￥1000–1999.99",
+    "Colors.GiftValue2000Brush": "礼物边框：￥2000 及以上",
     "Colors.Title": "配色与方案",
     "Colors.Help": "修改颜色立即预览；留空沿用当前主题默认值。八位颜色格式为 #AARRGGBB。",
     "Colors.Scheme": "配色方案",

@@ -21,6 +21,7 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
     private RoomTabState? room;
     private int limit = PAGE_SIZE;
     private int revision;
+    private int unreadCount;
     private bool disposed;
     private readonly HashSet<string> translationRequested = new();
     public ObservableCollection<MessageItemViewModel> Items { get; } = [];
@@ -28,7 +29,17 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
     public ObservableCollection<MessageItemViewModel> ScrollingItems { get; } = [];
     public bool HasPinnedItems => PinnedItems.Count > 0;
     public bool HasScrollingItems => ScrollingItems.Count > 0;
-    public int UnreadCount => Items.Count(item => item.ShowUnreadDot);
+    public int UnreadCount
+    {
+        get => unreadCount;
+        private set
+        {
+            if (SetProperty(ref unreadCount, value))
+            {
+                OnPropertyChanged(nameof(HasUnreadMessages));
+            }
+        }
+    }
     public bool HasUnreadMessages => UnreadCount > 0;
     public bool IsReadingHistory { get; set; }
     public event Action<Exception>? Failed;
@@ -65,6 +76,7 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
         Items.Clear();
         PinnedItems.Clear();
         ScrollingItems.Clear();
+        UnreadCount = 0;
         NotifyRegions();
         await RefreshAsync();
     }
@@ -77,6 +89,19 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
             return;
         }
         limit = Math.Max(limit, ScrollingItems.Count(item => !item.Record.IsPriority)) + PAGE_SIZE;
+        await RefreshAsync();
+    }
+
+    /// <summary>确认当前房间、类型的全部未读记录，然后刷新当前选择。</summary>
+    public async Task MarkAllReadAsync()
+    {
+        var current = room;
+        if (disposed || current is null)
+        {
+            return;
+        }
+        await runtime.Messages.MarkAllReadAsync(current.Id, kind);
+        runtime.NotifyTranslation();
         await RefreshAsync();
     }
 
@@ -107,13 +132,14 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
         }
         try
         {
-            var records = await runtime.Messages.LoadFeedAsync(current.Id, kind, limit,
+            var snapshot = await runtime.Messages.LoadFeedAsync(current.Id, kind, limit,
                 IsReadingHistory ? ScrollingItems.LastOrDefault(item => !item.Record.IsPriority)?.Record.Id : null,
                 cancellationToken);
             if (disposed || version != revision || cancellationToken.IsCancellationRequested)
             {
                 return;
             }
+            var records = snapshot.Records;
             var expected = records.Select(record => record.Id).ToHashSet();
             for (var index = Items.Count - 1; index >= 0; index--)
             {
@@ -158,6 +184,7 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
             }
             SynchronizeRegion(PinnedItems, Items.Where(item => kind == MessageKind.Danmu && item.Record.IsPinned).ToArray());
             SynchronizeRegion(ScrollingItems, Items.Where(item => kind != MessageKind.Danmu || !item.Record.IsPinned).ToArray());
+            UnreadCount = snapshot.UnreadCount;
             NotifyRegions();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -199,8 +226,6 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(HasPinnedItems));
         OnPropertyChanged(nameof(HasScrollingItems));
-        OnPropertyChanged(nameof(UnreadCount));
-        OnPropertyChanged(nameof(HasUnreadMessages));
     }
 
     /// <inheritdoc/>

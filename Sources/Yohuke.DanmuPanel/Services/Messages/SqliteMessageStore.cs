@@ -91,6 +91,8 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
                 (room_tab_id, kind, priority DESC, pinned_ms DESC, occurred_ms DESC, sequence DESC);
             CREATE INDEX IF NOT EXISTS ix_message_recent ON message_records
                 (room_tab_id, kind, occurred_ms DESC, sequence DESC);
+            CREATE INDEX IF NOT EXISTS ix_message_unread ON message_records
+                (room_tab_id, kind, json_extract(payload,'$.IsRead'));
             CREATE TABLE IF NOT EXISTS message_events (
                 room_tab_id TEXT NOT NULL, kind INTEGER NOT NULL, source_id TEXT NOT NULL,
                 PRIMARY KEY(room_tab_id,kind,source_id));

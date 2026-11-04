@@ -2,6 +2,13 @@
   "LanguageName": "English",
   "LanguageID": "en-US",
   "Strings": {
+    "Panel.MarkAllRead": "Mark all as read",
+    "Colors.GiftValueUnder50Brush": "Gift border: below ￥50",
+    "Colors.GiftValue50Brush": "Gift border: ￥50–99.99",
+    "Colors.GiftValue100Brush": "Gift border: ￥100–499.99",
+    "Colors.GiftValue500Brush": "Gift border: ￥500–999.99",
+    "Colors.GiftValue1000Brush": "Gift border: ￥1000–1999.99",
+    "Colors.GiftValue2000Brush": "Gift border: ￥2000 and above",
     "Colors.Title": "Colors and schemes",
     "Colors.Help": "Colors preview immediately. Leave blank to use the theme default. Eight-digit colors use #AARRGGBB.",
     "Colors.Scheme": "Color scheme",

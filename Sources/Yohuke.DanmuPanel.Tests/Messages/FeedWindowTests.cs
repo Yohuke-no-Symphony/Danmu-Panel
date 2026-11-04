@@ -18,7 +18,7 @@ public sealed class FeedWindowTests
         {
             await store.AppendAsync(Message(time), new());
         }
-        var initial = await store.LoadFeedAsync("tab", MessageKind.Danmu, 100, null);
+        var initial = (await store.LoadFeedAsync("tab", MessageKind.Danmu, 100, null)).Records;
         Assert.Equal(100, initial.Count);
         var boundary = initial[^1];
         for (var index = 0; index < 3; index++)
@@ -26,12 +26,12 @@ public sealed class FeedWindowTests
             await store.AppendAsync(Message(time), new());
         }
 
-        var retained = await store.LoadFeedAsync("tab", MessageKind.Danmu, 100, boundary.Id);
+        var retained = (await store.LoadFeedAsync("tab", MessageKind.Danmu, 100, boundary.Id)).Records;
         Assert.Equal(103, retained.Count);
         Assert.Equal(boundary.Id, retained[^1].Id);
         Assert.Equal(initial.Select(record => record.Id), retained.Skip(3).Select(record => record.Id));
 
-        var expanded = await store.LoadFeedAsync("tab", MessageKind.Danmu, retained.Count + 100, boundary.Id);
+        var expanded = (await store.LoadFeedAsync("tab", MessageKind.Danmu, retained.Count + 100, boundary.Id)).Records;
         Assert.Equal(203, expanded.Count);
         Assert.Equal(boundary.Id, expanded[102].Id);
         Assert.Equal(203, expanded.Select(record => record.Id).Distinct().Count());
@@ -52,17 +52,17 @@ public sealed class FeedWindowTests
         {
             await store.AppendAsync(Message(time.AddSeconds(index)), new());
         }
-        var initial = await store.LoadFeedAsync("tab", MessageKind.Danmu, 3, null);
+        var initial = (await store.LoadFeedAsync("tab", MessageKind.Danmu, 3, null)).Records;
         Assert.Equal(oldest.Id, Assert.Single(initial, record => record.IsPriority).Id);
         var boundary = initial.Last(record => !record.IsPriority);
 
         await store.TogglePinAsync(oldest.Id);
-        var retained = await store.LoadFeedAsync("tab", MessageKind.Danmu, 3, boundary.Id);
+        var retained = (await store.LoadFeedAsync("tab", MessageKind.Danmu, 3, boundary.Id)).Records;
         Assert.Equal(3, retained.Count);
         Assert.DoesNotContain(retained, record => record.Id == oldest.Id);
         Assert.Equal(boundary.Id, retained[^1].Id);
 
-        var expanded = await store.LoadFeedAsync("tab", MessageKind.Danmu, 11, boundary.Id);
+        var expanded = (await store.LoadFeedAsync("tab", MessageKind.Danmu, 11, boundary.Id)).Records;
         Assert.Equal(11, expanded.Count);
         Assert.Equal(oldest.Id, expanded[^1].Id);
         Assert.False(expanded[^1].IsPinned);

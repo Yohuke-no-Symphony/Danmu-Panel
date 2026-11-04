@@ -2,6 +2,13 @@
   "LanguageName": "日本語",
   "LanguageID": "ja-JP",
   "Strings": {
+    "Panel.MarkAllRead": "すべて既読にする",
+    "Colors.GiftValueUnder50Brush": "ギフト枠：￥50 未満",
+    "Colors.GiftValue50Brush": "ギフト枠：￥50–99.99",
+    "Colors.GiftValue100Brush": "ギフト枠：￥100–499.99",
+    "Colors.GiftValue500Brush": "ギフト枠：￥500–999.99",
+    "Colors.GiftValue1000Brush": "ギフト枠：￥1000–1999.99",
+    "Colors.GiftValue2000Brush": "ギフト枠：￥2000 以上",
     "Colors.Title": "配色と配色セット",
     "Colors.Help": "変更はすぐにプレビューされます。空欄はテーマの既定色を使用します。8桁の形式は #AARRGGBB です。",
     "Colors.Scheme": "配色セット",

@@ -121,6 +121,39 @@ public sealed partial class SqliteMessageStore
     }
 
     /// <inheritdoc />
+    public Task<int> MarkAllReadAsync(string roomTabId, MessageKind kind, CancellationToken cancellationToken = default)
+    {
+        if (kind is not (MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard))
+        {
+            throw new ArgumentOutOfRangeException(nameof(kind));
+        }
+        return EnqueueAsync(connection =>
+        {
+            using var transaction = connection.BeginTransaction();
+            using var command = Command(connection, transaction, """
+                SELECT payload FROM message_records
+                WHERE room_tab_id=$room AND kind=$kind AND json_extract(payload,'$.IsRead')=0;
+                """, ("$room", roomTabId), ("$kind", (int)kind));
+            var records = ReadMessages(command);
+            foreach (var record in records)
+            {
+                var updated = record with
+                {
+                    HasBeenRead = true,
+                    ReadQuantity = record.Quantity,
+                    ReadTotalPrice = record.TotalPrice,
+                    IsRead = true,
+                    IsPriority = false
+                };
+                WriteMessage(connection, transaction, updated);
+                UpdateJobPriority(connection, transaction, updated);
+            }
+            transaction.Commit();
+            return records.Count;
+        }, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public Task ClearRoomAsync(string roomTabId, CancellationToken cancellationToken = default)
     {
         return EnqueueAsync(connection =>

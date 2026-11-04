@@ -49,9 +49,17 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         {
             var button = Ui.IconButton("Panel.BackToTop", LucideIconKind.ArrowUpToLine, ScrollToLatestAsync, reportError);
             button.Classes.Add("dockChromeButton");
-            return button;
+            if (kind == MessageKind.Danmu)
+            {
+                return button;
+            }
+            var markAllRead = Ui.IconButton("Panel.MarkAllRead", LucideIconKind.CheckCheck, Model.MarkAllReadAsync, reportError);
+            markAllRead.Name = "MarkAllReadButton";
+            markAllRead.Classes.Add("dockChromeButton");
+            markAllRead.Bind(IsEnabledProperty, new Binding(nameof(FeedViewModel.HasUnreadMessages)) { Source = Model });
+            return new StackPanel { Orientation = Orientation.Horizontal, Children = { markAllRead, button } };
         });
-        if (kind is MessageKind.SuperChat or MessageKind.Guard)
+        if (kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard)
         {
             HeaderBadgeTemplate = new FuncDataTemplate<MessageFeedView>((_, _) => CreateUnreadBadge());
         }
@@ -206,22 +214,23 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             layout.Children.Add(body);
             layout.Classes.Add("danmuFeedLayout");
         }
+        var isCard = item.Record.Kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard;
         var frame = new Border
         {
-            BorderThickness = new Thickness(item.Record.Kind == MessageKind.SuperChat ? 2 : 0),
-            CornerRadius = new CornerRadius(5), Child = layout
+            BorderThickness = new Thickness(isCard ? 2 : 0),
+            Child = layout
         };
         if (item.Record.Kind == MessageKind.SuperChat)
         {
             frame.Classes.Add("scFeedCard");
         }
-        frame.Bind(Border.BorderBrushProperty, new Binding(nameof(MessageItemViewModel.BorderBrush)));
-        if (item.Record.Kind == MessageKind.Guard)
+        if (isCard)
         {
-            frame.BorderThickness = new Thickness(3, 0, 0, 0);
+            frame.Classes.Add("messageCard");
         }
+        frame.Bind(Border.BorderBrushProperty, new Binding(nameof(MessageItemViewModel.BorderBrush)));
         Control rowContent = frame;
-        if (item.Record.Kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard)
+        if (isCard)
         {
             var dot = new Border { IsHitTestVisible = false };
             dot.Classes.Add("messageUnreadDot");
@@ -243,6 +252,10 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             HorizontalContentAlignment = HorizontalAlignment.Stretch
         };
         button.Classes.Add(item.Record.Kind == MessageKind.SuperChat ? "scFeedButton" : "danmuFeedButton");
+        if (isCard)
+        {
+            button.Classes.Add("messageCardButton");
+        }
         button.Click += async (_, args) =>
         {
             args.Handled = true;

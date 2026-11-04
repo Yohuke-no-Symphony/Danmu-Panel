@@ -27,6 +27,8 @@ internal sealed class BlockingReceptionStore(IMessageStore inner) : IMessageStor
     public Task<MessageRecord?> TogglePinAsync(string id, CancellationToken cancellationToken = default) => inner.TogglePinAsync(id, cancellationToken);
     public Task<MessageRecord?> MarkReadAsync(string id, int observedQuantity, decimal observedTotalPrice,
         CancellationToken cancellationToken = default) => inner.MarkReadAsync(id, observedQuantity, observedTotalPrice, cancellationToken);
+    public Task<int> MarkAllReadAsync(string roomTabId, MessageKind kind, CancellationToken cancellationToken = default)
+        => inner.MarkAllReadAsync(roomTabId, kind, cancellationToken);
     public Task ClearRoomAsync(string roomTabId, CancellationToken cancellationToken = default) => inner.ClearRoomAsync(roomTabId, cancellationToken);
     public Task ClearAllAsync(CancellationToken cancellationToken = default) => inner.ClearAllAsync(cancellationToken);
     public Task<bool> ApplyTranslationAsync(string id, long generation, string fingerprint, string translation,

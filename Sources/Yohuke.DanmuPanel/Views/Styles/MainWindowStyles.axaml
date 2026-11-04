@@ -873,7 +873,7 @@
         <Setter Property="Background" Value="{DynamicResource AppSidebarHoverBrush}" />
     </Style>
 
-    <Style Selector="Button.scFeedButton">
+    <Style Selector="Button.messageCardButton">
         <Setter Property="Padding" Value="0" />
         <Setter Property="Margin" Value="0,0,0,4" />
         <Setter Property="MinHeight" Value="0" />
@@ -882,11 +882,11 @@
         <Setter Property="CornerRadius" Value="6" />
     </Style>
 
-    <Style Selector="Button.scFeedButton:pointerover">
+    <Style Selector="Button.messageCardButton:pointerover">
         <Setter Property="Background" Value="{DynamicResource AppSidebarHoverBrush}" />
     </Style>
 
-    <Style Selector="Border.scFeedCard">
+    <Style Selector="Border.messageCard">
         <Setter Property="Padding" Value="8,6" />
         <Setter Property="CornerRadius" Value="7" />
         <Setter Property="Background" Value="Transparent" />
@@ -1023,11 +1023,12 @@
         <Setter Property="Margin" Value="0,0,16,0" />
     </Style>
 
-    <Style Selector="Grid.compactDanmu Button.scFeedButton">
+    <Style Selector="Grid.compactDanmu Button.messageCardButton">
+        <Setter Property="Padding" Value="0" />
         <Setter Property="Margin" Value="0,0,0,1" />
     </Style>
 
-    <Style Selector="Grid.compactDanmu Border.scFeedCard">
+    <Style Selector="Grid.compactDanmu Border.messageCard">
         <Setter Property="Padding" Value="6,3" />
     </Style>
 

@@ -21,6 +21,8 @@ public interface IMessageStore : IAsyncDisposable
     /// <summary>仅确认用户操作时实际看到的数量和价值。</summary>
     Task<MessageRecord?> MarkReadAsync(string id, int observedQuantity, decimal observedTotalPrice,
         CancellationToken cancellationToken = default);
+    /// <summary>在同一事务中确认指定房间与消息类型的全部未读记录，返回确认条数。</summary>
+    Task<int> MarkAllReadAsync(string roomTabId, MessageKind kind, CancellationToken cancellationToken = default);
     /// <summary>清空房间消息并使旧代次的回调失效。</summary>
     Task ClearRoomAsync(string roomTabId, CancellationToken cancellationToken = default);
     /// <summary>清空全部已登记房间并推进各房间代次。</summary>
