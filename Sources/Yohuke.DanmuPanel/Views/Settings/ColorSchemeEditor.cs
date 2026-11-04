@@ -65,13 +65,11 @@ public sealed class ColorSchemeEditor : UserControl
         header.Children.Add(heading);
         Grid.SetColumn(actions, 1);
         header.Children.Add(actions);
-        var help = Label("Colors.Help");
-        help.Classes.Add("muted");
-        help.FontSize = 12;
+
         var content = new StackPanel
         {
             Spacing = 12,
-            Children = { header, help, Row("Colors.Scheme", schemes), Row("Colors.SchemeName", schemeName), status }
+            Children = { header, Row("Colors.Scheme", schemes), Row("Colors.SchemeName", schemeName), status }
         };
         foreach (var group in ColorSettingCatalog.Definitions.GroupBy(definition => definition.GroupKey))
         {
