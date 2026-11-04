@@ -96,7 +96,9 @@ public sealed partial class SqliteMessageStore
         return EnqueueAsync(connection =>
         {
             using var transaction = connection.BeginTransaction();
-            using var command = Command(connection, transaction, "SELECT payload FROM translation_jobs WHERE status=0;");
+            using var command = Command(connection, transaction,
+                "SELECT payload FROM translation_jobs WHERE status=0 AND fingerprint<>$fingerprint;",
+                ("$fingerprint", configurationFingerprint));
             foreach (var job in ReadJobs(command))
             {
                 var record = ReadMessage(connection, transaction, job.MessageId);

@@ -291,7 +291,9 @@ internal sealed class DanmuFeedScrollController : IDisposable
 
     private bool IsAtLatest()
     {
-        return scrollViewer.ScrollBarMaximum.Y - scrollViewer.Offset.Y <= LATEST_OFFSET_THRESHOLD;
+        var scaling = TopLevel.GetTopLevel(scrollViewer)?.RenderScaling ?? 1;
+        var distanceInPixels = Math.Round((scrollViewer.ScrollBarMaximum.Y - scrollViewer.Offset.Y) * scaling);
+        return distanceInPixels <= Math.Round(LATEST_OFFSET_THRESHOLD * scaling);
     }
 
     private void MoveToLatest()

@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using Microsoft.Data.Sqlite;
 
 namespace Yohuke.DanmuPanel.Services.Translation;
@@ -5,39 +6,28 @@ namespace Yohuke.DanmuPanel.Services.Translation;
 /// <summary>独立数据库中的持久 LRU；淘汰不会影响消息已有译文。</summary>
 public sealed class SqliteTranslationCache : ITranslationCache, IAsyncDisposable
 {
-    private readonly SqliteConnection connection;
-    private readonly SemaphoreSlim gate = new(1, 1);
+    private const int QUEUE_CAPACITY = 512;
+    private readonly Channel<TranslationCacheOperation> operations = Channel.CreateBounded<TranslationCacheOperation>(
+        new BoundedChannelOptions(QUEUE_CAPACITY) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
+    private readonly Task worker;
     private readonly int capacity;
     private long accessOrder;
+    private int disposalRequested;
 
-    /// <summary>打开缓存数据库并恢复访问序号。</summary>
+    /// <summary>在后台初始化缓存数据库，并串行执行缓存操作。</summary>
     public SqliteTranslationCache(string databasePath, int capacity = 5000)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(capacity);
         this.capacity = capacity;
-        if (databasePath != ":memory:")
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(databasePath))!);
-        }
-
-        connection = new(new SqliteConnectionStringBuilder { DataSource = databasePath }.ToString());
-        connection.Open();
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            PRAGMA journal_mode=WAL;
-            CREATE TABLE IF NOT EXISTS translations (cache_key TEXT PRIMARY KEY, translation TEXT NOT NULL, access_order INTEGER NOT NULL);
-            CREATE INDEX IF NOT EXISTS ix_translations_access ON translations(access_order);
-            """;
-        command.ExecuteNonQuery();
-        command.CommandText = "SELECT COALESCE(MAX(access_order), 0) FROM translations;";
-        accessOrder = Convert.ToInt64(command.ExecuteScalar());
+        var path = databasePath == ":memory:" ? databasePath : Path.GetFullPath(databasePath);
+        worker = Task.Run(() => RunAsync(path));
     }
 
     /// <summary>查找并提升最近使用顺序。</summary>
-    public async Task<string?> GetAsync(string key, CancellationToken cancellationToken = default)
+    public Task<string?> GetAsync(string key, CancellationToken cancellationToken = default)
     {
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        return EnqueueAsync(connection =>
         {
             using var command = connection.CreateCommand();
             command.CommandText = "SELECT translation FROM translations WHERE cache_key=$key;";
@@ -51,18 +41,13 @@ public sealed class SqliteTranslationCache : ITranslationCache, IAsyncDisposable
             }
 
             return value;
-        }
-        finally
-        {
-            gate.Release();
-        }
+        }, cancellationToken);
     }
 
     /// <summary>保存成功结果，并在同一事务中淘汰最久未访问项。</summary>
-    public async Task SetAsync(string key, string translation, CancellationToken cancellationToken = default)
+    public Task SetAsync(string key, string translation, CancellationToken cancellationToken = default)
     {
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        return EnqueueAsync(connection =>
         {
             using var transaction = connection.BeginTransaction();
             using var command = connection.CreateCommand();
@@ -78,40 +63,87 @@ public sealed class SqliteTranslationCache : ITranslationCache, IAsyncDisposable
             command.Parameters.AddWithValue("$capacity", capacity);
             command.ExecuteNonQuery();
             transaction.Commit();
-        }
-        finally
-        {
-            gate.Release();
-        }
+            return true;
+        }, cancellationToken);
     }
 
     /// <summary>清空可复用缓存，不删除永久消息。</summary>
-    public async Task ClearAsync(CancellationToken cancellationToken = default)
+    public Task ClearAsync(CancellationToken cancellationToken = default)
     {
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        return EnqueueAsync(connection =>
         {
             using var command = connection.CreateCommand();
             command.CommandText = "DELETE FROM translations;";
             command.ExecuteNonQuery();
-        }
-        finally
+            return true;
+        }, cancellationToken);
+    }
+
+    /// <summary>排空已接受的操作，并在后台关闭数据库。</summary>
+    public ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref disposalRequested, 1) == 0)
         {
-            gate.Release();
+            operations.Writer.TryComplete();
+        }
+        return new(worker);
+    }
+
+    private async Task RunAsync(string databasePath)
+    {
+        try
+        {
+            if (databasePath != ":memory:")
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+            }
+            using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = databasePath,
+                Pooling = false
+            }.ToString());
+            connection.Open();
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = """
+                    PRAGMA journal_mode=WAL;
+                    CREATE TABLE IF NOT EXISTS translations (cache_key TEXT PRIMARY KEY, translation TEXT NOT NULL, access_order INTEGER NOT NULL);
+                    CREATE INDEX IF NOT EXISTS ix_translations_access ON translations(access_order);
+                    """;
+                command.ExecuteNonQuery();
+                command.CommandText = "SELECT COALESCE(MAX(access_order), 0) FROM translations;";
+                accessOrder = Convert.ToInt64(command.ExecuteScalar());
+            }
+            await foreach (var operation in operations.Reader.ReadAllAsync().ConfigureAwait(false))
+            {
+                operation.Execute(connection);
+            }
+        }
+        catch (Exception error)
+        {
+            operations.Writer.TryComplete(error);
+            while (operations.Reader.TryRead(out var operation))
+            {
+                operation.Fail(error);
+            }
+            throw;
         }
     }
 
-    /// <summary>等待当前操作完成并关闭数据库。</summary>
-    public async ValueTask DisposeAsync()
+    private async Task<T> EnqueueAsync<T>(Func<SqliteConnection, T> action, CancellationToken cancellationToken)
     {
-        await gate.WaitAsync().ConfigureAwait(false);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref disposalRequested) != 0, this);
+        var operation = new TranslationCacheOperationOfT<T>(action, cancellationToken);
         try
         {
-            await connection.DisposeAsync().ConfigureAwait(false);
+            await operations.Writer.WriteAsync(operation, cancellationToken).ConfigureAwait(false);
         }
-        finally
+        catch (ChannelClosedException)
         {
-            gate.Release();
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref disposalRequested) != 0, this);
+            await worker.ConfigureAwait(false);
+            throw;
         }
+        return await operation.Task.ConfigureAwait(false);
     }
 }

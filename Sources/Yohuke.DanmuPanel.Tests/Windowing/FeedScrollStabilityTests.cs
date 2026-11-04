@@ -28,6 +28,28 @@ public sealed class FeedScrollStabilityTests
 {
     private static readonly IPinyinService pinyin = new PinyinService();
 
+    /// <summary>原生浮点偏移在底部容差附近的误差不解除跟随，实际离开底部仍进入历史阅读。</summary>
+    [AvaloniaTheory]
+    [InlineData(1.00006103515625, true)]
+    [InlineData(2, false)]
+    public void NativeOffsetRoundingDoesNotCancelFollowing(double distance, bool follows)
+    {
+        var (window, _, viewer, controller, _) = CreateFeed(startAtLatest: true);
+        using (controller)
+        {
+            try
+            {
+                viewer.Offset = new(0, viewer.ScrollBarMaximum.Y - distance);
+
+                Assert.Equal(follows, controller.IsFollowingLatest);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+    }
+
     /// <summary>手势回到底部时不能在冒泡阶段撤销刚排队的跟随请求。</summary>
     [AvaloniaFact]
     public void ScrollGestureReturningToBottomKeepsFollowThroughDeferredLayout()

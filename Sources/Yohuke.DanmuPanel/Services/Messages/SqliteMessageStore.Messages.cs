@@ -219,14 +219,27 @@ public sealed partial class SqliteMessageStore
     {
         return EnqueueAsync(connection =>
         {
-            using var transaction = connection.BeginTransaction();
-            WriteOptions(connection, transaction, options);
-            using var command = Command(connection, transaction, "SELECT payload FROM message_records WHERE kind=$kind;", ("$kind", (int)MessageKind.Gift));
-            foreach (var record in ReadMessages(command))
+            using var transaction = connection.BeginTransaction(deferred: true);
+            var previous = ReadOptions(connection, transaction);
+            if (previous == options)
             {
-                var updated = record with { IsPriority = IsPriority(record, options) };
-                WriteMessage(connection, transaction, updated);
-                UpdateJobPriority(connection, transaction, updated);
+                return true;
+            }
+            WriteOptions(connection, transaction, options);
+            if (previous.GiftAutoPinMinimum != options.GiftAutoPinMinimum)
+            {
+                using var command = Command(connection, transaction,
+                    "SELECT payload FROM message_records WHERE kind=$kind AND json_extract(payload,'$.IsRead')=0;",
+                    ("$kind", (int)MessageKind.Gift));
+                foreach (var record in ReadMessages(command))
+                {
+                    var priority = IsPriority(record, options);
+                    if (record.IsPriority == priority)
+                    {
+                        continue;
+                    }
+                    WriteMessage(connection, transaction, record with { IsPriority = priority });
+                }
             }
             transaction.Commit();
             return true;

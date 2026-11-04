@@ -63,7 +63,10 @@ public sealed class TranslationScheduler : ITranslationScheduler
                 await generation.CancelAsync().ConfigureAwait(false);
                 generation.Dispose();
                 generation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
-                await store.ResetPendingAsync(fingerprint, cancellationToken).ConfigureAwait(false);
+                if (snapshot.Enabled)
+                {
+                    await store.ResetPendingAsync(fingerprint, cancellationToken).ConfigureAwait(false);
+                }
                 authenticationFailed = false;
             }
 

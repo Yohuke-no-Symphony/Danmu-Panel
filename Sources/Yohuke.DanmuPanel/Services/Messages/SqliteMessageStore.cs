@@ -173,7 +173,10 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
 
     private static void WriteOptions(SqliteConnection connection, SqliteTransaction transaction, MessageReadOptions options)
     {
-        Execute(connection, transaction, "INSERT INTO message_options(id,payload) VALUES(1,$payload) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload;",
+        Execute(connection, transaction, """
+            INSERT INTO message_options(id,payload) VALUES(1,$payload)
+            ON CONFLICT(id) DO UPDATE SET payload=excluded.payload WHERE message_options.payload<>excluded.payload;
+            """,
             ("$payload", JsonSerializer.Serialize(options)));
     }
 
