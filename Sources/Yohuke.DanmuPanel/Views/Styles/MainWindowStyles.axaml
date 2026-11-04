@@ -917,6 +917,7 @@
     </Style>
 
     <Style Selector="TextBlock.danmuFeedUser">
+        <Setter Property="Foreground" Value="{DynamicResource MessageUserNameBrush}" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="VerticalAlignment" Value="Center" />
@@ -925,13 +926,13 @@
 
     <Style Selector="TextBlock.danmuFeedMeta">
         <Setter Property="FontSize" Value="11" />
-        <Setter Property="Foreground" Value="{DynamicResource AppMutedTextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource MessageTimeBrush}" />
     </Style>
 
     <Style Selector="TextBlock.danmuFeedPinyin">
         <Setter Property="FontSize" Value="10" />
         <Setter Property="FontWeight" Value="Regular" />
-        <Setter Property="Foreground" Value="{DynamicResource AppMutedTextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource MessagePinyinBrush}" />
         <Setter Property="TextAlignment" Value="Center" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
@@ -944,7 +945,7 @@
     </Style>
 
     <Style Selector="Border.danmuMedalBadge">
-        <Setter Property="Background" Value="{DynamicResource AppSidebarSelectedBrush}" />
+        <Setter Property="Background" Value="{DynamicResource MedalBackgroundBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="3" />
         <Setter Property="Padding" Value="4,1" />
@@ -961,7 +962,7 @@
 
     <Style Selector="TextBlock.danmuMedalText">
         <Setter Property="FontSize" Value="11" />
-        <Setter Property="Foreground" Value="{DynamicResource AppMutedTextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource MedalTextBrush}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
@@ -975,6 +976,22 @@
         <Setter Property="LineSpacing" Value="1" />
         <Setter Property="TextAlignment" Value="Left" />
         <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.originalText">
+        <Setter Property="Foreground" Value="{DynamicResource MessageOriginalBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.translatedText">
+        <Setter Property="Foreground" Value="{DynamicResource MessageTranslationBrush}" />
+    </Style>
+
+    <Style Selector="components|HoverMarqueeTextBlock.originalText">
+        <Setter Property="Foreground" Value="{DynamicResource MessageOriginalBrush}" />
+    </Style>
+
+    <Style Selector="components|HoverMarqueeTextBlock.translatedText">
+        <Setter Property="Foreground" Value="{DynamicResource MessageTranslationBrush}" />
     </Style>
 
 

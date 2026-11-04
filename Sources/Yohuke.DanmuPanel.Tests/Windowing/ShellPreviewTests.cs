@@ -40,7 +40,7 @@ public sealed class ShellPreviewTests
         var originalTheme = Application.Current!.RequestedThemeVariant;
         Localization.SetLanguage("zh-CN");
         Application.Current.RequestedThemeVariant = ThemeVariant.Light;
-        var workspaceView = new WorkspaceView(runtime, errors.Add);
+        var workspaceView = new WorkspaceView(runtime, errors.Add, new Workspace.FakeRoomAvatarService());
         using var testView = new TestMessagesView(runtime, errors.Add);
         testView.SelectRoom(room);
         var kinds = new[] { MessageKind.Danmu, MessageKind.SuperChat, MessageKind.Gift, MessageKind.Guard };

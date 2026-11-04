@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using Yohuke.DanmuPanel.Models.State;
+using Yohuke.DanmuPanel.Services.Appearance;
 
 namespace Yohuke.DanmuPanel.Services;
 
@@ -32,6 +33,7 @@ public sealed class ConfigurationService
     /// <summary>串行保存当前配置快照。</summary>
     public async Task SaveAsync(PanelConfiguration configuration)
     {
+        ColorSchemeService.Validate(configuration.Settings.ColorScheme);
         var snapshots = new Dictionary<string, string>
         {
             ["settings.json"] = JsonSerializer.Serialize(configuration.Settings, JSON_OPTIONS),
@@ -90,9 +92,13 @@ public sealed class ConfigurationService
         try
         {
             value = JsonSerializer.Deserialize<T>(File.ReadAllText(path), JSON_OPTIONS) ?? throw new JsonException("Null configuration");
+            if (value is PanelSettings settings)
+            {
+                ColorSchemeService.Validate(settings.ColorScheme);
+            }
             return true;
         }
-        catch (JsonException)
+        catch (Exception exception) when (exception is JsonException or InvalidDataException)
         {
             var corrupt = Path.Combine(DirectoryPath, "Corrupt");
             Directory.CreateDirectory(corrupt);

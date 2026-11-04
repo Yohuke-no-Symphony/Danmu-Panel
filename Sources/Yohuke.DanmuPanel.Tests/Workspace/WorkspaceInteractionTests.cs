@@ -23,7 +23,7 @@ public sealed class WorkspaceInteractionTests
     {
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = CreateRuntime(directory);
-        using var view = new WorkspaceView(runtime, exception => throw exception);
+        using var view = new WorkspaceView(runtime, exception => throw exception, new FakeRoomAvatarService());
         var panels = WorkbenchPanelIds.All.ToDictionary(id => id, _ => (Control)new Border());
         panels[WorkbenchPanelIds.WORKSPACE] = view;
         var shell = new ShellWindow(panels, view.Toolbar, directory.Path);
@@ -64,7 +64,7 @@ public sealed class WorkspaceInteractionTests
     {
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = CreateRuntime(directory);
-        using var view = new WorkspaceView(runtime, exception => throw exception);
+        using var view = new WorkspaceView(runtime, exception => throw exception, new FakeRoomAvatarService());
         var window = new Window { Width = 360, Height = 600, Content = view };
         try
         {

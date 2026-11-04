@@ -51,6 +51,7 @@ public partial class App : Application
                     configuration.Workspaces.Add(new() { Name = Localization.Get("Panel.DefaultWorkspace") });
                 }
                 runtime = new(configStore, configuration);
+                runtime.Colors.Apply(this, configuration.Settings.ColorScheme);
                 workspace = new(runtime, ReportFailure);
                 var panels = new Dictionary<string, Control> { ["workspace"] = workspace };
                 foreach (var (id, kind) in new[] { ("danmu", MessageKind.Danmu), ("superChat", MessageKind.SuperChat), ("gift", MessageKind.Gift), ("guard", MessageKind.Guard) })

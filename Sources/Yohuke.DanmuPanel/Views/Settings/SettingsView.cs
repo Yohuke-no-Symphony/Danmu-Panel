@@ -21,6 +21,7 @@ namespace Yohuke.DanmuPanel.Views.Settings;
 public sealed class SettingsView : UserControl
 {
     private readonly SettingsDialogSurface surface = new();
+    private readonly ColorSchemeEditor colorSchemeEditor;
     private readonly PanelRuntime runtime;
     private readonly Control accountsView;
     private readonly TextBlock status;
@@ -72,6 +73,7 @@ public sealed class SettingsView : UserControl
         this.runtime = runtime;
         this.accountsView = accountsView;
         var settings = runtime.Configuration.Settings;
+        colorSchemeEditor = new(settings, runtime.Colors);
         windowMenuOnMac = Check("Settings.Appearance.WindowMenuOnMac", settings.UseWindowMenuOnMac);
         windowMenuOnMac.Name = "UseWindowMenuOnMacCheckBox";
         windowMenuOnMac.IsVisible = supportsNativeMenus;
@@ -153,6 +155,11 @@ public sealed class SettingsView : UserControl
         try
         {
             await PendingMenuPreferenceSave;
+            if (!colorSchemeEditor.TryCommit(out var colorError))
+            {
+                SetStatus(colorError ?? Localization.Get("Colors.InvalidColor"));
+                return false;
+            }
             glossaryGrid.CommitEdit(DataGridEditingUnit.Cell, true);
             glossaryGrid.CommitEdit(DataGridEditingUnit.Row, true);
             var terms = glossary.Where(entry => !string.IsNullOrWhiteSpace(entry.Source) || !string.IsNullOrWhiteSpace(entry.Target)).ToList();
@@ -234,20 +241,32 @@ public sealed class SettingsView : UserControl
         };
         var themes = new[] { "system", "light", "dark" };
         var theme = Choices(["Settings.FollowSystem", "Settings.Light", "Settings.Dark"], Math.Max(0, Array.IndexOf(themes, settings.Theme)));
+        void ApplyAppearance()
+        {
+            var application = Application.Current!;
+            application.RequestedThemeVariant = settings.Theme switch
+            {
+                "light" => ThemeVariant.Light,
+                "dark" => ThemeVariant.Dark,
+                _ => ThemeVariant.Default
+            };
+            runtime.Colors.Apply(application, settings.ColorScheme);
+            colorSchemeEditor.RefreshDefaults();
+            theme.SelectedIndex = Math.Max(0, Array.IndexOf(themes, settings.Theme));
+            runtime.NotifyAppearanceChanged();
+        }
+        colorSchemeEditor.Changed += ApplyAppearance;
         theme.SelectionChanged += (_, _) =>
         {
-            if (theme.SelectedIndex >= 0)
+            if (theme.SelectedIndex >= 0 && settings.Theme != themes[theme.SelectedIndex])
             {
                 settings.Theme = themes[theme.SelectedIndex];
-                Application.Current!.RequestedThemeVariant = settings.Theme switch
-                {
-                    "light" => ThemeVariant.Light,
-                    "dark" => ThemeVariant.Dark,
-                    _ => ThemeVariant.Default
-                };
+                settings.ColorScheme.SelectedSchemeId = null;
+                ApplyAppearance();
             }
         };
-        return Stack(Card("Settings.Appearance", Row("Settings.Language", languages), Row("Settings.Theme", theme), windowMenuOnMac));
+        return Stack(Card("Settings.Appearance", Row("Settings.Language", languages), Row("Settings.Theme", theme), windowMenuOnMac),
+            colorSchemeEditor);
     }
 
     private async Task SaveMenuPreferenceAsync()

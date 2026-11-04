@@ -6,6 +6,7 @@ using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Models.Workspace;
 using Yohuke.DanmuPanel.Services.Translation;
+using Yohuke.DanmuPanel.Services.Appearance;
 
 namespace Yohuke.DanmuPanel.ViewModels;
 
@@ -32,10 +33,13 @@ public sealed class MessageItemViewModel : ObservableObject
         }
     }
     public int MedalLevel => Record.MedalLevel;
-    public Avalonia.Media.IBrush MedalBorderBrush => Avalonia.Media.Brush.Parse(Record.MedalGuardLevel switch
+    public Avalonia.Media.IBrush MedalBorderBrush => Record.MedalGuardLevel switch
     {
-        1 => "#E9A23B", 2 => "#A46EE8", 3 => "#4F8FDD", _ => "Transparent"
-    });
+        1 => GetColor("GuardGovernorBrush", ColorSettingCatalog.GUARD_GOVERNOR_COLOR),
+        2 => GetColor("GuardAdmiralBrush", ColorSettingCatalog.GUARD_ADMIRAL_COLOR),
+        3 => GetColor("GuardCaptainBrush", ColorSettingCatalog.GUARD_CAPTAIN_COLOR),
+        _ => Avalonia.Media.Brushes.Transparent
+    };
     public string Time => Record.Time.ToLocalTime().ToString("HH:mm:ss");
     public string State => Record.IsPinned ? "📌" : Record.Kind == MessageKind.Gift && !Record.IsRead ? "●" : "";
     public bool HasState => State.Length > 0;
@@ -56,12 +60,17 @@ public sealed class MessageItemViewModel : ObservableObject
     public bool ShowOriginal => !HasTranslation || settings.Translation.DisplayMode == TranslationDisplayMode.Bilingual;
     public bool HasMedal => Medal.Length > 0;
     public bool AutoScrollLongMessages => settings.AutoScrollLongMessages;
-    public Avalonia.Media.IBrush BorderBrush => Avalonia.Media.Brush.Parse(Record.Kind switch
+    public Avalonia.Media.IBrush BorderBrush => Record.Kind switch
     {
-        MessageKind.Guard => Record.GuardLevel switch { 1 => "#E9A23B", 2 => "#A46EE8", _ => "#4F8FDD" },
-        MessageKind.SuperChat => string.IsNullOrEmpty(Record.BorderColor) ? "#2A60B2" : Record.BorderColor,
-        _ => Record.IsPriority ? "#5B9BD5" : "Transparent"
-    });
+        MessageKind.Guard => Record.GuardLevel switch
+        {
+            1 => GetColor("GuardGovernorBrush", ColorSettingCatalog.GUARD_GOVERNOR_COLOR),
+            2 => GetColor("GuardAdmiralBrush", ColorSettingCatalog.GUARD_ADMIRAL_COLOR),
+            _ => GetColor("GuardCaptainBrush", ColorSettingCatalog.GUARD_CAPTAIN_COLOR)
+        },
+        MessageKind.SuperChat => GetColor("SuperChatBorderBrush", string.IsNullOrEmpty(Record.BorderColor) ? ColorSettingCatalog.SUPER_CHAT_FALLBACK_COLOR : Record.BorderColor),
+        _ => Record.IsPriority ? GetColor("PriorityMessageBorderBrush", ColorSettingCatalog.PRIORITY_MESSAGE_COLOR) : Avalonia.Media.Brushes.Transparent
+    };
     public IReadOnlyList<DanmuEmoticon> Emoticons
     {
         get => emoticons;
@@ -82,6 +91,11 @@ public sealed class MessageItemViewModel : ObservableObject
         Record = record;
         settings = currentSettings;
         OnPropertyChanged(string.Empty);
+    }
+
+    private Avalonia.Media.IBrush GetColor(string key, string fallback)
+    {
+        return Avalonia.Media.Brush.Parse(settings.ColorScheme.Overrides.GetValueOrDefault(key, fallback));
     }
 
     private string GetAnnotation(string text, bool enabled)

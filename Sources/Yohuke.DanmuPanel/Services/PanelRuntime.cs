@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Services.Messages;
+using Yohuke.DanmuPanel.Services.Appearance;
 using Yohuke.DanmuPanel.Services.Translation;
 
 namespace Yohuke.DanmuPanel.Services;
@@ -23,6 +24,8 @@ public sealed class PanelRuntime : IAsyncDisposable
     /// <summary>向当前阅读房间添加和清理仅用于界面验证的本地消息。</summary>
     public TestMessageService TestMessages { get; }
     public EmoticonCacheService Emoticons { get; }
+    public AvatarCacheService Avatars { get; }
+    public ColorSchemeService Colors { get; } = new();
     public BilibiliAccountSessionService AccountSessions { get; } = new();
     public IPinyinService Pinyin { get; } = new PinyinService();
     public event Action<string>? Changed;
@@ -48,6 +51,7 @@ public sealed class PanelRuntime : IAsyncDisposable
         scheduler.Completed += (_, args) => Changed?.Invoke(args.RoomTabId);
         scheduler.Error += ReportError;
         Emoticons = new(new AppDirectoryService(configurationStore.DirectoryPath));
+        Avatars = new(new AppDirectoryService(configurationStore.DirectoryPath));
     }
 
     /// <summary>恢复翻译队列。</summary>
@@ -96,6 +100,12 @@ public sealed class PanelRuntime : IAsyncDisposable
         await ConfigurationStore.SaveAsync(Configuration);
         await Messages.ReevaluateReadOptionsAsync(Configuration.Settings.Reading);
         await scheduler.UpdateSettingsAsync(Configuration.Settings.Translation);
+        Changed?.Invoke("");
+    }
+
+    /// <summary>即时刷新消息的全局配色，不触发翻译或重新读取设置。</summary>
+    public void NotifyAppearanceChanged()
+    {
         Changed?.Invoke("");
     }
 
@@ -165,6 +175,8 @@ public sealed class PanelRuntime : IAsyncDisposable
             await translationCache.DisposeAsync();
             await ConfigurationStore.SaveAsync(Configuration);
             Emoticons.Dispose();
+            Avatars.Dispose();
+            Colors.Dispose();
             Configuration.Accounts.CollectionChanged -= OnAccountsChanged;
             AccountSessions.Dispose();
             await Messages.DisposeAsync();

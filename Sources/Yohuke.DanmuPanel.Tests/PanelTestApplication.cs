@@ -28,6 +28,10 @@ public sealed class PanelTestApplication : Application
         Styles.Add(new DockFluentTheme());
         Styles.Add(new StyleInclude(new Uri("avares://Yohuke.DanmuPanel/"))
         {
+            Source = new("avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml")
+        });
+        Styles.Add(new StyleInclude(new Uri("avares://Yohuke.DanmuPanel/"))
+        {
             Source = new("avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml")
         });
         Styles.Add(new StyleInclude(new Uri("avares://Yohuke.DanmuPanel/"))

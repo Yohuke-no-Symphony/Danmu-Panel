@@ -1,4 +1,5 @@
 using Yohuke.DanmuPanel.Models.Messages;
+using Yohuke.DanmuPanel.Models.Appearance;
 using Yohuke.DanmuPanel.Models.Translation;
 
 namespace Yohuke.DanmuPanel.Models.State;
@@ -8,6 +9,7 @@ public sealed class PanelSettings
 {
     public string Language { get; set; } = "system";
     public string Theme { get; set; } = "system";
+    public ColorSchemeSettings ColorScheme { get; set; } = new();
 
     /// <summary>在 macOS 主窗口内显示菜单；默认使用系统菜单栏。</summary>
     public bool UseWindowMenuOnMac { get; set; }

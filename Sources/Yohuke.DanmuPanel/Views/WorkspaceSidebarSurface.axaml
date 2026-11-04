@@ -134,8 +134,14 @@
                                                   ColumnSpacing="8">
                                                 <Border Classes="roomAvatarPlaceholder"
                                                         Background="{DynamicResource AppSidebarSelectedBrush}"
-                                                        >
-                                                    <TextBlock Text="{Binding AvatarPlaceholderText}" />
+                                                        ClipToBounds="True">
+                                                    <Panel>
+                                                        <TextBlock Text="{Binding AvatarPlaceholderText}"
+                                                                   IsVisible="{Binding HasNoAvatar}" />
+                                                        <Image Source="{Binding AvatarImage}"
+                                                               IsVisible="{Binding HasAvatar}"
+                                                               Stretch="UniformToFill" />
+                                                    </Panel>
                                                 </Border>
                                                 <TextBlock Grid.Column="1"
                                                            Text="{Binding State.Name}"

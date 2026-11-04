@@ -9,5 +9,6 @@ public sealed partial class RoomTabState : ObservableObject
     public string RoomId { get; set; } = "";
     [ObservableProperty] private string name = "";
     public string OwnerUid { get; set; } = "";
+    public string AvatarPath { get; set; } = "";
     public string? AccountOverrideId { get; set; }
 }

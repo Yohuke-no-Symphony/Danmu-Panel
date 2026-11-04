@@ -25,6 +25,17 @@
                     <SolidColorBrush x:Key="AppBorderBrush" Color="#DDE2EA" />
                     <SolidColorBrush x:Key="AppTextBrush" Color="#111827" />
                     <SolidColorBrush x:Key="AppMutedTextBrush" Color="#627087" />
+                    <SolidColorBrush x:Key="MessageOriginalBrush" Color="#111827" />
+                    <SolidColorBrush x:Key="MessageTranslationBrush" Color="#111827" Opacity="0.85" />
+                    <SolidColorBrush x:Key="MessageUserNameBrush" Color="#111827" />
+                    <SolidColorBrush x:Key="MessagePinyinBrush" Color="#627087" />
+                    <SolidColorBrush x:Key="MessageTimeBrush" Color="#627087" Opacity="0.6" />
+                    <SolidColorBrush x:Key="MedalBackgroundBrush" Color="{DynamicResource SystemAccentColor}" Opacity="0.14" />
+                    <SolidColorBrush x:Key="MedalTextBrush" Color="#627087" />
+                    <SolidColorBrush x:Key="GuardCaptainBrush" Color="#4F8FDD" />
+                    <SolidColorBrush x:Key="GuardAdmiralBrush" Color="#A46EE8" />
+                    <SolidColorBrush x:Key="GuardGovernorBrush" Color="#E9A23B" />
+                    <SolidColorBrush x:Key="PriorityMessageBorderBrush" Color="#5B9BD5" />
                     <SolidColorBrush x:Key="AppPrimaryBrush" Color="{DynamicResource SystemAccentColor}" />
                     <SolidColorBrush x:Key="AppPrimaryTextBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="AppSplitterBrush" Color="#DDE2EA" />
@@ -52,6 +63,17 @@
                     <SolidColorBrush x:Key="AppBorderBrush" Color="#303949" />
                     <SolidColorBrush x:Key="AppTextBrush" Color="#F2F4F8" />
                     <SolidColorBrush x:Key="AppMutedTextBrush" Color="#9AAAC2" />
+                    <SolidColorBrush x:Key="MessageOriginalBrush" Color="#F2F4F8" />
+                    <SolidColorBrush x:Key="MessageTranslationBrush" Color="#F2F4F8" Opacity="0.85" />
+                    <SolidColorBrush x:Key="MessageUserNameBrush" Color="#F2F4F8" />
+                    <SolidColorBrush x:Key="MessagePinyinBrush" Color="#9AAAC2" />
+                    <SolidColorBrush x:Key="MessageTimeBrush" Color="#9AAAC2" Opacity="0.6" />
+                    <SolidColorBrush x:Key="MedalBackgroundBrush" Color="{DynamicResource SystemAccentColor}" Opacity="0.14" />
+                    <SolidColorBrush x:Key="MedalTextBrush" Color="#9AAAC2" />
+                    <SolidColorBrush x:Key="GuardCaptainBrush" Color="#4F8FDD" />
+                    <SolidColorBrush x:Key="GuardAdmiralBrush" Color="#A46EE8" />
+                    <SolidColorBrush x:Key="GuardGovernorBrush" Color="#E9A23B" />
+                    <SolidColorBrush x:Key="PriorityMessageBorderBrush" Color="#5B9BD5" />
                     <SolidColorBrush x:Key="AppPrimaryBrush" Color="{DynamicResource SystemAccentColor}" />
                     <SolidColorBrush x:Key="AppPrimaryTextBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="AppSplitterBrush" Color="#303949" />

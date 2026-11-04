@@ -11,6 +11,23 @@ namespace Yohuke.DanmuPanel.Tests.Integration;
 /// <summary>验证配置原子保存和损坏备份恢复。</summary>
 public sealed class ConfigurationServiceTests
 {
+    /// <summary>旧设置保持默认配色；损坏颜色不会阻止从最近有效备份恢复。</summary>
+    [Fact]
+    public async Task InvalidColorSchemeRestoresBackupAndLegacySettingsKeepDefaults()
+    {
+        using var directory = new MessageStoreTestDirectory();
+        var service = new ConfigurationService(directory.Path);
+        var path = Path.Combine(directory.Path, "settings.json");
+        File.WriteAllText(path, "{\"Language\":\"ja-JP\"}");
+        var configuration = service.Load();
+        Assert.Empty(configuration.Settings.ColorScheme.Overrides);
+        Assert.Empty(configuration.Settings.ColorScheme.SavedSchemes);
+        await service.SaveAsync(configuration);
+        File.WriteAllText(path, "{\"ColorScheme\":{\"Overrides\":{\"MessageOriginalBrush\":\"broken\"}}}");
+        Assert.Equal("ja-JP", service.Load().Settings.Language);
+        Assert.Single(Directory.GetFiles(Path.Combine(directory.Path, "Corrupt")));
+    }
+
     /// <summary>主文件损坏时保留原件并恢复最后一个完整备份。</summary>
     [Fact]
     public async Task CorruptPrimaryRestoresValidBackup()

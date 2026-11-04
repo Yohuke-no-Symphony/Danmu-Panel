@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Lucide.Avalonia;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.State;
@@ -20,6 +21,7 @@ public sealed class WorkspaceView : UserControl, IDisposable
 {
     private readonly PanelRuntime runtime;
     private readonly Action<Exception> reportError;
+    private readonly IRoomAvatarService avatars;
     private readonly WorkspaceShareService sharing = new();
     private readonly HashSet<WorkspaceState> observedWorkspaces = [];
     private readonly TextBlock roomTitle = new();
@@ -40,10 +42,12 @@ public sealed class WorkspaceView : UserControl, IDisposable
     public event Action<RoomTabState?>? SelectedRoomChanged;
 
     /// <summary>连接已有配置、阅读选择与监听运行时。</summary>
-    public WorkspaceView(PanelRuntime runtime, Action<Exception> reportError)
+    public WorkspaceView(PanelRuntime runtime, Action<Exception> reportError, IRoomAvatarService? avatarService = null)
     {
         this.runtime = runtime;
         this.reportError = reportError;
+        avatars = avatarService ?? runtime.Avatars;
+        AttachedToVisualTree += (_, _) => LoadAvatars();
         Content = new WorkspaceSidebarSurface { DataContext = this };
         DataContext = this;
         listen = Ui.Button("Panel.StartListening", ToggleListeningAsync, reportError);
@@ -84,6 +88,10 @@ public sealed class WorkspaceView : UserControl, IDisposable
             workspace.Rooms.CollectionChanged -= OnRoomsChanged;
         }
         observedWorkspaces.Clear();
+        foreach (var room in Workspaces.SelectMany(workspace => workspace.Rooms))
+        {
+            room.Dispose();
+        }
     }
 
     internal async Task SelectAsync(WorkspaceState workspace, RoomTabState? room = null)
@@ -132,6 +140,7 @@ public sealed class WorkspaceView : UserControl, IDisposable
             observedWorkspaces.Remove(removed);
         }
         var previous = Workspaces.ToDictionary(item => item.State);
+        var removedRooms = Workspaces.SelectMany(workspace => workspace.Rooms).ToHashSet();
         Workspaces.Clear();
         foreach (var workspace in runtime.Configuration.Workspaces)
         {
@@ -144,11 +153,52 @@ public sealed class WorkspaceView : UserControl, IDisposable
             node.Rooms.Clear();
             foreach (var room in workspace.Rooms)
             {
-                node.Rooms.Add(rooms.GetValueOrDefault(room) ?? new RoomTreeItemViewModel(workspace, room));
+                var roomNode = rooms.GetValueOrDefault(room) ?? new RoomTreeItemViewModel(workspace, room);
+                node.Rooms.Add(roomNode);
+                removedRooms.Remove(roomNode);
             }
             Workspaces.Add(node);
         }
+        foreach (var room in removedRooms)
+        {
+            room.Dispose();
+        }
         RefreshPresentation();
+        if (this.IsAttachedToVisualTree())
+        {
+            LoadAvatars();
+        }
+    }
+
+    private void LoadAvatars()
+    {
+        if (disposed)
+        {
+            return;
+        }
+        foreach (var room in Workspaces.SelectMany(workspace => workspace.Rooms))
+        {
+            _ = LoadAvatarAsync(room);
+        }
+    }
+
+    private async Task LoadAvatarAsync(RoomTreeItemViewModel room)
+    {
+        try
+        {
+            var account = PanelAccountSelector.Resolve(runtime.Configuration, room.Workspace, room.State);
+            if (await room.LoadAvatarAsync(avatars, account?.Cookie) && !disposed)
+            {
+                await runtime.ConfigurationStore.SaveAsync(runtime.Configuration);
+            }
+        }
+        catch (Exception exception)
+        {
+            if (!disposed)
+            {
+                reportError(exception);
+            }
+        }
     }
 
     private void RefreshPresentation()
