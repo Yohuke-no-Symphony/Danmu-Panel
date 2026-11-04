@@ -58,7 +58,7 @@ internal sealed class MessageFeedRow : Button
         name.Bind(EmoticonTextBlock.PinyinForegroundProperty, new DynamicResourceExtension("MessagePinyinBrush"));
         name.Bind(EmoticonTextBlock.PinyinFontSizeProperty, new DynamicResourceExtension("MessageFontSizePinyin"));
         name.Classes.Add("danmuFeedUser");
-        name.TextAlignment = TextAlignment.Center;
+        name.TextAlignment = kind is MessageKind.Gift or MessageKind.Guard ? TextAlignment.Left : TextAlignment.Center;
         name.Bind(ToolTip.TipProperty, new Binding(nameof(MessageItemViewModel.Name)));
         identity.Children.Add(name);
         identity.Classes.Add("danmuFeedIdentity");
@@ -122,7 +122,7 @@ internal sealed class MessageFeedRow : Button
         }
         else
         {
-            layout.ColumnDefinitions = new(kind is MessageKind.Gift or MessageKind.Guard ? "3*,2*" : "2*,3*");
+            layout.ColumnDefinitions = new(kind == MessageKind.Guard ? "3*,2*" : "2*,3*");
             layout.Children.Add(identity);
             Grid.SetColumn(body, 1);
             layout.Children.Add(body);
