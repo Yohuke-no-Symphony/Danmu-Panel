@@ -127,6 +127,25 @@ public sealed class TestMessageServiceTests
         Assert.Empty(await store.LoadPageAsync(room.Id, MessageKind.Danmu, 0, 10));
     }
 
+    /// <summary>无效舰队身份在写入前被拒绝。</summary>
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(4)]
+    public async Task InvalidMedalGuardLevelDoesNotWriteMessages(int level)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var store = new SqliteMessageStore(directory.DatabasePath);
+        var service = new TestMessageService(store, () => new(), _ => { }, () => { });
+        var room = new RoomTabState { Id = "room", RoomId = "123" };
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.AddAsync(room, new()
+        {
+            UserName = "viewer", Content = "message", MedalGuardLevel = level
+        }));
+
+        Assert.Empty(await store.LoadPageAsync(room.Id, MessageKind.Danmu, 0, 10));
+    }
+
     /// <summary>人工译文不重复请求模型；修改翻译配置后仍可通过普通入口重新排队。</summary>
     [Theory]
     [InlineData(MessageKind.Danmu, false)]

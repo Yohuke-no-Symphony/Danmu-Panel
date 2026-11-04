@@ -371,6 +371,8 @@
     "TestMessages.UserName": "ユーザー名",
     "TestMessages.MedalName": "ファンメダル名（空欄でなし）",
     "TestMessages.MedalLevel": "ファンメダルのレベル（0 でなし）",
+    "TestMessages.MedalGuardLevel": "大航海メンバー",
+    "TestMessages.NoGuard": "なし",
     "TestMessages.Content": "本文",
     "TestMessages.Translation": "手入力の訳文（任意）",
     "TestMessages.GiftName": "ギフト名",

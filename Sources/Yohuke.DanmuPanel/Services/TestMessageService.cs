@@ -35,6 +35,8 @@ public sealed class TestMessageService
         ArgumentOutOfRangeException.ThrowIfLessThan(request.Quantity, 1);
         ArgumentOutOfRangeException.ThrowIfNegative(request.UnitPrice);
         ArgumentOutOfRangeException.ThrowIfNegative(request.MedalLevel);
+        ArgumentOutOfRangeException.ThrowIfNegative(request.MedalGuardLevel);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(request.MedalGuardLevel, 3);
         if (!Enum.IsDefined(request.Kind))
         {
             throw new ArgumentOutOfRangeException(nameof(request));
@@ -71,6 +73,7 @@ public sealed class TestMessageService
             UserName = request.Count > 1 ? $"{request.UserName.Trim()} · {index + 1}" : request.UserName.Trim(),
             MedalName = hasMedal ? medalName : "",
             MedalLevel = hasMedal ? request.MedalLevel : 0,
+            MedalGuardLevel = request.MedalGuardLevel,
             Content = hasText ? request.Content : "",
             Time = now.AddMilliseconds(index - request.Count + 1),
             GiftName = request.Kind == MessageKind.Gift ? request.GiftName.Trim() : "",

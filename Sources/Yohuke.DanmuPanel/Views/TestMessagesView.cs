@@ -28,6 +28,7 @@ public sealed class TestMessagesView : UserControl, IWorkbenchHeaderActions, IDi
     private readonly ComboBox kind;
     private readonly TextBox userName;
     private readonly TextBox medalName = new() { Name = "TestMedalName" };
+    private readonly ComboBox medalGuardLevel;
     private readonly NumericUpDown medalLevel = new()
     {
         Name = "TestMedalLevel", Minimum = 0, Maximum = int.MaxValue, Value = 0,
@@ -85,6 +86,8 @@ public sealed class TestMessagesView : UserControl, IWorkbenchHeaderActions, IDi
         });
         kind = Choices("TestKind", ["Workbench.Panel.Danmu", "Workbench.Panel.SuperChat", "Workbench.Panel.Gift", "Workbench.Panel.Guard"], 0);
         guardLevel = Choices("TestGuardLevel", ["Panel.Guard.1", "Panel.Guard.2", "Panel.Guard.3"], 2);
+        medalGuardLevel = Choices("TestMedalGuardLevel",
+            ["TestMessages.NoGuard", "Panel.Guard.3", "Panel.Guard.2", "Panel.Guard.1"], 0);
         userName = new() { Name = "TestUserName", Text = Localization.Get("TestMessages.SampleUser") };
         messageContent = new()
         {
@@ -115,6 +118,7 @@ public sealed class TestMessagesView : UserControl, IWorkbenchHeaderActions, IDi
             {
                 target, help, Ui.Field("TestMessages.Kind", kind), Ui.Field("TestMessages.UserName", userName),
                 Ui.Field("TestMessages.MedalName", medalName), Ui.Field("TestMessages.MedalLevel", medalLevel),
+                Ui.Field("TestMessages.MedalGuardLevel", medalGuardLevel),
                 textFields, giftField, priceField, quantityField, guardField,
                 Ui.Field("TestMessages.BatchCount", batchCount), status
             }
@@ -190,6 +194,14 @@ public sealed class TestMessagesView : UserControl, IWorkbenchHeaderActions, IDi
         {
             Kind = selectedKind, UserName = userName.Text!, Content = messageContent.Text ?? "",
             MedalName = medalName.Text ?? "", MedalLevel = decimal.ToInt32(medalLevel.Value ?? 0),
+            MedalGuardLevel = medalGuardLevel.SelectedIndex switch
+            {
+                0 => 0,
+                1 => 3,
+                2 => 2,
+                3 => 1,
+                _ => throw new InvalidOperationException()
+            },
             GiftName = giftName.Text ?? "", UnitPrice = price.Value ?? 0,
             Quantity = decimal.ToInt32(quantity.Value ?? 1), GuardLevel = guardLevel.SelectedIndex + 1,
             Translation = translation.Text ?? "", Count = count

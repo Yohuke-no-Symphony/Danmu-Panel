@@ -9,7 +9,9 @@ using Yohuke.DanmuPanel.Layouts;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Services;
+using Yohuke.DanmuPanel.Services.Messages;
 using Yohuke.DanmuPanel.Tests.Messages;
+using Yohuke.DanmuPanel.ViewModels;
 using Yohuke.DanmuPanel.Views;
 using Xunit;
 
@@ -94,7 +96,7 @@ public sealed class TestMessagesViewTests
                 shell.RequestedThemeVariant = theme;
                 Pump(shell);
                 var expected = Assert.IsAssignableFrom<ISolidColorBrush>(shell.Foreground).Color;
-                foreach (var choice in new[] { kind, Find<ComboBox>(view, "TestGuardLevel") })
+                foreach (var choice in new[] { kind, Find<ComboBox>(view, "TestGuardLevel"), Find<ComboBox>(view, "TestMedalGuardLevel") })
                 {
                     var labels = choice.GetVisualDescendants().OfType<TextBlock>()
                         .Where(label => !string.IsNullOrWhiteSpace(label.Text)).ToArray();
@@ -139,6 +141,60 @@ public sealed class TestMessagesViewTests
             await view.FinishPendingAsync();
             await shell.CloseAsync();
             Dispatcher.UIThread.RunJobs();
+        }
+    }
+
+    /// <summary>四种大航海身份应用于全部消息类型，批量生成与重新读取保留粉丝牌边框。</summary>
+    [AvaloniaTheory]
+    [InlineData(0, 0, "Transparent")]
+    [InlineData(1, 3, "#4F8FDD")]
+    [InlineData(2, 2, "#A46EE8")]
+    [InlineData(3, 1, "#E9A23B")]
+    public async Task MembershipSelectionAppliesToAllMessageKinds(int selectedIndex, int expectedLevel, string expectedColor)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var runtime = new PanelRuntime(new(directory.Path), new());
+        using var view = new TestMessagesView(runtime, exception => throw exception);
+        var window = new Window { Width = 600, Height = 900, Content = view };
+        var room = new RoomTabState { Id = "room", RoomId = "123" };
+        try
+        {
+            window.Show();
+            view.SelectRoom(room);
+            Pump(window);
+            var membership = Find<ComboBox>(view, "TestMedalGuardLevel");
+            Assert.Equal(0, membership.SelectedIndex);
+            Assert.Equal(4, membership.ItemCount);
+            membership.SelectedIndex = selectedIndex;
+            Find<TextBox>(view, "TestMedalName").Text = "粉丝牌";
+            Find<NumericUpDown>(view, "TestMedalLevel").Value = 20;
+            Find<NumericUpDown>(view, "TestBatchCount").Value = 2;
+            Find<ComboBox>(view, "TestGuardLevel").SelectedIndex = 1;
+            foreach (var messageKind in Enum.GetValues<MessageKind>())
+            {
+                Find<ComboBox>(view, "TestKind").SelectedIndex = (int)messageKind;
+                Assert.True(membership.IsEffectivelyVisible);
+                await view.AddBatchCommand.ExecuteAsync(null);
+            }
+            await using var reopened = new SqliteMessageStore(directory.DatabasePath);
+            foreach (var messageKind in Enum.GetValues<MessageKind>())
+            {
+                var records = await reopened.LoadPageAsync(room.Id, messageKind, 0, 10);
+                Assert.Equal(2, records.Count);
+                Assert.All(records, record =>
+                {
+                    Assert.Equal(expectedLevel, record.MedalGuardLevel);
+                    Assert.Equal(messageKind == MessageKind.Guard ? 2 : 0, record.GuardLevel);
+                    var item = new MessageItemViewModel(record, runtime.Configuration.Settings, runtime.Pinyin);
+                    Assert.True(item.HasMedal);
+                    Assert.Equal(Color.Parse(expectedColor), Assert.IsAssignableFrom<ISolidColorBrush>(item.MedalBorderBrush).Color);
+                });
+            }
+        }
+        finally
+        {
+            await view.FinishPendingAsync();
+            window.Close();
         }
     }
 

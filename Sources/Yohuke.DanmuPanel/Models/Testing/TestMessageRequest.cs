@@ -10,6 +10,7 @@ public sealed record TestMessageRequest
     public string UserName { get; init; } = "";
     public string MedalName { get; init; } = "";
     public int MedalLevel { get; init; }
+    public int MedalGuardLevel { get; init; }
     public string Content { get; init; } = "";
     public string GiftName { get; init; } = "";
     public decimal UnitPrice { get; init; }
