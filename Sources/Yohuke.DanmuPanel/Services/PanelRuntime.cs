@@ -30,6 +30,9 @@ public sealed class PanelRuntime : IAsyncDisposable
     public IPinyinService Pinyin { get; } = new PinyinService();
     public event Action<string>? Changed;
 
+    /// <summary>通知消息或译文变化；类型为空时重读该房间的所有消息面板。</summary>
+    public event Action<string, MessageKind?>? MessagesChanged;
+
     /// <summary>组合应用依赖，不自动连接直播间。</summary>
     public PanelRuntime(ConfigurationService configurationStore, PanelConfiguration configuration)
     {
@@ -45,9 +48,9 @@ public sealed class PanelRuntime : IAsyncDisposable
         translationCache = new(Path.Combine(configurationStore.DirectoryPath, "translation-cache.db"));
         translationService = new(new OpenAiCompatibleTranslationClient(translationHttp), translationCache);
         scheduler = new(Messages, translationService);
-        TestMessages = new(Messages, () => Configuration.Settings, roomId => Changed?.Invoke(roomId),
+        TestMessages = new(Messages, () => Configuration.Settings, roomId => MessagesChanged?.Invoke(roomId, null),
             () => scheduler.NotifyWorkAvailable());
-        scheduler.Completed += (_, args) => Changed?.Invoke(args.RoomTabId);
+        scheduler.Completed += (_, args) => MessagesChanged?.Invoke(args.RoomTabId, null);
         scheduler.Error += message => ReportError(message, I18n.Localization.Get("Panel.Log.Translation"));
         Emoticons = new(new AppDirectoryService(configurationStore.DirectoryPath));
         Avatars = new(new AppDirectoryService(configurationStore.DirectoryPath));
@@ -228,7 +231,7 @@ public sealed class PanelRuntime : IAsyncDisposable
         session.Committed += message =>
         {
             scheduler.NotifyWorkAvailable();
-            Changed?.Invoke(message.RoomTabId);
+            MessagesChanged?.Invoke(message.RoomTabId, message.Kind);
         };
         session.StatusChanged += status =>
         {

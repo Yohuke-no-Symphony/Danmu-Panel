@@ -5,7 +5,6 @@ using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Models.Workspace;
 using Yohuke.DanmuPanel.Services;
-using Yohuke.DanmuPanel.Services.Translation;
 
 namespace Yohuke.DanmuPanel.ViewModels;
 
@@ -22,13 +21,21 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
     private int limit = PAGE_SIZE;
     private int revision;
     private int unreadCount;
+    private int refreshRequested;
+    private int refreshScheduled;
     private bool disposed;
+    private bool hasPinnedItems;
+    private bool hasScrollingItems;
+    private bool isCompactDisplay;
+    private bool isCompactMessageWrap;
+    private bool isCompactSuperChatWrap;
+    private MessageDisplaySettings? displaySettings;
     private readonly HashSet<string> translationRequested = new();
     public ObservableCollection<MessageItemViewModel> Items { get; } = [];
     public ObservableCollection<MessageItemViewModel> PinnedItems { get; } = [];
     public ObservableCollection<MessageItemViewModel> ScrollingItems { get; } = [];
-    public bool HasPinnedItems => PinnedItems.Count > 0;
-    public bool HasScrollingItems => ScrollingItems.Count > 0;
+    public bool HasPinnedItems => hasPinnedItems;
+    public bool HasScrollingItems => hasScrollingItems;
     public int UnreadCount
     {
         get => unreadCount;
@@ -46,18 +53,20 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
     public bool IsReadingHistory { get; set; }
     public event Action<Exception>? Failed;
 
-    public bool IsCompactDisplay => runtime.Configuration.Settings.CompactDanmuDisplay;
-    public bool IsCompactMessageWrap => runtime.Configuration.Settings.CompactDanmuWrap;
-    public bool IsCompactSuperChatWrap => runtime.Configuration.Settings.CompactSuperChatWrap;
+    public bool IsCompactDisplay => isCompactDisplay;
+    public bool IsCompactMessageWrap => isCompactMessageWrap;
+    public bool IsCompactSuperChatWrap => isCompactSuperChatWrap;
 
     /// <summary>连接一个独立消息类型的列表。</summary>
     public FeedViewModel(PanelRuntime runtime, MessageKind kind)
     {
         this.runtime = runtime;
         this.kind = kind;
+        UpdateLayoutOptions();
         refreshTimer = new() { Interval = TimeSpan.FromMilliseconds(150) };
         refreshTimer.Tick += OnRefreshTimer;
         runtime.Changed += OnChanged;
+        runtime.MessagesChanged += OnMessagesChanged;
     }
 
     /// <summary>切换阅读房间，取消旧房间的图片回写。</summary>
@@ -67,7 +76,7 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
         {
             return;
         }
-        room = selected;
+        Volatile.Write(ref room, selected);
         OnPropertyChanged(nameof(SelectedRoom));
         OnPropertyChanged(nameof(HasSelectedRoom));
         IsReadingHistory = false;
@@ -130,9 +139,7 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
         {
             return;
         }
-        OnPropertyChanged(nameof(IsCompactDisplay));
-        OnPropertyChanged(nameof(IsCompactMessageWrap));
-        OnPropertyChanged(nameof(IsCompactSuperChatWrap));
+        UpdateLayoutOptions();
         var current = room;
         var version = revision;
         if (disposed || current is null)
@@ -158,6 +165,11 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
                 return;
             }
             var records = snapshot.Records;
+            var currentSettings = runtime.Configuration.Settings;
+            displaySettings = MessageDisplaySettings.Capture(currentSettings, displaySettings);
+            var translationEnabled = currentSettings.Translation.Enabled;
+            var existingItems = Items.ToDictionary(item => item.Record.Id);
+            var translationWorkCreated = false;
             var expected = records.Select(record => record.Id).ToHashSet();
             for (var index = Items.Count - 1; index >= 0; index--)
             {
@@ -169,10 +181,9 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
             for (var index = 0; index < records.Count; index++)
             {
                 var record = records[index];
-                var translationSettings = runtime.Configuration.Settings.Translation;
-                if (translationSettings.Enabled && record.Kind is MessageKind.Danmu or MessageKind.SuperChat)
+                if (translationEnabled && record.Kind is MessageKind.Danmu or MessageKind.SuperChat)
                 {
-                    var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(translationSettings);
+                    var fingerprint = displaySettings.TranslationFingerprint;
                     if (record.TranslationFingerprint != fingerprint && translationRequested.Add(record.Id + fingerprint))
                     {
                         await runtime.Messages.UpsertTranslationJobAsync(record.Id, record.Generation, fingerprint, cancellationToken);
@@ -180,25 +191,28 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
                         {
                             return;
                         }
-                        runtime.NotifyTranslation();
+                        translationWorkCreated = true;
                     }
                 }
-                var existing = Items.FirstOrDefault(item => item.Record.Id == record.Id);
-                if (existing is null)
+                if (!existingItems.TryGetValue(record.Id, out var existing))
                 {
-                    var item = new MessageItemViewModel(record, runtime.Configuration.Settings, runtime.Pinyin);
+                    var item = MessageItemViewModel.Create(record, displaySettings, runtime.Pinyin);
                     Items.Insert(index, item);
                     _ = LoadEmoticonsAsync(item, cancellationToken);
                 }
                 else
                 {
-                    var oldIndex = Items.IndexOf(existing);
-                    if (oldIndex != index)
+                    if (!ReferenceEquals(Items[index], existing))
                     {
+                        var oldIndex = Items.IndexOf(existing);
                         Items.Move(oldIndex, index);
                     }
-                    existing.Update(record, runtime.Configuration.Settings);
+                    existing.Apply(record, displaySettings);
                 }
+            }
+            if (translationWorkCreated)
+            {
+                runtime.NotifyTranslation();
             }
             SynchronizeRegion(PinnedItems, Items.Where(item => kind == MessageKind.Danmu && item.Record.IsPinned).ToArray());
             SynchronizeRegion(ScrollingItems, Items.Where(item => kind != MessageKind.Danmu || !item.Record.IsPinned).ToArray());
@@ -228,6 +242,10 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
         for (var index = 0; index < expected.Count; index++)
         {
             var item = expected[index];
+            if (index < target.Count && ReferenceEquals(target[index], item))
+            {
+                continue;
+            }
             var previousIndex = target.IndexOf(item);
             if (previousIndex < 0)
             {
@@ -242,8 +260,16 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
 
     private void NotifyRegions()
     {
-        OnPropertyChanged(nameof(HasPinnedItems));
-        OnPropertyChanged(nameof(HasScrollingItems));
+        SetProperty(ref hasPinnedItems, PinnedItems.Count > 0, nameof(HasPinnedItems));
+        SetProperty(ref hasScrollingItems, ScrollingItems.Count > 0, nameof(HasScrollingItems));
+    }
+
+    private void UpdateLayoutOptions()
+    {
+        var settings = runtime.Configuration.Settings;
+        SetProperty(ref isCompactDisplay, settings.CompactDanmuDisplay, nameof(IsCompactDisplay));
+        SetProperty(ref isCompactMessageWrap, settings.CompactDanmuWrap, nameof(IsCompactMessageWrap));
+        SetProperty(ref isCompactSuperChatWrap, settings.CompactSuperChatWrap, nameof(IsCompactSuperChatWrap));
     }
 
     /// <inheritdoc/>
@@ -253,10 +279,11 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
         {
             return;
         }
-        disposed = true;
+        Volatile.Write(ref disposed, true);
         revision++;
-        room = null;
+        Volatile.Write(ref room, null);
         runtime.Changed -= OnChanged;
+        runtime.MessagesChanged -= OnMessagesChanged;
         refreshTimer.Stop();
         refreshTimer.Tick -= OnRefreshTimer;
         lifetime.Cancel();
@@ -265,22 +292,43 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
 
     private void OnChanged(string roomId)
     {
-        if (disposed)
+        var current = Volatile.Read(ref room);
+        if (Volatile.Read(ref disposed) || current is null || (roomId.Length > 0 && roomId != current.Id))
         {
             return;
         }
-        Dispatcher.UIThread.Post(() =>
+        Interlocked.Exchange(ref refreshRequested, 1);
+        ScheduleRefresh();
+    }
+
+    private void OnMessagesChanged(string roomId, MessageKind? changedKind)
+    {
+        if (changedKind is null || changedKind == kind)
         {
-            if (!disposed && (roomId.Length == 0 || roomId == room?.Id))
-            {
-                refreshTimer.Start();
-            }
-        });
+            OnChanged(roomId);
+        }
+    }
+
+    private void ScheduleRefresh()
+    {
+        if (!Volatile.Read(ref disposed) && Interlocked.CompareExchange(ref refreshScheduled, 1, 0) == 0)
+        {
+            Dispatcher.UIThread.Post(StartRefreshTimer, DispatcherPriority.Background);
+        }
+    }
+
+    private void StartRefreshTimer()
+    {
+        if (!disposed)
+        {
+            refreshTimer.Start();
+        }
     }
 
     private async void OnRefreshTimer(object? sender, EventArgs args)
     {
         refreshTimer.Stop();
+        Interlocked.Exchange(ref refreshRequested, 0);
         try
         {
             await RefreshAsync();
@@ -288,6 +336,14 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
         catch (Exception exception)
         {
             Failed?.Invoke(exception);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref refreshScheduled, 0);
+            if (Volatile.Read(ref refreshRequested) != 0)
+            {
+                ScheduleRefresh();
+            }
         }
     }
 
