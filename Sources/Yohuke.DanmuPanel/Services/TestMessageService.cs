@@ -1,6 +1,7 @@
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Models.Testing;
+using Yohuke.DanmuPanel.Services.Appearance;
 using Yohuke.DanmuPanel.Services.Messages;
 using Yohuke.DanmuPanel.Services.Translation;
 
@@ -77,8 +78,10 @@ public sealed class TestMessageService
             UnitPrice = request.Kind == MessageKind.Danmu ? 0 : request.UnitPrice,
             TotalPrice = request.Kind == MessageKind.Danmu ? 0 : request.UnitPrice * quantity,
             GuardLevel = request.Kind == MessageKind.Guard ? request.GuardLevel : 0,
-            BorderColor = request.Kind == MessageKind.SuperChat ? "#1D71B8" : request.Kind == MessageKind.Guard
-                ? request.GuardLevel switch { 1 => "#D99D36", 2 => "#9554B2", _ => "#2A60B2" } : "",
+            BorderColor = request.Kind == MessageKind.SuperChat
+                ? ColorSettingCatalog.GetSuperChatBorder(request.UnitPrice).DefaultColor!
+                : request.Kind == MessageKind.Guard
+                    ? request.GuardLevel switch { 1 => "#D99D36", 2 => "#9554B2", _ => "#2A60B2" } : "",
             Translation = translation,
             TranslationFingerprint = fingerprint
         }).ToArray();

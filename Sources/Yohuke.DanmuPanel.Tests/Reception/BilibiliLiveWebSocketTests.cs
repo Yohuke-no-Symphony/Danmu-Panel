@@ -193,8 +193,14 @@ public class BilibiliLiveWebSocketTests
         Assert.Equal("#2A60B2", message.BorderColor);
     }
 
-    [Fact]
-    public void ParseSuperChatMessageFallsBackToDefaultColor()
+    [Theory]
+    [InlineData(30, "#3171D2")]
+    [InlineData(50, "#427D9E")]
+    [InlineData(100, "#E2B52B")]
+    [InlineData(500, "#E09443")]
+    [InlineData(1000, "#E54D4D")]
+    [InlineData(2000, "#AB1A32")]
+    public void ParseSuperChatMessageFallsBackToPriceTierColor(int price, string expected)
     {
         var json = JObject.Parse("""
         {
@@ -211,10 +217,11 @@ public class BilibiliLiveWebSocketTests
         }
         """);
 
+        json["data"]!["price"] = price;
         var message = BilibiliLiveWebSocket.ParseSuperChatMessage("200", json);
 
         Assert.NotNull(message);
-        Assert.Equal("#2A60B2", message.BorderColor);
+        Assert.Equal(expected, message.BorderColor);
     }
 
     [Fact]

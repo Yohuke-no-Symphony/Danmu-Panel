@@ -69,7 +69,7 @@ public sealed class MessageItemViewModel : ObservableObject
             2 => GetColor("GuardAdmiralBrush", ColorSettingCatalog.GUARD_ADMIRAL_COLOR),
             _ => GetColor("GuardCaptainBrush", ColorSettingCatalog.GUARD_CAPTAIN_COLOR)
         },
-        MessageKind.SuperChat => GetColor("SuperChatBorderBrush", string.IsNullOrEmpty(Record.BorderColor) ? ColorSettingCatalog.SUPER_CHAT_FALLBACK_COLOR : Record.BorderColor),
+        MessageKind.SuperChat => GetSuperChatBorderBrush(),
         _ => Record.IsPriority ? GetColor("PriorityMessageBorderBrush", ColorSettingCatalog.PRIORITY_MESSAGE_COLOR) : Avalonia.Media.Brushes.Transparent
     };
     public IReadOnlyList<DanmuEmoticon> Emoticons
@@ -103,6 +103,15 @@ public sealed class MessageItemViewModel : ObservableObject
     {
         var definition = ColorSettingCatalog.GetGiftBorder(Record.TotalPrice);
         return GetColor(definition.Key, definition.DefaultColor!);
+    }
+
+    private Avalonia.Media.IBrush GetSuperChatBorderBrush()
+    {
+        var definition = ColorSettingCatalog.GetSuperChatBorder(Record.TotalPrice);
+        var fallback = Record.IsTest || string.IsNullOrEmpty(Record.BorderColor)
+            ? definition.DefaultColor!
+            : Record.BorderColor;
+        return GetColor(definition.Key, settings.ColorScheme.Overrides.GetValueOrDefault("SuperChatBorderBrush", fallback));
     }
 
     private string GetAnnotation(string text, bool enabled)

@@ -12,6 +12,7 @@ using Newtonsoft.Json.Linq;
 using Yohuke.DanmuPanel.Apis.Models.Bilibili;
 using Yohuke.DanmuPanel.Apis.Models.Common;
 using Yohuke.DanmuPanel.Services;
+using Yohuke.DanmuPanel.Services.Appearance;
 
 namespace Yohuke.DanmuPanel.Apis;
 
@@ -20,7 +21,6 @@ namespace Yohuke.DanmuPanel.Apis;
 /// </summary>
 public class BilibiliLiveWebSocket : BaseApi, ILiveDanmuSocket
 {
-    private const string DEFAULT_SUPER_CHAT_COLOR = "#2A60B2";
     private const int HEARTBEAT_INTERVAL_SECONDS = 30;
     private const int CONNECTION_MONITOR_INTERVAL_SECONDS = 5;
     private const int CONNECTION_TIMEOUT_SECONDS = 75;
@@ -750,13 +750,13 @@ public class BilibiliLiveWebSocket : BaseApi, ILiveDanmuSocket
             PriceText = string.IsNullOrWhiteSpace(priceText)
                 ? $"￥{price.ToString("0.##", CultureInfo.InvariantCulture)}"
                 : priceText,
-            BorderColor = ReadSuperChatColor(data),
+            BorderColor = ReadSuperChatColor(data, price),
             Content = data["message"]?.Value<string>() ?? "",
             Timestamp = data["ts"]?.Value<long>() ?? DateTimeOffset.Now.ToUnixTimeSeconds()
         };
     }
 
-    private static string ReadSuperChatColor(JToken data)
+    private static string ReadSuperChatColor(JToken data, decimal price)
     {
         string[] colorKeys =
         [
@@ -775,7 +775,7 @@ public class BilibiliLiveWebSocket : BaseApi, ILiveDanmuSocket
             }
         }
 
-        return DEFAULT_SUPER_CHAT_COLOR;
+        return ColorSettingCatalog.GetSuperChatBorder(price).DefaultColor!;
     }
 
     private static bool IsHexColor(string? value)

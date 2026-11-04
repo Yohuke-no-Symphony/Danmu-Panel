@@ -8,7 +8,6 @@ public static class ColorSettingCatalog
     public const string GUARD_CAPTAIN_COLOR = "#4F8FDD";
     public const string GUARD_ADMIRAL_COLOR = "#A46EE8";
     public const string GUARD_GOVERNOR_COLOR = "#E9A23B";
-    public const string SUPER_CHAT_FALLBACK_COLOR = "#2A60B2";
     public const string PRIORITY_MESSAGE_COLOR = "#5B9BD5";
 
     public static IReadOnlyList<ColorSettingDefinition> Definitions { get; } = Array.AsReadOnly<ColorSettingDefinition>(
@@ -45,6 +44,12 @@ public static class ColorSettingCatalog
         Define("GuardAdmiralBrush", "Borders", color: GUARD_ADMIRAL_COLOR),
         Define("GuardGovernorBrush", "Borders", color: GUARD_GOVERNOR_COLOR),
         Define("SuperChatBorderBrush", "Borders"),
+        Define("SuperChatValueUnder50Brush", "Borders", color: "#3171D2"),
+        Define("SuperChatValue50Brush", "Borders", color: "#427D9E"),
+        Define("SuperChatValue100Brush", "Borders", color: "#E2B52B"),
+        Define("SuperChatValue500Brush", "Borders", color: "#E09443"),
+        Define("SuperChatValue1000Brush", "Borders", color: "#E54D4D"),
+        Define("SuperChatValue2000Brush", "Borders", color: "#AB1A32"),
         Define("GiftValueUnder50Brush", "Borders", color: "#3171D2"),
         Define("GiftValue50Brush", "Borders", color: "#427D9E"),
         Define("GiftValue100Brush", "Borders", color: "#E2B52B"),
@@ -79,6 +84,19 @@ public static class ColorSettingCatalog
     internal static bool Contains(string key)
     {
         return definitionsByKey.ContainsKey(key);
+    }
+
+    internal static ColorSettingDefinition GetSuperChatBorder(decimal price)
+    {
+        return Get(price switch
+        {
+            >= 2000 => "SuperChatValue2000Brush",
+            >= 1000 => "SuperChatValue1000Brush",
+            >= 500 => "SuperChatValue500Brush",
+            >= 100 => "SuperChatValue100Brush",
+            >= 50 => "SuperChatValue50Brush",
+            _ => "SuperChatValueUnder50Brush"
+        });
     }
 
     private static ColorSettingDefinition Define(string key, string group, string? resource = null, string? color = null)
