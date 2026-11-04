@@ -123,6 +123,8 @@
     "Panel.BrowserLogin": "Browser login",
     "Panel.Cancel": "Cancel",
     "Panel.ClearAllConfirm": "Clear all message history in every workspace and room? Accounts, settings and layouts are kept. This cannot be undone.",
+    "Panel.ClearFeed": "Clear this panel",
+    "Panel.ClearFeedConfirm": "Clear all messages, translations, read states and pins from the {1} panel in “{0}”? Other panels keep their records. This cannot be undone.",
     "Panel.ClearRoomConfirm": "Clear all messages, SCs, gifts, guards, translations, read states and pins in “{0}”? Accounts, settings and layouts are kept.",
     "Panel.Confirm": "Confirm",
     "Panel.Cookie": "Bilibili Cookie (editable)",

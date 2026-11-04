@@ -123,6 +123,8 @@
     "Panel.BrowserLogin": "ブラウザーでログイン",
     "Panel.Cancel": "キャンセル",
     "Panel.ClearAllConfirm": "すべてのワークスペース・ルームのメッセージ履歴を消去しますか？アカウント・設定・レイアウトは保持されます。この操作は取り消せません。",
+    "Panel.ClearFeed": "このパネルを消去",
+    "Panel.ClearFeedConfirm": "「{0}」の「{1}」パネルのメッセージ・翻訳・既読状態・固定をすべて消去しますか？他のパネルの履歴は保持されます。この操作は取り消せません。",
     "Panel.ClearRoomConfirm": "「{0}」のコメント・SC・ギフト・大航海・翻訳・既読状態・固定をすべて消去しますか？アカウント・設定・レイアウトは保持されます。",
     "Panel.Confirm": "確認",
     "Panel.Cookie": "Bilibili の Cookie（手動編集可）",

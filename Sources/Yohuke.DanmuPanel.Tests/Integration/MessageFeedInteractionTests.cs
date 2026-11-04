@@ -197,8 +197,13 @@ public sealed class MessageFeedInteractionTests
         var originalLanguage = Localization.SelectedLanguageID;
         try
         {
-            var first = Assert.IsType<Button>(view.HeaderActionsTemplate.Build(view));
-            var second = Assert.IsType<Button>(view.HeaderActionsTemplate.Build(view));
+            var firstActions = Assert.IsType<StackPanel>(view.HeaderActionsTemplate.Build(view));
+            var secondActions = Assert.IsType<StackPanel>(view.HeaderActionsTemplate.Build(view));
+            var first = Assert.IsType<Button>(firstActions.Children[^1]);
+            var second = Assert.IsType<Button>(secondActions.Children[^1]);
+            var clear = Assert.IsType<Button>(firstActions.Children[0]);
+            Assert.NotSame(clear, secondActions.Children[0]);
+            Assert.Equal(LucideIconKind.Trash2, Assert.IsType<LucideIcon>(clear.Content).Kind);
             Assert.NotSame(first, second);
             Assert.Contains("iconButton", first.Classes);
             Assert.Equal(LucideIconKind.ArrowDownToLine, Assert.IsType<LucideIcon>(first.Content).Kind);
@@ -208,6 +213,9 @@ public sealed class MessageFeedInteractionTests
                 Assert.Equal(Localization.Get("Panel.BackToLatest"), ToolTip.GetTip(first));
                 Assert.Equal(Localization.Get("Panel.BackToLatest"), AutomationProperties.GetName(first));
                 Assert.IsType<LucideIcon>(first.Content);
+                Assert.Equal(Localization.Get("Panel.ClearFeed"), ToolTip.GetTip(clear));
+                Assert.Equal(Localization.Get("Panel.ClearFeed"), AutomationProperties.GetName(clear));
+                Assert.IsType<LucideIcon>(clear.Content);
             }
         }
         finally

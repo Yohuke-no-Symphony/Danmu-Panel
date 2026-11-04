@@ -73,7 +73,7 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
         Execute(connection, null, "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;");
         using var version = Command(connection, null, "PRAGMA user_version;");
         var databaseVersion = Convert.ToInt32(version.ExecuteScalar(), CultureInfo.InvariantCulture);
-        if (databaseVersion > 2)
+        if (databaseVersion > 3)
         {
             throw new InvalidDataException("The message database was created by a newer application version.");
         }
@@ -82,6 +82,9 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
         Execute(connection, transaction, """
             CREATE TABLE IF NOT EXISTS message_rooms (
                 id TEXT PRIMARY KEY, generation INTEGER NOT NULL DEFAULT 0, cleared_before INTEGER NOT NULL DEFAULT 0);
+            CREATE TABLE IF NOT EXISTS message_feed_clears (
+                room_tab_id TEXT NOT NULL, kind INTEGER NOT NULL, cleared_before INTEGER NOT NULL,
+                PRIMARY KEY(room_tab_id,kind));
             CREATE TABLE IF NOT EXISTS message_records (
                 sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
                 room_tab_id TEXT NOT NULL, kind INTEGER NOT NULL, occurred_ms INTEGER NOT NULL,
@@ -115,7 +118,7 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
         }
         Execute(connection, transaction, """
             CREATE INDEX IF NOT EXISTS ix_message_test ON message_records(room_tab_id,is_test);
-            PRAGMA user_version=2;
+            PRAGMA user_version=3;
             """);
         transaction.Commit();
     }

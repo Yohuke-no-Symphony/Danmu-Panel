@@ -41,6 +41,8 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
         }
     }
     public bool HasUnreadMessages => UnreadCount > 0;
+    public RoomTabState? SelectedRoom => room;
+    public bool HasSelectedRoom => room is not null;
     public bool IsReadingHistory { get; set; }
     public event Action<Exception>? Failed;
 
@@ -66,6 +68,8 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
             return;
         }
         room = selected;
+        OnPropertyChanged(nameof(SelectedRoom));
+        OnPropertyChanged(nameof(HasSelectedRoom));
         IsReadingHistory = false;
         revision++;
         limit = PAGE_SIZE;
@@ -103,6 +107,20 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
         await runtime.Messages.MarkAllReadAsync(current.Id, kind);
         runtime.NotifyTranslation();
         await RefreshAsync();
+    }
+
+    /// <summary>清空已确认的目标房间；仍在阅读该房间时重置分页、置顶区和滚动状态。</summary>
+    public async Task ClearAsync(RoomTabState target)
+    {
+        if (disposed)
+        {
+            return;
+        }
+        await runtime.ClearFeedAsync(target, kind);
+        if (!disposed && room?.Id == target.Id)
+        {
+            await SelectRoomAsync(room);
+        }
     }
 
     /// <summary>将最新数据库投影应用到已有行。</summary>

@@ -110,7 +110,18 @@ public sealed class PanelRuntime : IAsyncDisposable
     }
 
     /// <summary>在监听停止并排空后清空记录，完成后恢复原监听。</summary>
-    public async Task ClearAsync(RoomTabState? room)
+    public Task ClearAsync(RoomTabState? room)
+    {
+        return ClearMessagesAsync(room, null);
+    }
+
+    /// <summary>排空房间监听后仅清空指定面板，保留其他消息与翻译任务并恢复监听。</summary>
+    public Task ClearFeedAsync(RoomTabState room, MessageKind kind)
+    {
+        return ClearMessagesAsync(room, kind);
+    }
+
+    private async Task ClearMessagesAsync(RoomTabState? room, MessageKind? kind)
     {
         await lifecycle.WaitAsync();
         try
@@ -125,6 +136,10 @@ public sealed class PanelRuntime : IAsyncDisposable
             if (room is null)
             {
                 await Messages.ClearAllAsync();
+            }
+            else if (kind is { } feedKind)
+            {
+                await Messages.ClearFeedAsync(room.Id, feedKind);
             }
             else
             {

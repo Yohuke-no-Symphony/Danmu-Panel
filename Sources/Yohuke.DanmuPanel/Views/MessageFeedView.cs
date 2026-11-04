@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Lucide.Avalonia;
+using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Services;
 using Yohuke.DanmuPanel.Services.Translation;
@@ -26,7 +27,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     private DanmuFeedScrollController? scroll;
     public FeedViewModel Model { get; }
 
-    /// <summary>为每个停靠或浮动宿主创建独立的回到最新图标按钮。</summary>
+    /// <summary>为每个停靠或浮动宿主创建独立的面板操作按钮。</summary>
     public IDataTemplate HeaderActionsTemplate { get; }
 
     /// <inheritdoc />
@@ -47,17 +48,25 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         list.DetachedFromVisualTree += (_, _) => { scroll?.Dispose(); scroll = null; };
         HeaderActionsTemplate = new FuncDataTemplate<MessageFeedView>((_, _) =>
         {
+            var actions = new StackPanel { Orientation = Orientation.Horizontal };
+            var clear = Ui.IconButton("Panel.ClearFeed", LucideIconKind.Trash2, () => ClearAsync(kind), reportError);
+            clear.Name = "ClearFeedButton";
+            clear.Classes.Add("dockChromeButton");
+            clear.Bind(IsEnabledProperty, new Binding(nameof(FeedViewModel.HasSelectedRoom)) { Source = Model });
+            actions.Children.Add(clear);
             var button = Ui.IconButton("Panel.BackToLatest", LucideIconKind.ArrowDownToLine, ScrollToLatestAsync, reportError);
+            button.Name = "BackToLatestButton";
             button.Classes.Add("dockChromeButton");
-            if (kind == MessageKind.Danmu)
+            if (kind != MessageKind.Danmu)
             {
-                return button;
+                var markAllRead = Ui.IconButton("Panel.MarkAllRead", LucideIconKind.CheckCheck, Model.MarkAllReadAsync, reportError);
+                markAllRead.Name = "MarkAllReadButton";
+                markAllRead.Classes.Add("dockChromeButton");
+                markAllRead.Bind(IsEnabledProperty, new Binding(nameof(FeedViewModel.HasUnreadMessages)) { Source = Model });
+                actions.Children.Add(markAllRead);
             }
-            var markAllRead = Ui.IconButton("Panel.MarkAllRead", LucideIconKind.CheckCheck, Model.MarkAllReadAsync, reportError);
-            markAllRead.Name = "MarkAllReadButton";
-            markAllRead.Classes.Add("dockChromeButton");
-            markAllRead.Bind(IsEnabledProperty, new Binding(nameof(FeedViewModel.HasUnreadMessages)) { Source = Model });
-            return new StackPanel { Orientation = Orientation.Horizontal, Children = { markAllRead, button } };
+            actions.Children.Add(button);
+            return actions;
         });
         if (kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard)
         {
@@ -80,6 +89,21 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             }
         };
         Content = surface;
+    }
+
+    private async Task ClearAsync(MessageKind kind)
+    {
+        var room = Model.SelectedRoom;
+        if (room is null || TopLevel.GetTopLevel(this) is not Window owner)
+        {
+            return;
+        }
+        var dialog = new ConfirmationWindow(Localization.Get("Panel.ClearFeed"),
+            Localization.Format("Panel.ClearFeedConfirm", room.Name, Localization.Get("Workbench.Panel." + kind)));
+        if (await dialog.ShowDialog<bool>(owner))
+        {
+            await Model.ClearAsync(room);
+        }
     }
 
     private ListBox CreateList(IEnumerable<MessageItemViewModel> items, MessageKind kind, string name)

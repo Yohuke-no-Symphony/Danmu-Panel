@@ -89,7 +89,8 @@ public sealed class MessageFeedScrollTests
             }
 
             var actions = view.HeaderActionsTemplate.Build(view);
-            var latestButton = actions as Button ?? Assert.IsType<StackPanel>(actions).Children.OfType<Button>().Single(button => button.Name != "MarkAllReadButton");
+            var latestButton = Assert.IsType<StackPanel>(actions).Children.OfType<Button>()
+                .Single(button => button.Name == "BackToLatestButton");
             await Assert.IsAssignableFrom<IAsyncRelayCommand>(latestButton.Command).ExecuteAsync(null);
             Pump(window);
             AssertAtBottom(viewer);

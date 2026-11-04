@@ -154,6 +154,31 @@ public sealed partial class SqliteMessageStore
     }
 
     /// <inheritdoc />
+    public Task ClearFeedAsync(string roomTabId, MessageKind kind, CancellationToken cancellationToken = default)
+    {
+        return EnqueueAsync(connection =>
+        {
+            using var transaction = connection.BeginTransaction();
+            Execute(connection, transaction, """
+                INSERT OR IGNORE INTO message_rooms(id) VALUES($room);
+                INSERT INTO message_feed_clears(room_tab_id,kind,cleared_before) VALUES($room,$kind,$cutoff)
+                ON CONFLICT(room_tab_id,kind) DO UPDATE SET cleared_before=excluded.cleared_before;
+                """, ("$room", roomTabId), ("$kind", (int)kind), ("$cutoff", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
+            if (kind == MessageKind.Gift)
+            {
+                Execute(connection, transaction, """
+                    UPDATE message_combos SET cleared_quantity=quantity,cleared_total_price=total_price,message_id=NULL
+                    WHERE room_tab_id=$room;
+                    """, ("$room", roomTabId));
+            }
+            Execute(connection, transaction, "DELETE FROM message_records WHERE room_tab_id=$room AND kind=$kind;",
+                ("$room", roomTabId), ("$kind", (int)kind));
+            transaction.Commit();
+            return true;
+        }, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public Task ClearRoomAsync(string roomTabId, CancellationToken cancellationToken = default)
     {
         return EnqueueAsync(connection =>
@@ -219,7 +244,11 @@ public sealed partial class SqliteMessageStore
         }
         if (message.IsHistory)
         {
-            using var cutoff = Command(connection, transaction, "SELECT cleared_before FROM message_rooms WHERE id=$room;", ("$room", message.RoomTabId));
+            using var cutoff = Command(connection, transaction, """
+                SELECT MAX(cleared_before,COALESCE(
+                    (SELECT cleared_before FROM message_feed_clears WHERE room_tab_id=$room AND kind=$kind),0))
+                FROM message_rooms WHERE id=$room;
+                """, ("$room", message.RoomTabId), ("$kind", (int)message.Kind));
             var clearedBefore = Convert.ToInt64(cutoff.ExecuteScalar(), CultureInfo.InvariantCulture);
             if (clearedBefore > 0 && (!message.HasSourceTimestamp || clearedBefore >= message.Time.ToUnixTimeMilliseconds()))
             {
