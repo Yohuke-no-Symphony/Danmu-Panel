@@ -116,15 +116,24 @@ public sealed class MessageTextScaleTests
         Assert.False(string.IsNullOrEmpty(metadata.Text));
         var medalText = row.GetVisualDescendants().OfType<TextBlock>()
             .Where(text => text.Classes.Contains("danmuMedalText")).ToArray();
-        Assert.NotEmpty(medalText);
-        Assert.All(medalText, text => Assert.Equal(11 * scale, text.FontSize));
-        var medalLevel = Assert.Single(medalText, text => text.Classes.Contains("danmuMedalLevel"));
-        Assert.Equal("12", medalLevel.Text);
-        Assert.Equal(20 * scale, medalLevel.Width);
-        var medalSlot = Assert.Single(row.GetVisualDescendants().OfType<Grid>(),
-            control => control.Classes.Contains("danmuMedalSlot"));
-        Assert.Equal(66 * scale, medalSlot.Width);
-        Assert.Equal(66 * scale, medalSlot.Bounds.Width);
+        var medalSlots = row.GetVisualDescendants().OfType<Grid>()
+            .Where(control => control.Classes.Contains("danmuMedalSlot")).ToArray();
+        if (kind == MessageKind.SuperChat)
+        {
+            Assert.Empty(medalText);
+            Assert.Empty(medalSlots);
+        }
+        else
+        {
+            Assert.NotEmpty(medalText);
+            Assert.All(medalText, text => Assert.Equal(11 * scale, text.FontSize));
+            var medalLevel = Assert.Single(medalText, text => text.Classes.Contains("danmuMedalLevel"));
+            Assert.Equal("12", medalLevel.Text);
+            Assert.Equal(20 * scale, medalLevel.Width);
+            var medalSlot = Assert.Single(medalSlots);
+            Assert.Equal(66 * scale, medalSlot.Width);
+            Assert.Equal(66 * scale, medalSlot.Bounds.Width);
+        }
         AssertAnnotatedTextSize(name, bodySize, 10 * scale);
         Assert.Equal(10 * scale, body.PinyinFontSize);
         if (kind == MessageKind.Guard)

@@ -164,31 +164,34 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         time.Classes.Add("danmuFeedMeta");
         DockPanel.SetDock(time, Avalonia.Controls.Dock.Right);
         identity.Children.Add(time);
-        var medal = BoundText(nameof(MessageItemViewModel.MedalName));
-        medal.Classes.Add("danmuMedalText");
-        var level = BoundText(nameof(MessageItemViewModel.MedalLevel));
-        level.Classes.Add("danmuMedalText");
-        level.Classes.Add("danmuMedalLevel");
-        var medalLayout = new Grid { ColumnDefinitions = new("*,Auto"), Children = { medal, level } };
-        medalLayout.Classes.Add("danmuMedalLayout");
-        Grid.SetColumn(level, 1);
-        var medalFrame = new Border { Child = medalLayout };
-        medalFrame.Classes.Add("danmuMedalBadge");
-        medalFrame.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.HasMedal)));
-        medalFrame.Bind(Border.BorderBrushProperty, new Binding(nameof(MessageItemViewModel.MedalBorderBrush)));
-        medalFrame.Bind(ToolTip.TipProperty, new Binding(nameof(MessageItemViewModel.Medal)));
-        var noMedal = Ui.Text("Panel.NoMedal");
-        noMedal.Classes.Add("danmuMedalText");
-        noMedal.Classes.Add("danmuMedalPlaceholder");
-        var noMedalFrame = new Border { Child = noMedal };
-        noMedalFrame.Classes.Add("danmuMedalPlaceholder");
-        noMedalFrame.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.HasMedal))
+        if (item.Record.Kind != MessageKind.SuperChat)
         {
-            Converter = BoolConverters.Not
-        });
-        var medalSlot = new Grid { Children = { medalFrame, noMedalFrame } };
-        medalSlot.Classes.Add("danmuMedalSlot");
-        identity.Children.Add(medalSlot);
+            var medal = BoundText(nameof(MessageItemViewModel.MedalName));
+            medal.Classes.Add("danmuMedalText");
+            var level = BoundText(nameof(MessageItemViewModel.MedalLevel));
+            level.Classes.Add("danmuMedalText");
+            level.Classes.Add("danmuMedalLevel");
+            var medalLayout = new Grid { ColumnDefinitions = new("*,Auto"), Children = { medal, level } };
+            medalLayout.Classes.Add("danmuMedalLayout");
+            Grid.SetColumn(level, 1);
+            var medalFrame = new Border { Child = medalLayout };
+            medalFrame.Classes.Add("danmuMedalBadge");
+            medalFrame.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.HasMedal)));
+            medalFrame.Bind(Border.BorderBrushProperty, new Binding(nameof(MessageItemViewModel.MedalBorderBrush)));
+            medalFrame.Bind(ToolTip.TipProperty, new Binding(nameof(MessageItemViewModel.Medal)));
+            var noMedal = Ui.Text("Panel.NoMedal");
+            noMedal.Classes.Add("danmuMedalText");
+            noMedal.Classes.Add("danmuMedalPlaceholder");
+            var noMedalFrame = new Border { Child = noMedal };
+            noMedalFrame.Classes.Add("danmuMedalPlaceholder");
+            noMedalFrame.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.HasMedal))
+            {
+                Converter = BoolConverters.Not
+            });
+            var medalSlot = new Grid { Children = { medalFrame, noMedalFrame } };
+            medalSlot.Classes.Add("danmuMedalSlot");
+            identity.Children.Add(medalSlot);
+        }
         var name = new EmoticonTextBlock();
         name.Bind(EmoticonTextBlock.ContentTextProperty, new Binding(nameof(MessageItemViewModel.Name)));
         name.Bind(EmoticonTextBlock.AnnotationsProperty, new Binding(nameof(MessageItemViewModel.NameAnnotations)));
