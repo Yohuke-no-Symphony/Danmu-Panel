@@ -38,6 +38,11 @@ public sealed class SettingsWindow : Window
 
     /// <summary>创建设置窗口及账号页容器。</summary>
     public SettingsWindow(PanelRuntime runtime, Control accountsView)
+        : this(runtime, accountsView, new SettingsTransferDialogs())
+    {
+    }
+
+    internal SettingsWindow(PanelRuntime runtime, Control accountsView, ISettingsTransferDialogs transferDialogs)
     {
         Width = 1020;
         Height = 760;
@@ -45,7 +50,7 @@ public sealed class SettingsWindow : Window
         MinHeight = 520;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Bind(TitleProperty, Localization.Observe("Settings.Title"));
-        view = new(runtime, accountsView);
+        view = new(runtime, accountsView, OperatingSystem.IsMacOS(), transferDialogs);
         view.ClearRequested += async all =>
         {
             if (await view.SaveAsync())

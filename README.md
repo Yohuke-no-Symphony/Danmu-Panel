@@ -24,6 +24,7 @@
 - **Translation and pinyin**: translate chat and Super Chats through an OpenAI-compatible API, with glossaries and caching; generate local pinyin for usernames, gift names, and message content. Chat and Super Chat content have independent toggles. All annotations share character-aligned ruby (default) or a separate pinyin line; hover over a Chinese character to highlight its syllable. Text in chat, Super Chat, gift, and membership panels scales together from 50% to 200% (default 100%).
 - **Ready to resume**: SQLite preserves messages, translations, pins, and read states. Includes light/dark themes and English, Chinese, and Japanese interfaces.
 - **Update checks**: checks for new official releases after startup. Settings → Updates provides a startup toggle and manual check; update prompts open the GitHub release page for downloads.
+- **Settings backup and sharing**: Settings → Data imports and exports `.dnsettings.json` files containing appearance, color schemes, reading, translation, glossaries and update preferences, including the full API key. Accounts, workspaces, layouts and message history stay separate. Confirmed imports take effect immediately and close the settings window.
 
 ![](Screenshots/1.gif)
 

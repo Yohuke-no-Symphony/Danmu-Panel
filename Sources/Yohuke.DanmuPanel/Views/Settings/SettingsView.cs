@@ -11,8 +11,11 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.Messages;
+using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Services;
+using Yohuke.DanmuPanel.Services.Appearance;
+using Yohuke.DanmuPanel.Services.Settings;
 using Yohuke.DanmuPanel.Services.Translation;
 using Yohuke.DanmuPanel.Services.Updates;
 
@@ -24,6 +27,8 @@ public sealed class SettingsView : UserControl
     private readonly SettingsDialogSurface surface = new();
     private readonly ColorSchemeEditor colorSchemeEditor;
     private readonly PanelRuntime runtime;
+    private readonly SettingsShareService sharing = new();
+    private readonly ISettingsTransferDialogs transferDialogs;
     private readonly Control accountsView;
     private readonly TextBlock status;
     private readonly List<Button> sectionButtons = [];
@@ -53,10 +58,11 @@ public sealed class SettingsView : UserControl
     private readonly TextBlock glossaryLanguage;
     private readonly DataGrid glossaryGrid;
     private readonly Button save;
-    private bool saving;
+    private bool operating;
 
     internal Task PendingMenuPreferenceSave { get; private set; } = Task.CompletedTask;
     internal Task PendingUpdatePreferenceSave { get; private set; } = Task.CompletedTask;
+    internal Task PendingSettingsTransfer { get; private set; } = Task.CompletedTask;
 
     private string SelectedBaseUrl => ((TranslationProviderOption)provider.SelectedItem!).BaseUrl ?? baseUrl.Text?.Trim() ?? "";
     private string SelectedTargetLanguage => ((TranslationLanguageOption)targetLanguage.SelectedItem!).Code;
@@ -79,11 +85,13 @@ public sealed class SettingsView : UserControl
     {
     }
 
-    internal SettingsView(PanelRuntime runtime, Control accountsView, bool supportsNativeMenus)
+    internal SettingsView(PanelRuntime runtime, Control accountsView, bool supportsNativeMenus,
+        ISettingsTransferDialogs? transferDialogs = null)
     {
         Content = surface;
         status = surface.FindControl<TextBlock>("SaveStatus")!;
         this.runtime = runtime;
+        this.transferDialogs = transferDialogs ?? new SettingsTransferDialogs();
         this.accountsView = accountsView;
         var settings = runtime.Configuration.Settings;
         colorSchemeEditor = new(settings, runtime.Colors);
@@ -189,66 +197,18 @@ public sealed class SettingsView : UserControl
     /// <summary>校验并保存设置；失败保留窗口及输入内容。</summary>
     public async Task<bool> SaveAsync()
     {
-        if (saving)
+        if (!TryBeginOperation())
         {
             return false;
         }
-
-        saving = true;
-        save.IsEnabled = false;
         try
         {
             await Task.WhenAll(PendingMenuPreferenceSave, PendingUpdatePreferenceSave);
-            if (!colorSchemeEditor.TryCommit(out var colorError))
+            if (!TryCreateDraft(out var draft))
             {
-                SetStatus(colorError ?? Localization.Get("Colors.InvalidColor"));
                 return false;
             }
-            CommitGlossaryEdits();
-            var terms = glossary.Where(entry => !string.IsNullOrWhiteSpace(entry.Source) || entry.HasTranslations).ToList();
-            if (terms.Any(entry => string.IsNullOrWhiteSpace(entry.Source) || !entry.HasTranslations))
-            {
-                SetStatus(Localization.Get("Settings.IncompleteTerm"));
-                return false;
-            }
-
-            if (enabled.IsChecked == true && (!Uri.TryCreate(SelectedBaseUrl, UriKind.Absolute, out var endpoint) ||
-                endpoint.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(endpoint.Query) ||
-                !string.IsNullOrEmpty(endpoint.Fragment) || !string.IsNullOrEmpty(endpoint.UserInfo) ||
-                string.IsNullOrWhiteSpace(model.Text) || string.IsNullOrWhiteSpace(SelectedTargetLanguage)))
-            {
-                SetStatus(Localization.Get("Settings.InvalidTranslation"));
-                return false;
-            }
-
-            var settings = runtime.Configuration.Settings;
-            settings.Translation = new()
-            {
-                Enabled = enabled.IsChecked == true,
-                BaseUrl = SelectedBaseUrl,
-                ApiKey = apiKey.Text ?? "",
-                Model = model.Text?.Trim() ?? "",
-                TargetLanguage = SelectedTargetLanguage,
-                ExtraSystemPrompt = extraPrompt.Text ?? "",
-                DisplayMode = (TranslationDisplayMode)displayMode.SelectedIndex,
-                BacklogMode = (TranslationBacklogMode)backlogMode.SelectedIndex,
-                Glossary = terms.SelectMany(entry => entry.GetEntries()).ToList()
-            };
-            settings.Reading = new()
-            {
-                GiftAutoPinMinimum = giftMinimum.Value ?? 0,
-                GiftReadResetPolicy = (GiftReadResetPolicy)giftResetPolicy.SelectedIndex
-            };
-            settings.ShowUserPinyin = userPinyin.IsChecked == true;
-            settings.ShowGiftPinyin = giftPinyin.IsChecked == true;
-            settings.ShowDanmuPinyin = danmuPinyin.IsChecked == true;
-            settings.ShowSuperChatPinyin = superChatPinyin.IsChecked == true;
-            settings.PinyinLayout = (PinyinLayoutMode)pinyinLayout.SelectedIndex;
-            settings.MessageTextScale = (double)(messageTextScale.Value ?? 100) / 100;
-            settings.CompactDanmuDisplay = compactDisplay.IsChecked == true;
-            settings.CompactDanmuWrap = compactDanmuWrap.IsChecked == true;
-            settings.CompactSuperChatWrap = compactSuperChatWrap.IsChecked == true;
-            settings.AutoScrollLongMessages = autoScrollLongMessages.IsChecked == true;
+            sharing.ApplyTo(runtime.Configuration.Settings, draft);
             if (accountsView is AccountSettingsView accountSettings)
             {
                 await accountSettings.SaveEditsAsync();
@@ -265,9 +225,203 @@ public sealed class SettingsView : UserControl
         }
         finally
         {
-            saving = false;
-            save.IsEnabled = true;
+            EndOperation();
         }
+    }
+
+    internal async Task<bool> ExportSettingsAsync()
+    {
+        if (!TryBeginOperation())
+        {
+            return false;
+        }
+        try
+        {
+            if (!TryCreateDraft(out var draft))
+            {
+                return false;
+            }
+            var snapshot = sharing.CreatePackage(draft).Settings;
+            await using var stream = await transferDialogs.OpenExportAsync((Window)TopLevel.GetTopLevel(this)!);
+            if (stream is null)
+            {
+                return false;
+            }
+            stream.SetLength(0);
+            stream.Position = 0;
+            await sharing.ExportAsync(snapshot, stream);
+            SetStatus(Localization.Get("Settings.Exported"), isError: false);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            SetStatus(Localization.Get("Settings.ExportFailed") + " · " + exception.GetType().Name);
+            return false;
+        }
+        finally
+        {
+            EndOperation();
+        }
+    }
+
+    internal async Task<bool> ImportSettingsAsync()
+    {
+        if (!TryBeginOperation())
+        {
+            return false;
+        }
+        try
+        {
+            var owner = (Window)TopLevel.GetTopLevel(this)!;
+            await using var stream = await transferDialogs.OpenImportAsync(owner);
+            if (stream is null)
+            {
+                return false;
+            }
+            PanelSettings imported;
+            try
+            {
+                imported = await sharing.ImportAsync(stream);
+            }
+            catch (InvalidDataException)
+            {
+                SetStatus(Localization.Get("Settings.InvalidSettingsFile"));
+                return false;
+            }
+            if (!await transferDialogs.ConfirmImportAsync(owner))
+            {
+                return false;
+            }
+            await Task.WhenAll(PendingMenuPreferenceSave, PendingUpdatePreferenceSave);
+            if (accountsView is AccountSettingsView accountSettings)
+            {
+                await accountSettings.SaveEditsAsync();
+            }
+            var settings = runtime.Configuration.Settings;
+            var previous = sharing.Snapshot(settings);
+            sharing.ApplyTo(settings, imported);
+            try
+            {
+                await runtime.ApplySettingsAsync();
+            }
+            catch (Exception exception)
+            {
+                sharing.RestoreTo(settings, previous);
+                try
+                {
+                    await runtime.ApplySettingsAsync();
+                }
+                catch (Exception restoreException)
+                {
+                    SetStatus(Localization.Get("Settings.ImportRestoreFailed") + " · " + exception.GetType().Name + " / " + restoreException.GetType().Name);
+                    return false;
+                }
+                SetStatus(Localization.Get("Settings.ImportFailed") + " · " + exception.GetType().Name);
+                return false;
+            }
+            Localization.SetLanguage(settings.Language);
+            Application.Current!.RequestedThemeVariant = settings.Theme switch
+            {
+                "light" => ThemeVariant.Light,
+                "dark" => ThemeVariant.Dark,
+                _ => ThemeVariant.Default
+            };
+            runtime.Colors.Apply(Application.Current, settings.ColorScheme);
+            runtime.NotifyAppearanceChanged();
+            WindowMenuOnMacChanged?.Invoke(settings.UseWindowMenuOnMac);
+            StartupUpdatePreferenceChanged?.Invoke(settings.CheckForUpdatesOnStartup);
+            SetStatus("");
+            Saved?.Invoke();
+            return true;
+        }
+        catch (Exception exception)
+        {
+            SetStatus(Localization.Get("Settings.ImportFailed") + " · " + exception.GetType().Name);
+            return false;
+        }
+        finally
+        {
+            EndOperation();
+        }
+    }
+
+    private bool TryCreateDraft(out PanelSettings draft)
+    {
+        draft = null!;
+        if (!colorSchemeEditor.TryCommit(out var colorError))
+        {
+            SetStatus(colorError ?? Localization.Get("Colors.InvalidColor"));
+            return false;
+        }
+        CommitGlossaryEdits();
+        var terms = glossary.Where(entry => !string.IsNullOrWhiteSpace(entry.Source) || entry.HasTranslations).ToList();
+        if (terms.Any(entry => string.IsNullOrWhiteSpace(entry.Source) || !entry.HasTranslations))
+        {
+            SetStatus(Localization.Get("Settings.IncompleteTerm"));
+            return false;
+        }
+        if (enabled.IsChecked == true && (!Uri.TryCreate(SelectedBaseUrl, UriKind.Absolute, out var endpoint) ||
+            endpoint.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(endpoint.Query) ||
+            !string.IsNullOrEmpty(endpoint.Fragment) || !string.IsNullOrEmpty(endpoint.UserInfo) ||
+            string.IsNullOrWhiteSpace(model.Text) || string.IsNullOrWhiteSpace(SelectedTargetLanguage)))
+        {
+            SetStatus(Localization.Get("Settings.InvalidTranslation"));
+            return false;
+        }
+        var settings = runtime.Configuration.Settings;
+        draft = new()
+        {
+            Language = settings.Language,
+            Theme = settings.Theme,
+            ColorScheme = ColorSchemeService.Snapshot(settings.ColorScheme),
+            UseWindowMenuOnMac = settings.UseWindowMenuOnMac,
+            CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup,
+            Translation = new()
+            {
+                Enabled = enabled.IsChecked == true,
+                BaseUrl = SelectedBaseUrl,
+                ApiKey = apiKey.Text ?? "",
+                Model = model.Text?.Trim() ?? "",
+                TargetLanguage = SelectedTargetLanguage,
+                ExtraSystemPrompt = extraPrompt.Text ?? "",
+                DisplayMode = (TranslationDisplayMode)displayMode.SelectedIndex,
+                BacklogMode = (TranslationBacklogMode)backlogMode.SelectedIndex,
+                Glossary = terms.SelectMany(entry => entry.GetEntries()).ToList()
+            },
+            Reading = new()
+            {
+                GiftAutoPinMinimum = giftMinimum.Value ?? 0,
+                GiftReadResetPolicy = (GiftReadResetPolicy)giftResetPolicy.SelectedIndex
+            },
+            ShowUserPinyin = userPinyin.IsChecked == true,
+            ShowGiftPinyin = giftPinyin.IsChecked == true,
+            ShowDanmuPinyin = danmuPinyin.IsChecked == true,
+            ShowSuperChatPinyin = superChatPinyin.IsChecked == true,
+            PinyinLayout = (PinyinLayoutMode)pinyinLayout.SelectedIndex,
+            MessageTextScale = (double)(messageTextScale.Value ?? 100) / 100,
+            CompactDanmuDisplay = compactDisplay.IsChecked == true,
+            CompactDanmuWrap = compactDanmuWrap.IsChecked == true,
+            CompactSuperChatWrap = compactSuperChatWrap.IsChecked == true,
+            AutoScrollLongMessages = autoScrollLongMessages.IsChecked == true
+        };
+        return true;
+    }
+
+    private bool TryBeginOperation()
+    {
+        if (operating)
+        {
+            return false;
+        }
+        operating = true;
+        surface.IsEnabled = false;
+        return true;
+    }
+
+    private void EndOperation()
+    {
+        operating = false;
+        surface.IsEnabled = true;
     }
 
     private Control BuildAppearance()
@@ -403,6 +557,12 @@ public sealed class SettingsView : UserControl
 
     private Control BuildData()
     {
+        var import = ActionButton("Settings.Import", LucideIconKind.Import);
+        import.Name = "ImportSettingsButton";
+        import.Click += (_, _) => PendingSettingsTransfer = ImportSettingsAsync();
+        var export = ActionButton("Settings.Export", LucideIconKind.Upload);
+        export.Name = "ExportSettingsButton";
+        export.Click += (_, _) => PendingSettingsTransfer = ExportSettingsAsync();
         var clearCurrent = ActionButton("Settings.ClearCurrent", LucideIconKind.Trash2);
         clearCurrent.Click += (_, _) => ClearRequested?.Invoke(false);
         var clearAll = ActionButton("Settings.ClearAll", LucideIconKind.Trash2);
@@ -414,7 +574,7 @@ public sealed class SettingsView : UserControl
             try
             {
                 await runtime.ClearTranslationCacheAsync();
-                SetStatus(Localization.Get("Settings.CacheCleared"));
+                SetStatus(Localization.Get("Settings.CacheCleared"), isError: false);
             }
             catch (Exception exception)
             {
@@ -425,7 +585,9 @@ public sealed class SettingsView : UserControl
                 cache.IsEnabled = true;
             }
         };
-        return Stack(Card("Settings.Data", Help("Settings.HistoryHelp"), clearCurrent, clearAll),
+        return Stack(Card("Settings.Transfer", Help("Settings.TransferHelp"), Help("Settings.TransferKeyHelp"),
+                new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8, Children = { import, export } }),
+            Card("Settings.Data", Help("Settings.HistoryHelp"), clearCurrent, clearAll),
             Card("Settings.ClearCache", Help("Settings.CacheHelp"), cache));
     }
 
@@ -486,9 +648,10 @@ public sealed class SettingsView : UserControl
         surface.FindControl<TextBlock>("SectionDescription")!.Bind(TextBlock.TextProperty, Localization.Observe(descriptionKey));
     }
 
-    private void SetStatus(string text)
+    private void SetStatus(string text, bool isError = true)
     {
         status.Text = text;
+        status.Classes.Set("success", !isError);
         status.IsVisible = !string.IsNullOrEmpty(text);
     }
 
