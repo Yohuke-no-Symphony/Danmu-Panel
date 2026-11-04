@@ -3,9 +3,11 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
@@ -20,6 +22,8 @@ internal sealed class DanmuFeedScrollController : IDisposable
     private object? readingItem;
     private double readingY;
     private long session;
+    private long contentRevision;
+    private IPointer? scrollingPointer;
     private bool isFollowingLatest;
     private bool isFollowPending;
     private bool isAnchorCorrectionPending;
@@ -40,8 +44,10 @@ internal sealed class DanmuFeedScrollController : IDisposable
             RoutingStrategies.Tunnel, true);
         scrollViewer.AddHandler(InputElement.KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel, true);
         scrollViewer.AddHandler(Gestures.ScrollGestureEvent, OnScrollGesture,
-            RoutingStrategies.Tunnel | RoutingStrategies.Bubble, true);
+            RoutingStrategies.Tunnel, true);
         scrollViewer.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel, true);
+        scrollViewer.AddHandler(InputElement.PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Tunnel, true);
+        scrollViewer.AddHandler(InputElement.PointerCaptureLostEvent, OnPointerCaptureLost, RoutingStrategies.Direct, true);
     }
 
     /// <summary>切换消息集合并从底部开始阅读；空集合解除监听。</summary>
@@ -53,6 +59,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
             items.CollectionChanged -= OnCollectionChanged;
         }
         CancelPendingFollow();
+        scrollingPointer = null;
         ClearItemSubscriptions();
         readingItem = null;
         items = collection;
@@ -92,6 +99,8 @@ internal sealed class DanmuFeedScrollController : IDisposable
         scrollViewer.RemoveHandler(InputElement.KeyDownEvent, OnKeyDown);
         scrollViewer.RemoveHandler(Gestures.ScrollGestureEvent, OnScrollGesture);
         scrollViewer.RemoveHandler(InputElement.PointerPressedEvent, OnPointerPressed);
+        scrollViewer.RemoveHandler(InputElement.PointerReleasedEvent, OnPointerReleased);
+        scrollViewer.RemoveHandler(InputElement.PointerCaptureLostEvent, OnPointerCaptureLost);
         isDisposed = true;
     }
 
@@ -121,6 +130,11 @@ internal sealed class DanmuFeedScrollController : IDisposable
 
     private void OnContentChanged()
     {
+        contentRevision++;
+        if (scrollingPointer is not null)
+        {
+            return;
+        }
         if (isFollowingLatest)
         {
             QueueFollowLatest();
@@ -151,9 +165,17 @@ internal sealed class DanmuFeedScrollController : IDisposable
     {
         if (e.Property == ScrollViewer.OffsetProperty && items is not null && !isUpdatingScroll)
         {
+            if (isFollowingLatest && isFollowPending && scrollingPointer is null)
+            {
+                return;
+            }
             CancelPendingFollow();
             readingItem = null;
-            SetFollowingLatest(IsAtLatest());
+            SetFollowingLatest(scrollingPointer is null && IsAtLatest());
+            if (isFollowingLatest)
+            {
+                QueueFollowLatest();
+            }
         }
     }
 
@@ -184,11 +206,44 @@ internal sealed class DanmuFeedScrollController : IDisposable
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         CancelPendingFollow();
+        if (e.Source is ScrollBar || e.Source is Visual source && source.GetVisualAncestors().OfType<ScrollBar>().Any())
+        {
+            scrollingPointer = e.Pointer;
+            readingItem = null;
+            SetFollowingLatest(false);
+        }
+    }
+
+    private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        CompletePointerScroll(e.Pointer);
+    }
+
+    private void OnPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        CompletePointerScroll(e.Pointer);
+    }
+
+    private void CompletePointerScroll(IPointer pointer)
+    {
+        if (scrollingPointer != pointer)
+        {
+            return;
+        }
+        scrollingPointer = null;
+        CancelPendingFollow();
+        readingItem = null;
+        SetFollowingLatest(IsAtLatest());
+        if (isFollowingLatest)
+        {
+            QueueFollowLatest();
+        }
     }
 
     private void ResetToLatest()
     {
         CancelPendingFollow();
+        scrollingPointer = null;
         readingItem = null;
         SetFollowingLatest(true);
         isUpdatingScroll = true;
@@ -359,6 +414,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
             {
                 return;
             }
+            var followedRevision = contentRevision;
             isUpdatingScroll = true;
             try
             {
@@ -373,7 +429,18 @@ internal sealed class DanmuFeedScrollController : IDisposable
                 isUpdatingScroll = false;
                 if (requestedSession == session)
                 {
-                    isFollowPending = false;
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (requestedSession != session || isDisposed || items is null)
+                        {
+                            return;
+                        }
+                        isFollowPending = false;
+                        if (isFollowingLatest && (followedRevision != contentRevision || !IsAtLatest()))
+                        {
+                            QueueFollowLatest();
+                        }
+                    }, DispatcherPriority.Loaded);
                 }
             }
         }, DispatcherPriority.Normal);

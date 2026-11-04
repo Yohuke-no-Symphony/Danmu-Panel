@@ -8,6 +8,7 @@ using Avalonia.Data;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -26,6 +27,194 @@ namespace Yohuke.DanmuPanel.Tests.Windowing;
 public sealed class FeedScrollStabilityTests
 {
     private static readonly IPinyinService pinyin = new PinyinService();
+
+    /// <summary>手势回到底部时不能在冒泡阶段撤销刚排队的跟随请求。</summary>
+    [AvaloniaFact]
+    public void ScrollGestureReturningToBottomKeepsFollowThroughDeferredLayout()
+    {
+        var (window, _, viewer, controller, items) = CreateFeed();
+        using (controller)
+        {
+            try
+            {
+                items.Add(CreateItem("arrived while a gesture approaches the bottom"));
+                var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>());
+                var gestureId = ScrollGestureEventArgs.GetNextFreeId();
+                presenter.RaiseEvent(new ScrollGestureEventArgs(gestureId, new(0, viewer.ScrollBarMaximum.Y)));
+                Dispatcher.UIThread.Post(() => presenter.Offset = new(0, presenter.Offset.Y - 34), DispatcherPriority.Render);
+                Pump(window);
+
+                Assert.True(controller.IsFollowingLatest);
+                AssertAtLatest(viewer);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+    }
+
+    /// <summary>拖动滑块期间新增消息不会拉回底部，释放在底部后恢复跟随。</summary>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ScrollbarDragRemainsAuthoritativeWhileMessagesArrive(bool loseCapture)
+    {
+        var (window, _, viewer, controller, items) = CreateFeed(startAtLatest: true);
+        using (controller)
+        {
+            try
+            {
+                viewer.AllowAutoHide = false;
+                Pump(window);
+                var bar = viewer.GetVisualDescendants().OfType<ScrollBar>()
+                    .Single(value => value.Orientation == Orientation.Vertical);
+                var thumb = Assert.Single(bar.GetVisualDescendants().OfType<Thumb>());
+                IPointer? pointer = null;
+                viewer.AddHandler(InputElement.PointerPressedEvent, (_, args) => pointer = args.Pointer,
+                    RoutingStrategies.Tunnel, true);
+                var start = thumb.TranslatePoint(new Point(thumb.Bounds.Width / 2, thumb.Bounds.Height / 2), window)!.Value;
+                window.MouseMove(start);
+                window.MouseDown(start, MouseButton.Left);
+                items.Add(CreateItem("arrived while the scrollbar is held"));
+                Pump(window);
+                Assert.False(controller.IsFollowingLatest);
+
+                window.MouseMove(start + new Vector(0, -30), RawInputModifiers.LeftMouseButton);
+                Pump(window);
+                var offset = viewer.Offset.Y;
+                Assert.True(offset < viewer.ScrollBarMaximum.Y);
+                for (var index = 0; index < 20; index++)
+                {
+                    items.Add(CreateItem($"arrived during drag {index}"));
+                }
+                Pump(window);
+                AssertStable(window, viewer, offset);
+                Assert.False(controller.IsFollowingLatest);
+
+                window.MouseMove(start + new Vector(0, 300), RawInputModifiers.LeftMouseButton);
+                if (loseCapture)
+                {
+                    Assert.NotNull(pointer);
+                    pointer.Capture(null);
+                }
+                else
+                {
+                    window.MouseUp(start + new Vector(0, 300), MouseButton.Left);
+                }
+                Pump(window);
+                Assert.True(controller.IsFollowingLatest);
+                AssertAtLatest(viewer);
+                window.MouseUp(start + new Vector(0, 300), MouseButton.Left);
+                items.Add(CreateItem("arrived after releasing at the bottom"));
+                Pump(window);
+                Assert.True(controller.IsFollowingLatest);
+                AssertAtLatest(viewer);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+    }
+
+    /// <summary>新消息布局晚到的原生偏移修正不能撤销刚恢复的底部跟随。</summary>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DeferredPresenterCorrectionDoesNotCancelRestoredFollowing(bool useButton)
+    {
+        var (window, _, viewer, controller, items) = CreateFeed();
+        using (controller)
+        {
+            try
+            {
+                if (useButton)
+                {
+                    controller.ScrollToLatest();
+                }
+                else
+                {
+                    viewer.Offset = new(0, viewer.ScrollBarMaximum.Y);
+                }
+                items.Add(CreateItem("arrived while returning to latest"));
+                var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>());
+                Dispatcher.UIThread.Post(() => presenter.Offset = new(0, presenter.Offset.Y - 34), DispatcherPriority.Render);
+                Pump(window);
+
+                Assert.True(controller.IsFollowingLatest);
+                AssertAtLatest(viewer);
+                items.Add(CreateItem("arrived after the deferred layout correction"));
+                Pump(window);
+                Assert.True(controller.IsFollowingLatest);
+                AssertAtLatest(viewer);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+    }
+
+    /// <summary>返回底部后连续裁剪旧消息并插入不同高度的新消息，布局修正不能解除跟随。</summary>
+    [AvaloniaTheory]
+    [InlineData(false, 0)]
+    [InlineData(true, 0)]
+    [InlineData(false, 1)]
+    [InlineData(true, 1)]
+    public void ReturningToLatestKeepsFollowingAcrossRollingBatches(bool useButton, double cacheLength)
+    {
+        var (window, list, viewer, controller, items) = CreateFeed(cacheLength, startAtLatest: true);
+        using (controller)
+        {
+            try
+            {
+                viewer.Offset = new(0, 650);
+                Pump(window);
+                if (useButton)
+                {
+                    controller.ScrollToLatest();
+                }
+                else
+                {
+                    viewer.Offset = new(0, viewer.ScrollBarMaximum.Y);
+                }
+                Assert.True(controller.IsFollowingLatest);
+                var changes = new List<string>();
+                viewer.PropertyChanged += (_, args) =>
+                {
+                    if (args.Property == ScrollViewer.OffsetProperty || args.Property == ScrollViewer.ExtentProperty ||
+                        args.Property == ScrollViewer.ScrollBarMaximumProperty)
+                    {
+                        changes.Add($"{args.Property.Name}: {args.OldValue} -> {args.NewValue}; following={controller.IsFollowingLatest}");
+                    }
+                };
+                for (var batch = 0; batch < 10; batch++)
+                {
+                    for (var index = 0; index < 80; index++)
+                    {
+                        items.RemoveAt(0);
+                    }
+                    for (var index = 0; index < 80; index++)
+                    {
+                        items.Add(CreateItem(string.Join(Environment.NewLine,
+                            Enumerable.Repeat($"batch {batch} item {index}", index % 3 == 0 ? 40 : 1))));
+                    }
+                    window.UpdateLayout();
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick(2);
+                    Pump(window);
+
+                    Assert.True(controller.IsFollowingLatest, $"Batch {batch}: {string.Join(Environment.NewLine, changes.TakeLast(30))}");
+                    AssertAtLatest(viewer);
+                    Assert.NotNull(list.ContainerFromItem(items[^1]));
+                }
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+    }
 
     /// <summary>首次连接与底部追加在渲染前完成跟随，内容变高后仍贴住最新位置。</summary>
     [AvaloniaFact]
@@ -313,9 +502,11 @@ public sealed class FeedScrollStabilityTests
                 AssertAtLatest(viewer);
                 items.Add(CreateItem("queued before user scroll"));
                 window.UpdateLayout();
-                viewer.Offset = new(0, 300);
+                var point = viewer.TranslatePoint(new Point(50, 100), window)!.Value;
+                window.MouseWheel(point, new Vector(0, 1));
+                var offset = viewer.Offset.Y;
                 Pump(window);
-                AssertStable(window, viewer, 300);
+                AssertStable(window, viewer, offset);
                 Assert.False(controller.IsFollowingLatest);
                 viewer.ScrollToEnd();
                 Pump(window);
