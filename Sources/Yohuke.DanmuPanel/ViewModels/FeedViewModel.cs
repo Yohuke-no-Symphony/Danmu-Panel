@@ -76,7 +76,7 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
         {
             return;
         }
-        limit = Math.Max(limit, ScrollingItems.Count) + PAGE_SIZE;
+        limit = Math.Max(limit, ScrollingItems.Count(item => !item.Record.IsPriority)) + PAGE_SIZE;
         await RefreshAsync();
     }
 
@@ -108,7 +108,8 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
         try
         {
             var records = await runtime.Messages.LoadFeedAsync(current.Id, kind, limit,
-                IsReadingHistory ? ScrollingItems.LastOrDefault()?.Record.Id : null, cancellationToken);
+                IsReadingHistory ? ScrollingItems.LastOrDefault(item => !item.Record.IsPriority)?.Record.Id : null,
+                cancellationToken);
             if (disposed || version != revision || cancellationToken.IsCancellationRequested)
             {
                 return;
@@ -155,8 +156,8 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
                     existing.Update(record, runtime.Configuration.Settings);
                 }
             }
-            SynchronizeRegion(PinnedItems, Items.Where(item => item.Record.IsPriority).ToArray());
-            SynchronizeRegion(ScrollingItems, Items.Where(item => !item.Record.IsPriority).ToArray());
+            SynchronizeRegion(PinnedItems, Items.Where(item => kind == MessageKind.Danmu && item.Record.IsPinned).ToArray());
+            SynchronizeRegion(ScrollingItems, Items.Where(item => kind != MessageKind.Danmu || !item.Record.IsPinned).ToArray());
             NotifyRegions();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

@@ -221,7 +221,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             frame.BorderThickness = new Thickness(3, 0, 0, 0);
         }
         Control rowContent = frame;
-        if (item.Record.Kind is MessageKind.SuperChat or MessageKind.Guard)
+        if (item.Record.Kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard)
         {
             var dot = new Border { IsHitTestVisible = false };
             dot.Classes.Add("messageUnreadDot");

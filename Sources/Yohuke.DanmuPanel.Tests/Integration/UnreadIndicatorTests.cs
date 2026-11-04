@@ -23,6 +23,8 @@ public sealed class UnreadIndicatorTests
     [AvaloniaTheory]
     [InlineData(MessageKind.SuperChat, false)]
     [InlineData(MessageKind.SuperChat, true)]
+    [InlineData(MessageKind.Gift, false)]
+    [InlineData(MessageKind.Gift, true)]
     [InlineData(MessageKind.Guard, false)]
     [InlineData(MessageKind.Guard, true)]
     public async Task UnreadDotOverlaysRowWithoutChangingLayout(MessageKind kind, bool compact)
@@ -100,7 +102,7 @@ public sealed class UnreadIndicatorTests
             AssertBadge(badge, "105");
             var title = Assert.Single(badge.GetVisualAncestors().OfType<Grid>().First().GetVisualDescendants().OfType<TextBlock>(), text => text.Name == "PART_Title");
             Assert.True(badge.TranslatePoint(default, title)!.Value.X >= title.Bounds.Width);
-            var first = view.Model.PinnedItems[0];
+            var first = view.Model.ScrollingItems[0];
             FindRow(view, first.Record.Id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             for (var attempt = 0; attempt < 100 && !first.Record.IsRead; attempt++)
             {

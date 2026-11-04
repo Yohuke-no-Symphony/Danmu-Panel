@@ -41,9 +41,9 @@ public sealed class MessageItemViewModel : ObservableObject
         _ => Avalonia.Media.Brushes.Transparent
     };
     public string Time => Record.Time.ToLocalTime().ToString("HH:mm:ss");
-    public string State => Record.IsPinned ? "📌" : Record.Kind == MessageKind.Gift && !Record.IsRead ? "●" : "";
+    public string State => Record.IsPinned ? "📌" : "";
     public bool HasState => State.Length > 0;
-    public bool ShowUnreadDot => Record.Kind is MessageKind.SuperChat or MessageKind.Guard && !Record.IsRead;
+    public bool ShowUnreadDot => Record.Kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard && !Record.IsRead;
     public string Detail => Record.Kind switch
     {
         MessageKind.Gift => $"{Record.GiftName} ×{Record.Quantity} · ￥{Record.TotalPrice:0.##}",
