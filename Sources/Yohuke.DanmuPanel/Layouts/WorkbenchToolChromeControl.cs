@@ -35,6 +35,28 @@ internal sealed class WorkbenchToolChromeControl : ToolChromeControl
 
         base.OnApplyTemplate(e);
 
+        if (e.NameScope.Find<TextBlock>("PART_Title") is { Parent: Panel titleHost } title)
+        {
+            var badge = new ContentControl
+            {
+                Name = "PART_HeaderBadge",
+                VerticalContentAlignment = VerticalAlignment.Center,
+                [!ContentProperty] = new Binding(nameof(IDock.ActiveDockable)),
+                ContentTemplate = new FuncDataTemplate<WorkbenchDockPanel>((panel, _) => CreateHeaderBadge(panel))
+            };
+            var titleLayout = new Grid
+            {
+                ColumnDefinitions = new("*,Auto"),
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            var titleIndex = titleHost.Children.IndexOf(title);
+            titleHost.Children.Remove(title);
+            Grid.SetColumn(badge, 1);
+            titleLayout.Children.Add(title);
+            titleLayout.Children.Add(badge);
+            titleHost.Children.Insert(titleIndex, titleLayout);
+        }
+
         if (closeButton?.Parent is StackPanel headerButtons)
         {
             headerButtons.Children.Insert(0, new ContentControl
@@ -71,6 +93,21 @@ internal sealed class WorkbenchToolChromeControl : ToolChromeControl
         }
 
         return actions;
+    }
+
+    private static Control? CreateHeaderBadge(WorkbenchDockPanel? panel)
+    {
+        if (panel?.View is not IWorkbenchHeaderBadge { HeaderBadgeTemplate: { } template })
+        {
+            return null;
+        }
+
+        var badge = template.Build(panel.View);
+        if (badge is not null)
+        {
+            badge.DataContext = panel.View;
+        }
+        return badge;
     }
 
     private void OnCloseButtonClick(object? sender, RoutedEventArgs e)

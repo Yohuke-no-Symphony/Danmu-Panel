@@ -37,7 +37,9 @@ public sealed class MessageItemViewModel : ObservableObject
         1 => "#E9A23B", 2 => "#A46EE8", 3 => "#4F8FDD", _ => "Transparent"
     });
     public string Time => Record.Time.ToLocalTime().ToString("HH:mm:ss");
-    public string State => Record.IsPinned ? "📌" : Record.Kind != MessageKind.Danmu && !Record.IsRead ? "●" : "";
+    public string State => Record.IsPinned ? "📌" : Record.Kind == MessageKind.Gift && !Record.IsRead ? "●" : "";
+    public bool HasState => State.Length > 0;
+    public bool ShowUnreadDot => Record.Kind is MessageKind.SuperChat or MessageKind.Guard && !Record.IsRead;
     public string Detail => Record.Kind switch
     {
         MessageKind.Gift => $"{Record.GiftName} ×{Record.Quantity} · ￥{Record.TotalPrice:0.##}",

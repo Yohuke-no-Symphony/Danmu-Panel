@@ -17,7 +17,7 @@ using Yohuke.DanmuPanel.Views.Components;
 namespace Yohuke.DanmuPanel.Views;
 
 /// <summary>使用虚拟化容器展示可点击的消息行。</summary>
-public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions
+public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWorkbenchHeaderBadge
 {
     private readonly PanelRuntime runtime;
     private readonly Action<Exception> reportError;
@@ -28,6 +28,9 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions
 
     /// <summary>为每个停靠或浮动宿主创建独立的回顶图标按钮。</summary>
     public IDataTemplate HeaderActionsTemplate { get; }
+
+    /// <inheritdoc />
+    public IDataTemplate? HeaderBadgeTemplate { get; }
 
     /// <summary>创建指定消息面板。</summary>
     public MessageFeedView(PanelRuntime runtime, MessageKind kind, Action<Exception> reportError)
@@ -48,6 +51,10 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions
             button.Classes.Add("dockChromeButton");
             return button;
         });
+        if (kind is MessageKind.SuperChat or MessageKind.Guard)
+        {
+            HeaderBadgeTemplate = new FuncDataTemplate<MessageFeedView>((_, _) => CreateUnreadBadge());
+        }
         var surface = new MessageFeedSurface { DataContext = Model };
         surface.Host.Content = list;
         surface.PinnedContainer.Content = pinnedList;
@@ -110,6 +117,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions
         identity.Children.Add(time);
         var state = BoundText(nameof(MessageItemViewModel.State));
         state.Margin = new Thickness(0, 0, 5, 0);
+        state.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.HasState)));
         identity.Children.Add(state);
         var medal = BoundText(nameof(MessageItemViewModel.MedalName));
         medal.Classes.Add("danmuMedalText");
@@ -211,9 +219,25 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions
         {
             frame.BorderThickness = new Thickness(3, 0, 0, 0);
         }
+        Control rowContent = frame;
+        if (item.Record.Kind is MessageKind.SuperChat or MessageKind.Guard)
+        {
+            var dot = new Border { IsHitTestVisible = false };
+            dot.Classes.Add("messageUnreadDot");
+            dot.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.ShowUnreadDot)));
+            Canvas.SetRight(dot, 0);
+            var overlay = new Canvas
+            {
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                IsHitTestVisible = false,
+                Children = { dot }
+            };
+            rowContent = new Grid { Children = { frame, overlay } };
+        }
         var button = new Button
         {
-            DataContext = item, Content = frame,
+            DataContext = item, Content = rowContent,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch
         };
@@ -225,6 +249,16 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions
         };
         button.ContextMenu = CreateMessageMenu(item);
         return button;
+    }
+
+    private Border CreateUnreadBadge()
+    {
+        var count = new TextBlock();
+        count.Bind(TextBlock.TextProperty, new Binding(nameof(FeedViewModel.UnreadCount)) { Source = Model });
+        var badge = new Border { Child = count, IsHitTestVisible = false };
+        badge.Classes.Add("panelUnreadBadge");
+        badge.Bind(IsVisibleProperty, new Binding(nameof(FeedViewModel.HasUnreadMessages)) { Source = Model });
+        return badge;
     }
 
     private static HoverMarqueeTextBlock CreateMarquee(string property)

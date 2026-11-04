@@ -28,6 +28,8 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
     public ObservableCollection<MessageItemViewModel> ScrollingItems { get; } = [];
     public bool HasPinnedItems => PinnedItems.Count > 0;
     public bool HasScrollingItems => ScrollingItems.Count > 0;
+    public int UnreadCount => Items.Count(item => item.ShowUnreadDot);
+    public bool HasUnreadMessages => UnreadCount > 0;
     public bool IsReadingHistory { get; set; }
     public event Action<Exception>? Failed;
 
@@ -196,6 +198,8 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(HasPinnedItems));
         OnPropertyChanged(nameof(HasScrollingItems));
+        OnPropertyChanged(nameof(UnreadCount));
+        OnPropertyChanged(nameof(HasUnreadMessages));
     }
 
     /// <inheritdoc/>
