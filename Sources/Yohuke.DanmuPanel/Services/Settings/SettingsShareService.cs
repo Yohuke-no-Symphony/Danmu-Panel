@@ -3,6 +3,7 @@ using System.Text.Json.Serialization.Metadata;
 using Yohuke.DanmuPanel.Models.Settings;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Services.Appearance;
+using Yohuke.DanmuPanel.Services.Messages;
 
 namespace Yohuke.DanmuPanel.Services.Settings;
 
@@ -55,6 +56,7 @@ public sealed class SettingsShareService
         target.CompactSuperChatWrap = settings.CompactSuperChatWrap;
         target.AutoScrollLongMessages = settings.AutoScrollLongMessages;
         target.HideEmoticonDanmu = settings.HideEmoticonDanmu;
+        target.DanmuRegexFilter = settings.DanmuRegexFilter;
     }
 
     /// <summary>将包含原始 API Key 的设置快照写入调用方持有的流。</summary>
@@ -115,6 +117,7 @@ public sealed class SettingsShareService
             throw new InvalidDataException("The appearance or message display settings are invalid.");
         }
         ColorSchemeService.Validate(settings.ColorScheme);
+        DanmuRegexFilter.Validate(settings.DanmuRegexFilter);
         var reading = settings.Reading;
         if (reading is null || reading.GiftAutoPinMinimum is < 0 or > 1000000000 || !Enum.IsDefined(reading.GiftReadResetPolicy))
         {

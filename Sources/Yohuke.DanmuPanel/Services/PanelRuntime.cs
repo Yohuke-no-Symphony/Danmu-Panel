@@ -20,6 +20,7 @@ public sealed class PanelRuntime : IAsyncDisposable
     public ConfigurationService ConfigurationStore { get; }
     public PanelConfiguration Configuration { get; }
     public SqliteMessageStore Messages { get; }
+    public DanmuRegexFilter DanmuFilter { get; private set; }
 
     /// <summary>向当前阅读房间添加和清理仅用于界面验证的本地消息。</summary>
     public TestMessageService TestMessages { get; }
@@ -38,6 +39,7 @@ public sealed class PanelRuntime : IAsyncDisposable
     {
         ConfigurationStore = configurationStore;
         Configuration = configuration;
+        DanmuFilter = CreateDanmuFilter();
         foreach (var account in configuration.Accounts)
         {
             AccountSessions.Register(account);
@@ -100,9 +102,11 @@ public sealed class PanelRuntime : IAsyncDisposable
     /// <summary>保存设置并刷新未读优先级和翻译配置。</summary>
     public async Task ApplySettingsAsync()
     {
+        var danmuFilter = CreateDanmuFilter();
         await ConfigurationStore.SaveAsync(Configuration);
         await Messages.ReevaluateReadOptionsAsync(Configuration.Settings.Reading);
         await scheduler.UpdateSettingsAsync(Configuration.Settings.Translation);
+        DanmuFilter = danmuFilter;
         Changed?.Invoke("");
     }
 
@@ -268,6 +272,15 @@ public sealed class PanelRuntime : IAsyncDisposable
         }
         statuses[id] = "Panel.Stopped";
         Changed?.Invoke(id);
+    }
+
+    private DanmuRegexFilter CreateDanmuFilter()
+    {
+        var filter = new DanmuRegexFilter(Configuration.Settings.DanmuRegexFilter);
+        filter.PatternTimedOut += index => ReportError(
+            I18n.Localization.Format("Settings.DanmuRegexTimedOut", index),
+            I18n.Localization.Get("Settings.DanmuRegexFilter"));
+        return filter;
     }
 
     private void ReportError(string message, string source)

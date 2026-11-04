@@ -88,6 +88,8 @@ public sealed class SettingsShareServiceTests
         Assert.NotSame(source.Translation.Glossary, target.Translation.Glossary);
         Assert.NotSame(source.Translation.Glossary[0], target.Translation.Glossary[0]);
         Assert.NotSame(source.Reading, target.Reading);
+        Assert.NotSame(source.DanmuRegexFilter, target.DanmuRegexFilter);
+        Assert.NotSame(source.DanmuRegexFilter.Patterns, target.DanmuRegexFilter.Patterns);
         var applied = JsonSerializer.Serialize(target);
 
         source.ColorScheme.Overrides.Clear();
@@ -96,6 +98,8 @@ public sealed class SettingsShareServiceTests
         source.Translation.ApiKey = "changed-key";
         source.Translation.Glossary[0].Target = "changed";
         source.Translation.Glossary.Clear();
+        source.DanmuRegexFilter.Enabled = true;
+        source.DanmuRegexFilter.Patterns.Clear();
 
         Assert.Equal(applied, JsonSerializer.Serialize(target));
     }
@@ -105,6 +109,7 @@ public sealed class SettingsShareServiceTests
     [InlineData("appearance")]
     [InlineData("colors")]
     [InlineData("reading")]
+    [InlineData("danmuRegexFilter")]
     [InlineData("translation")]
     public void ApplyToRejectsInvalidSourceBeforeChangingTarget(string invalidSection)
     {
@@ -119,6 +124,9 @@ public sealed class SettingsShareServiceTests
                 break;
             case "reading":
                 source.Reading = new() { GiftAutoPinMinimum = -1 };
+                break;
+            case "danmuRegexFilter":
+                source.DanmuRegexFilter.Patterns = ["["];
                 break;
             case "translation":
                 source.Translation.Glossary[0].Target = " ";
@@ -376,6 +384,7 @@ public sealed class SettingsShareServiceTests
             CompactSuperChatWrap = false,
             AutoScrollLongMessages = false,
             HideEmoticonDanmu = true,
+            DanmuRegexFilter = new() { Enabled = false, Patterns = ["^广告", "机器人$"] },
             DefaultAccountId = "local-account",
             SelectedWorkspaceId = "local-workspace"
         };

@@ -49,6 +49,8 @@ public sealed class PanelSettings
     /// <summary>隐藏仅包含表情的普通弹幕，默认关闭。</summary>
     public bool HideEmoticonDanmu { get; set; }
 
+    public DanmuRegexFilterSettings DanmuRegexFilter { get; set; } = new();
+
     public string? DefaultAccountId { get; set; }
     public string? SelectedWorkspaceId { get; set; }
 }

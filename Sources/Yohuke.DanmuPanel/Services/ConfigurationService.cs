@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Text.Json;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Services.Appearance;
+using Yohuke.DanmuPanel.Services.Messages;
 
 namespace Yohuke.DanmuPanel.Services;
 
@@ -34,6 +35,7 @@ public sealed class ConfigurationService
     public async Task SaveAsync(PanelConfiguration configuration)
     {
         ColorSchemeService.Validate(configuration.Settings.ColorScheme);
+        DanmuRegexFilter.Validate(configuration.Settings.DanmuRegexFilter);
         var snapshots = new Dictionary<string, string>
         {
             ["settings.json"] = JsonSerializer.Serialize(configuration.Settings, JSON_OPTIONS),
@@ -95,6 +97,7 @@ public sealed class ConfigurationService
             if (value is PanelSettings settings)
             {
                 ColorSchemeService.Validate(settings.ColorScheme);
+                DanmuRegexFilter.Validate(settings.DanmuRegexFilter);
             }
             return true;
         }

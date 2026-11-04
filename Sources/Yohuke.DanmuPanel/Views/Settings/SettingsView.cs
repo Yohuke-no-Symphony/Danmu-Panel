@@ -15,6 +15,7 @@ using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Services;
 using Yohuke.DanmuPanel.Services.Appearance;
+using Yohuke.DanmuPanel.Services.Messages;
 using Yohuke.DanmuPanel.Services.Settings;
 using Yohuke.DanmuPanel.Services.Translation;
 using Yohuke.DanmuPanel.Services.Updates;
@@ -54,6 +55,8 @@ public sealed class SettingsView : UserControl
     private readonly CheckBox compactSuperChatWrap;
     private readonly CheckBox autoScrollLongMessages;
     private readonly CheckBox hideEmoticonDanmu;
+    private readonly CheckBox danmuRegexEnabled;
+    private readonly TextBox danmuRegexPatterns;
     private readonly CheckBox windowMenuOnMac;
     private readonly ObservableCollection<GlossaryRow> glossary;
     private readonly TextBlock glossaryLanguage;
@@ -144,6 +147,17 @@ public sealed class SettingsView : UserControl
         autoScrollLongMessages.Name = "AutoScrollLongMessagesCheckBox";
         hideEmoticonDanmu = Check("Settings.HideEmoticonDanmu", settings.HideEmoticonDanmu);
         hideEmoticonDanmu.Name = "HideEmoticonDanmuCheckBox";
+        danmuRegexEnabled = Check("Settings.DanmuRegexEnabled", settings.DanmuRegexFilter.Enabled);
+        danmuRegexEnabled.Name = "DanmuRegexFilterEnabledCheckBox";
+        danmuRegexPatterns = new()
+        {
+            Name = "DanmuRegexPatternsInput",
+            Text = string.Join(Environment.NewLine, settings.DanmuRegexFilter.Patterns),
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.NoWrap,
+            MinHeight = 140,
+            MaxHeight = 260
+        };
         compactDanmuWrap.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
         compactSuperChatWrap.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
         autoScrollLongMessages.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
@@ -184,6 +198,8 @@ public sealed class SettingsView : UserControl
                     Margin = new Thickness(24, 0, 0, 0), Spacing = 8,
                     Children = { compactDanmuWrap, compactSuperChatWrap, autoScrollLongMessages, Help("Settings.AutoScrollLongMessagesHelp") }
                 }),
+            Card("Settings.DanmuRegexFilter", danmuRegexEnabled, Help("Settings.DanmuRegexHelp"),
+                Row("Settings.DanmuRegexPatterns", danmuRegexPatterns)),
             Card("Settings.Reading", Row("Settings.GiftMinimum", giftMinimum), Row("Settings.ComboPolicy", giftResetPolicy)),
             Card("Settings.Pinyin", userPinyin, giftPinyin, danmuPinyin, superChatPinyin,
                 Row("Settings.PinyinLayout", pinyinLayout),
@@ -351,6 +367,22 @@ public sealed class SettingsView : UserControl
     private bool TryCreateDraft(out PanelSettings draft)
     {
         draft = null!;
+        var regexLines = (danmuRegexPatterns.Text ?? "").Split(["\r\n", "\n", "\r"], StringSplitOptions.None);
+        var patterns = new List<string>();
+        for (var index = 0; index < regexLines.Length; index++)
+        {
+            var pattern = regexLines[index];
+            if (string.IsNullOrWhiteSpace(pattern))
+            {
+                continue;
+            }
+            if (!DanmuRegexFilter.IsValidPattern(pattern))
+            {
+                SetStatus(Localization.Format("Settings.DanmuRegexInvalidPattern", index + 1));
+                return false;
+            }
+            patterns.Add(pattern);
+        }
         if (!colorSchemeEditor.TryCommit(out var colorError))
         {
             SetStatus(colorError ?? Localization.Get("Colors.InvalidColor"));
@@ -406,7 +438,8 @@ public sealed class SettingsView : UserControl
             CompactDanmuWrap = compactDanmuWrap.IsChecked == true,
             CompactSuperChatWrap = compactSuperChatWrap.IsChecked == true,
             AutoScrollLongMessages = autoScrollLongMessages.IsChecked == true,
-            HideEmoticonDanmu = hideEmoticonDanmu.IsChecked == true
+            HideEmoticonDanmu = hideEmoticonDanmu.IsChecked == true,
+            DanmuRegexFilter = new() { Enabled = danmuRegexEnabled.IsChecked == true, Patterns = patterns }
         };
         return true;
     }
