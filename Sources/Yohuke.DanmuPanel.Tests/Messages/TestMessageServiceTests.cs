@@ -40,7 +40,8 @@ public sealed class TestMessageServiceTests
             Assert.Equal(3, await service.AddAsync(room, new()
             {
                 Kind = kind, UserName = "viewer", Content = "test message", GiftName = "gift",
-                UnitPrice = 2, Quantity = 5, GuardLevel = 2, Count = 3
+                UnitPrice = 2, Quantity = 5, GuardLevel = 2, Count = 3,
+                MedalName = " 测试粉丝牌 ", MedalLevel = 28
             }));
             Assert.Equal(new[] { room.Id }, changed);
             var rows = await store.LoadPageAsync(room.Id, kind, 0, 10);
@@ -51,6 +52,8 @@ public sealed class TestMessageServiceTests
             {
                 Assert.True(row.IsTest);
                 Assert.Equal(room.RoomId, row.RoomId);
+                Assert.Equal("测试粉丝牌", row.MedalName);
+                Assert.Equal(28, row.MedalLevel);
                 Assert.Equal(kind != MessageKind.Danmu, row.IsPriority);
                 Assert.Equal(kind is MessageKind.Gift or MessageKind.Guard ? 5 : 1, row.Quantity);
                 Assert.Equal(kind is MessageKind.Gift or MessageKind.Guard ? 10 : kind == MessageKind.SuperChat ? 2 : 0, row.TotalPrice);
@@ -76,8 +79,52 @@ public sealed class TestMessageServiceTests
             Assert.Empty(await store.LoadRecentAsync(room.Id, kind, 10));
         }
         await using var reopened = new SqliteMessageStore(directory.DatabasePath);
-        Assert.All(await reopened.LoadPageAsync(room.Id, kind, 0, 10), row => Assert.True(row.IsTest));
+        Assert.All(await reopened.LoadPageAsync(room.Id, kind, 0, 10), row =>
+        {
+            Assert.True(row.IsTest);
+            Assert.Equal("测试粉丝牌", row.MedalName);
+            Assert.Equal(28, row.MedalLevel);
+        });
         Assert.Equal(shouldTranslate ? 3 : 0, (await reopened.GetPendingAsync(10)).Count);
+    }
+
+    /// <summary>空白名称或零等级生成无粉丝牌消息。</summary>
+    [Theory]
+    [InlineData("", 28)]
+    [InlineData("   ", 28)]
+    [InlineData("粉丝牌", 0)]
+    public async Task EmptyNameOrZeroLevelCreatesMessageWithoutMedal(string name, int level)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var store = new SqliteMessageStore(directory.DatabasePath);
+        var service = new TestMessageService(store, () => new(), _ => { }, () => { });
+        var room = new RoomTabState { Id = "room", RoomId = "123" };
+
+        await service.AddAsync(room, new()
+        {
+            UserName = "viewer", Content = "message", MedalName = name, MedalLevel = level
+        });
+
+        var record = Assert.Single(await store.LoadPageAsync(room.Id, MessageKind.Danmu, 0, 10));
+        Assert.Empty(record.MedalName);
+        Assert.Equal(0, record.MedalLevel);
+    }
+
+    /// <summary>负数粉丝牌等级在写入消息前被拒绝。</summary>
+    [Fact]
+    public async Task NegativeMedalLevelDoesNotWriteMessages()
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var store = new SqliteMessageStore(directory.DatabasePath);
+        var service = new TestMessageService(store, () => new(), _ => { }, () => { });
+        var room = new RoomTabState { Id = "room", RoomId = "123" };
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.AddAsync(room, new()
+        {
+            UserName = "viewer", Content = "message", MedalName = "粉丝牌", MedalLevel = -1
+        }));
+
+        Assert.Empty(await store.LoadPageAsync(room.Id, MessageKind.Danmu, 0, 10));
     }
 
     /// <summary>人工译文不重复请求模型；修改翻译配置后仍可通过普通入口重新排队。</summary>

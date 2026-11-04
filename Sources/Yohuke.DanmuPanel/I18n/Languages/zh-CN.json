@@ -356,6 +356,8 @@
     "TestMessages.Target": "目标：{0}（{1}）",
     "TestMessages.Kind": "消息类型",
     "TestMessages.UserName": "用户名",
+    "TestMessages.MedalName": "粉丝牌名称（留空表示无）",
+    "TestMessages.MedalLevel": "粉丝牌等级（0 表示无）",
     "TestMessages.Content": "正文",
     "TestMessages.Translation": "人工译文（可选）",
     "TestMessages.GiftName": "礼物名称",

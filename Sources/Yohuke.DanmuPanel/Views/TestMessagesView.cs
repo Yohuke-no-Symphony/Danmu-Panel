@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -26,6 +27,12 @@ public sealed class TestMessagesView : UserControl, IWorkbenchHeaderActions, IDi
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, IsVisible = false };
     private readonly ComboBox kind;
     private readonly TextBox userName;
+    private readonly TextBox medalName = new() { Name = "TestMedalName" };
+    private readonly NumericUpDown medalLevel = new()
+    {
+        Name = "TestMedalLevel", Minimum = 0, Maximum = int.MaxValue, Value = 0,
+        Increment = 1, FormatString = "0", ParsingNumberStyle = NumberStyles.Integer
+    };
     private readonly TextBox messageContent;
     private readonly TextBox giftName;
     private readonly TextBox translation;
@@ -107,6 +114,7 @@ public sealed class TestMessagesView : UserControl, IWorkbenchHeaderActions, IDi
             Children =
             {
                 target, help, Ui.Field("TestMessages.Kind", kind), Ui.Field("TestMessages.UserName", userName),
+                Ui.Field("TestMessages.MedalName", medalName), Ui.Field("TestMessages.MedalLevel", medalLevel),
                 textFields, giftField, priceField, quantityField, guardField,
                 Ui.Field("TestMessages.BatchCount", batchCount), status
             }
@@ -181,6 +189,7 @@ public sealed class TestMessagesView : UserControl, IWorkbenchHeaderActions, IDi
         var request = new TestMessageRequest
         {
             Kind = selectedKind, UserName = userName.Text!, Content = messageContent.Text ?? "",
+            MedalName = medalName.Text ?? "", MedalLevel = decimal.ToInt32(medalLevel.Value ?? 0),
             GiftName = giftName.Text ?? "", UnitPrice = price.Value ?? 0,
             Quantity = decimal.ToInt32(quantity.Value ?? 1), GuardLevel = guardLevel.SelectedIndex + 1,
             Translation = translation.Text ?? "", Count = count

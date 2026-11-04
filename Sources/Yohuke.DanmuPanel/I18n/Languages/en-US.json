@@ -356,6 +356,8 @@
     "TestMessages.Target": "Target: {0} ({1})",
     "TestMessages.Kind": "Message type",
     "TestMessages.UserName": "User name",
+    "TestMessages.MedalName": "Fan medal name (blank for none)",
+    "TestMessages.MedalLevel": "Fan medal level (0 for none)",
     "TestMessages.Content": "Message",
     "TestMessages.Translation": "Manual translation (optional)",
     "TestMessages.GiftName": "Gift name",

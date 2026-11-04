@@ -356,6 +356,8 @@
     "TestMessages.Target": "対象：{0}（{1}）",
     "TestMessages.Kind": "メッセージの種類",
     "TestMessages.UserName": "ユーザー名",
+    "TestMessages.MedalName": "ファンメダル名（空欄でなし）",
+    "TestMessages.MedalLevel": "ファンメダルのレベル（0 でなし）",
     "TestMessages.Content": "本文",
     "TestMessages.Translation": "手入力の訳文（任意）",
     "TestMessages.GiftName": "ギフト名",

@@ -61,6 +61,13 @@ public sealed class TestMessagesViewTests
 
             view.SelectRoom(room);
             Assert.True(view.AddSingleCommand.CanExecute(null));
+            var medalName = Find<TextBox>(view, "TestMedalName");
+            var medalLevel = Find<NumericUpDown>(view, "TestMedalLevel");
+            Assert.True(string.IsNullOrEmpty(medalName.Text));
+            Assert.Equal(0m, medalLevel.Value);
+            Assert.Equal(0m, medalLevel.Minimum);
+            medalName.Text = "测试粉丝牌";
+            medalLevel.Value = 28;
             await view.AddSingleCommand.ExecuteAsync(null);
             var kind = Find<ComboBox>(view, "TestKind");
             kind.SelectedIndex = (int)MessageKind.SuperChat;
@@ -97,6 +104,17 @@ public sealed class TestMessagesViewTests
             }
             await view.AddSingleCommand.ExecuteAsync(null);
             Assert.Equal(1, Assert.Single(await runtime.Messages.LoadPageAsync(room.Id, MessageKind.Guard, 0, 10)).GuardLevel);
+            foreach (var messageKind in Enum.GetValues<MessageKind>())
+            {
+                var records = (await runtime.Messages.LoadPageAsync(room.Id, messageKind, 0, 10))
+                    .Where(record => record.IsTest).ToArray();
+                Assert.NotEmpty(records);
+                Assert.All(records, record =>
+                {
+                    Assert.Equal("测试粉丝牌", record.MedalName);
+                    Assert.Equal(28, record.MedalLevel);
+                });
+            }
             var pending = await runtime.Messages.GetPendingAsync(10);
             Assert.Equal(translationEnabled ? 2 : 0, pending.Count);
             if (translationEnabled)

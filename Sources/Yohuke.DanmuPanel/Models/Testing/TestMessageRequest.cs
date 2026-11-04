@@ -8,6 +8,8 @@ public sealed record TestMessageRequest
     public const int MAX_BATCH_COUNT = 500;
     public MessageKind Kind { get; init; }
     public string UserName { get; init; } = "";
+    public string MedalName { get; init; } = "";
+    public int MedalLevel { get; init; }
     public string Content { get; init; } = "";
     public string GiftName { get; init; } = "";
     public decimal UnitPrice { get; init; }
