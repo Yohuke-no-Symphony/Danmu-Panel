@@ -255,6 +255,11 @@ internal sealed class DanmuFeedScrollController : IDisposable
             try
             {
                 scrollViewer.UpdateLayout();
+                if (itemsControl.ContainerFromItem(anchorItem) is null && itemsControl.Items.Contains(anchorItem))
+                {
+                    itemsControl.ScrollIntoView(anchorItem);
+                    scrollViewer.UpdateLayout();
+                }
                 if (itemsControl.ContainerFromItem(anchorItem) is { } anchor &&
                     anchor.TranslatePoint(default, scrollViewer) is { } position)
                 {

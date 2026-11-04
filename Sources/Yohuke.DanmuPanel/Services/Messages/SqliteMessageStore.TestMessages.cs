@@ -7,7 +7,7 @@ public sealed partial class SqliteMessageStore
 {
     /// <inheritdoc />
     public Task<int> AppendTestMessagesAsync(IReadOnlyList<MessageRecord> messages, MessageReadOptions options,
-        CancellationToken cancellationToken = default)
+        string? translationFingerprint = null, CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(messages.Count, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(messages.Count, TestMessageRequest.MAX_BATCH_COUNT);
@@ -38,7 +38,19 @@ public sealed partial class SqliteMessageStore
                     Generation = generation, IsRead = false, IsPinned = false, PinnedAt = null,
                     HasBeenRead = false, ReadQuantity = 0, ReadTotalPrice = 0
                 };
-                WriteMessage(connection, transaction, record with { IsPriority = IsPriority(record, options) });
+                var shouldTranslate = translationFingerprint is not null &&
+                    record.Kind is MessageKind.Danmu or MessageKind.SuperChat &&
+                    (string.IsNullOrWhiteSpace(record.Translation) || record.TranslationFingerprint != translationFingerprint);
+                if (shouldTranslate)
+                {
+                    record = record with { Translation = null, TranslationFingerprint = translationFingerprint };
+                }
+                record = record with { IsPriority = IsPriority(record, options) };
+                WriteMessage(connection, transaction, record);
+                if (shouldTranslate)
+                {
+                    EnsureJob(connection, transaction, record, translationFingerprint!);
+                }
             }
             transaction.Commit();
             return snapshot.Length;

@@ -150,6 +150,7 @@ public sealed class FeedScrollStabilityTests
     [InlineData("insert")]
     [InlineData("height")]
     [InlineData("both")]
+    [InlineData("tall")]
     public void CollectionAndContentChangesPreserveVisibleAnchor(string change)
     {
         var (window, list, viewer, controller, items) = CreateFeed();
@@ -171,11 +172,12 @@ public sealed class FeedScrollStabilityTests
                         items.Insert(0, CreateItem($"new message {index}"));
                     }
                 }
-                if (change is "height" or "both")
+                if (change is "height" or "both" or "tall")
                 {
                     preceding.Update(preceding.Record with
                     {
-                        Content = string.Concat(Enumerable.Repeat("translated message with a taller wrapped body ", 12))
+                        Content = string.Concat(Enumerable.Repeat("translated message with a taller wrapped body ",
+                            change == "tall" ? 60 : 12))
                     }, new());
                 }
                 Pump(window);
@@ -183,6 +185,39 @@ public sealed class FeedScrollStabilityTests
                 Assert.InRange(Math.Abs(after.TranslatePoint(default, viewer)!.Value.Y - before), 0, 1);
                 AssertStable(window, viewer, viewer.Offset.Y);
                 Assert.False(controller.IsFollowingLatest);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+    }
+
+    /// <summary>默认无缓冲虚拟化中，批量插入使旧容器回收后仍定位同一消息。</summary>
+    [AvaloniaTheory]
+    [InlineData(4)]
+    [InlineData(50)]
+    [InlineData(500)]
+    public void DefaultVirtualizationPreservesAnchorAcrossPrependBatches(int count)
+    {
+        var (window, list, viewer, controller, items) = CreateFeed(0);
+        using (controller)
+        {
+            try
+            {
+                viewer.Offset = new(0, 650);
+                Pump(window);
+                var anchor = Assert.IsAssignableFrom<Control>(viewer.CurrentAnchor);
+                var item = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(anchor));
+                var before = anchor.TranslatePoint(default, viewer)!.Value.Y;
+                for (var index = 0; index < count; index++)
+                {
+                    items.Insert(0, CreateItem($"batch {index}"));
+                }
+                Pump(window);
+                var after = Assert.IsAssignableFrom<Control>(list.ContainerFromItem(item));
+                Assert.InRange(Math.Abs(after.TranslatePoint(default, viewer)!.Value.Y - before), 0, 1);
+                AssertStable(window, viewer, viewer.Offset.Y);
             }
             finally
             {
@@ -270,14 +305,14 @@ public sealed class FeedScrollStabilityTests
     }
 
     private static (Window Window, ListBox List, ScrollViewer Viewer, DanmuFeedScrollController Controller,
-        ObservableCollection<MessageItemViewModel> Items) CreateFeed()
+        ObservableCollection<MessageItemViewModel> Items) CreateFeed(double cacheLength = 1)
     {
         var items = new ObservableCollection<MessageItemViewModel>(
             Enumerable.Range(0, 200).Select(index => CreateItem($"message {index}")));
         var list = new ListBox
         {
             ItemsSource = items,
-            ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel { CacheLength = 1 }),
+            ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel { CacheLength = cacheLength }),
             ItemTemplate = new FuncDataTemplate<MessageItemViewModel>((_, _) =>
             {
                 var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap };

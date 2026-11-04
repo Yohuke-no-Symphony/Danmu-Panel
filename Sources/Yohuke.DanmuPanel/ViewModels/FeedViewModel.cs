@@ -123,7 +123,7 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
             {
                 var record = records[index];
                 var translationSettings = runtime.Configuration.Settings.Translation;
-                if (!record.IsTest && translationSettings.Enabled && record.Kind is MessageKind.Danmu or MessageKind.SuperChat)
+                if (translationSettings.Enabled && record.Kind is MessageKind.Danmu or MessageKind.SuperChat)
                 {
                     var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(translationSettings);
                     if (record.TranslationFingerprint != fingerprint && translationRequested.Add(record.Id + fingerprint))

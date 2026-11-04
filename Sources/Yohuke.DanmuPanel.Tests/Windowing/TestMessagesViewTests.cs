@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -17,12 +19,17 @@ namespace Yohuke.DanmuPanel.Tests.Windowing;
 public sealed class TestMessagesViewTests
 {
     /// <summary>未选择房间时禁用操作，四类型输入通过标题图标或同一右键命令写入并能定向清理。</summary>
-    [AvaloniaFact]
-    public async Task TestPanelCommandsGenerateAllKindsAndClearOnlyLocalTestRecords()
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TestPanelCommandsGenerateAllKindsAndClearOnlyLocalTestRecords(bool translationEnabled)
     {
         using var directory = new MessageStoreTestDirectory();
         var room = new RoomTabState { Id = "room", RoomId = "123", Name = "Test room" };
-        var configuration = new PanelConfiguration();
+        var configuration = new PanelConfiguration
+        {
+            Settings = new() { Translation = new() { Enabled = translationEnabled, Model = "test" } }
+        };
         await using var runtime = new PanelRuntime(new(directory.Path), configuration);
         var errors = new List<Exception>();
         using var view = new TestMessagesView(runtime, errors.Add);
@@ -63,6 +70,8 @@ public sealed class TestMessagesViewTests
             var superChats = await runtime.Messages.LoadPageAsync(room.Id, MessageKind.SuperChat, 0, 10);
             Assert.Equal(3, superChats.Count);
             Assert.All(superChats, row => Assert.Equal("handwritten translation", row.Translation));
+            Find<TextBox>(view, "TestTranslation").Text = "";
+            await view.AddSingleCommand.ExecuteAsync(null);
 
             kind.SelectedIndex = (int)MessageKind.Gift;
             Find<TextBox>(view, "TestGiftName").Text = "test gift";
@@ -73,9 +82,28 @@ public sealed class TestMessagesViewTests
 
             kind.SelectedIndex = (int)MessageKind.Guard;
             Find<ComboBox>(view, "TestGuardLevel").SelectedIndex = 0;
+            foreach (var theme in new[] { ThemeVariant.Dark, ThemeVariant.Light })
+            {
+                shell.RequestedThemeVariant = theme;
+                Pump(shell);
+                var expected = Assert.IsAssignableFrom<ISolidColorBrush>(shell.Foreground).Color;
+                foreach (var choice in new[] { kind, Find<ComboBox>(view, "TestGuardLevel") })
+                {
+                    var labels = choice.GetVisualDescendants().OfType<TextBlock>()
+                        .Where(label => !string.IsNullOrWhiteSpace(label.Text)).ToArray();
+                    Assert.NotEmpty(labels);
+                    Assert.All(labels, label => Assert.Equal(expected, ((ISolidColorBrush)label.Foreground!).Color));
+                }
+            }
             await view.AddSingleCommand.ExecuteAsync(null);
             Assert.Equal(1, Assert.Single(await runtime.Messages.LoadPageAsync(room.Id, MessageKind.Guard, 0, 10)).GuardLevel);
-            Assert.Empty(await runtime.Messages.GetPendingAsync(10));
+            var pending = await runtime.Messages.GetPendingAsync(10);
+            Assert.Equal(translationEnabled ? 2 : 0, pending.Count);
+            if (translationEnabled)
+            {
+                Assert.Single(pending, job => job.Priority == 0);
+                Assert.Single(pending, job => job.Priority == 1);
+            }
 
             await view.ClearCommand.ExecuteAsync(null);
             Assert.Equal("live", Assert.Single(await runtime.Messages.LoadPageAsync(room.Id, MessageKind.Danmu, 0, 10)).Id);
@@ -83,6 +111,7 @@ public sealed class TestMessagesViewTests
             {
                 Assert.Empty(await runtime.Messages.LoadPageAsync(room.Id, messageKind, 0, 10));
             }
+            Assert.Empty(await runtime.Messages.GetPendingAsync(10));
             view.SelectRoom(null);
             Assert.False(view.AddSingleCommand.CanExecute(null));
             Assert.Empty(errors);

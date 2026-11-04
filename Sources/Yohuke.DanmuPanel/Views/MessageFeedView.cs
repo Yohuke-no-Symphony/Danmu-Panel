@@ -111,12 +111,6 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions
         var state = BoundText(nameof(MessageItemViewModel.State));
         state.Margin = new Thickness(0, 0, 5, 0);
         identity.Children.Add(state);
-        var testMarker = Ui.Text("TestMessages.Marker");
-        testMarker.Classes.Add("muted");
-        testMarker.FontSize = 10;
-        testMarker.Margin = new Thickness(0, 0, 4, 0);
-        testMarker.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.IsTest)));
-        identity.Children.Add(testMarker);
         var medal = BoundText(nameof(MessageItemViewModel.MedalName));
         medal.Classes.Add("danmuMedalText");
         var level = BoundText(nameof(MessageItemViewModel.MedalLevel));
@@ -197,7 +191,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions
         }
         else
         {
-            layout.ColumnDefinitions = new("2*,3*");
+            layout.ColumnDefinitions = new(item.Record.Kind is MessageKind.Gift or MessageKind.Guard ? "3*,2*" : "2*,3*");
             layout.Children.Add(identity);
             Grid.SetColumn(body, 1);
             layout.Children.Add(body);
@@ -262,7 +256,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions
         }
         RefreshActivation();
         menu.Opened += (_, _) => RefreshActivation();
-        if (!item.Record.IsTest && item.Record.Kind is MessageKind.Danmu or MessageKind.SuperChat)
+        if (item.Record.Kind is MessageKind.Danmu or MessageKind.SuperChat)
         {
             var retry = AddAction(menu, "Panel.RetryTranslation", LucideIconKind.Languages, async () =>
             {
@@ -314,7 +308,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions
         if (record.Kind == MessageKind.Danmu)
         {
             var updated = await runtime.Messages.TogglePinAsync(record.Id);
-            if (updated?.IsPinned == true && !updated.IsTest && runtime.Configuration.Settings.Translation.Enabled)
+            if (updated?.IsPinned == true && runtime.Configuration.Settings.Translation.Enabled)
             {
                 await runtime.Messages.UpsertTranslationJobAsync(updated.Id, updated.Generation,
                     TranslationRequestFactory.GetConfigurationFingerprint(runtime.Configuration.Settings.Translation));

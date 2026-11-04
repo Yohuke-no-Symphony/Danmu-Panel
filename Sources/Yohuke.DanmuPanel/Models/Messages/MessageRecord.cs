@@ -15,7 +15,7 @@ public sealed record MessageRecord
     public bool HasSourceTimestamp { get; init; } = true;
     public bool IsHistory { get; init; }
 
-    /// <summary>标识仅用于本地界面验证的消息，不参与网络翻译及真实历史去重。</summary>
+    /// <summary>标识由测试面板生成的消息，供独立清理使用。</summary>
     public bool IsTest { get; init; }
 
     public long Generation { get; init; }

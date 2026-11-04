@@ -40,10 +40,11 @@ public sealed class PanelRuntime : IAsyncDisposable
         configuration.Accounts.CollectionChanged += OnAccountsChanged;
         var database = Path.Combine(configurationStore.DirectoryPath, "messages.db");
         Messages = new(database);
-        TestMessages = new(Messages, () => Configuration.Settings, roomId => Changed?.Invoke(roomId));
         translationCache = new(Path.Combine(configurationStore.DirectoryPath, "translation-cache.db"));
         translationService = new(new OpenAiCompatibleTranslationClient(translationHttp), translationCache);
         scheduler = new(Messages, translationService);
+        TestMessages = new(Messages, () => Configuration.Settings, roomId => Changed?.Invoke(roomId),
+            () => scheduler.NotifyWorkAvailable());
         scheduler.Completed += (_, args) => Changed?.Invoke(args.RoomTabId);
         scheduler.Error += ReportError;
         Emoticons = new(new AppDirectoryService(configurationStore.DirectoryPath));

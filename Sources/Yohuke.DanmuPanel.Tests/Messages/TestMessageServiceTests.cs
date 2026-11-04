@@ -9,32 +9,38 @@ using Xunit;
 
 namespace Yohuke.DanmuPanel.Tests.Messages;
 
-/// <summary>验证本地测试消息的持久化、网络隔离和定向删除。</summary>
+/// <summary>验证测试消息的持久化、自动翻译入队和定向删除。</summary>
 public sealed class TestMessageServiceTests
 {
-    /// <summary>四类消息使用真实存储与阅读规则，同时保留测试标记且不创建翻译任务。</summary>
+    /// <summary>四类消息使用真实存储与阅读规则，弹幕和 SC 仅在自动翻译开启时入队并通知调度器。</summary>
     [Theory]
-    [InlineData(MessageKind.Danmu)]
-    [InlineData(MessageKind.SuperChat)]
-    [InlineData(MessageKind.Gift)]
-    [InlineData(MessageKind.Guard)]
-    public async Task EveryMessageKindPersistsAndNeverQueuesNetworkTranslation(MessageKind kind)
+    [InlineData(MessageKind.Danmu, false)]
+    [InlineData(MessageKind.Danmu, true)]
+    [InlineData(MessageKind.SuperChat, false)]
+    [InlineData(MessageKind.SuperChat, true)]
+    [InlineData(MessageKind.Gift, false)]
+    [InlineData(MessageKind.Gift, true)]
+    [InlineData(MessageKind.Guard, false)]
+    [InlineData(MessageKind.Guard, true)]
+    public async Task EveryMessageKindUsesTheGlobalAutomaticTranslationSetting(MessageKind kind, bool enabled)
     {
         using var directory = new MessageStoreTestDirectory();
         var room = new RoomTabState { Id = "room", RoomId = "123", Name = "room" };
         var settings = new PanelSettings
         {
             Reading = new() { GiftAutoPinMinimum = 8 },
-            Translation = new() { Enabled = true, BaseUrl = "https://translation.invalid/v1", Model = "test", TargetLanguage = "ja-JP" }
+            Translation = new() { Enabled = enabled, BaseUrl = "https://translation.invalid/v1", Model = "test", TargetLanguage = "ja-JP" }
         };
         var changed = new List<string>();
+        var notifications = 0;
+        var shouldTranslate = enabled && kind is MessageKind.Danmu or MessageKind.SuperChat;
         await using (var store = new SqliteMessageStore(directory.DatabasePath))
         {
-            var service = new TestMessageService(store, () => settings, changed.Add);
+            var service = new TestMessageService(store, () => settings, changed.Add, () => notifications++);
             Assert.Equal(3, await service.AddAsync(room, new()
             {
                 Kind = kind, UserName = "viewer", Content = "test message", GiftName = "gift",
-                UnitPrice = 2, Quantity = 5, GuardLevel = 2, Count = 3, Translation = "manual translation"
+                UnitPrice = 2, Quantity = 5, GuardLevel = 2, Count = 3
             }));
             Assert.Equal(new[] { room.Id }, changed);
             var rows = await store.LoadPageAsync(room.Id, kind, 0, 10);
@@ -48,22 +54,62 @@ public sealed class TestMessageServiceTests
                 Assert.Equal(kind != MessageKind.Danmu, row.IsPriority);
                 Assert.Equal(kind is MessageKind.Gift or MessageKind.Guard ? 5 : 1, row.Quantity);
                 Assert.Equal(kind is MessageKind.Gift or MessageKind.Guard ? 10 : kind == MessageKind.SuperChat ? 2 : 0, row.TotalPrice);
-                if (kind is MessageKind.Danmu or MessageKind.SuperChat)
+                Assert.Null(row.Translation);
+                if (shouldTranslate)
                 {
-                    Assert.Equal("manual translation", row.Translation);
                     Assert.Equal(TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation), row.TranslationFingerprint);
                 }
+                else
+                {
+                    Assert.Null(row.TranslationFingerprint);
+                }
             });
-            Assert.Empty(await store.GetPendingAsync(10));
-            foreach (var row in rows)
+            var pending = await store.GetPendingAsync(10);
+            Assert.Equal(shouldTranslate ? 3 : 0, pending.Count);
+            Assert.Equal(shouldTranslate ? 1 : 0, notifications);
+            Assert.All(pending, job =>
             {
-                Assert.False(await store.UpsertTranslationJobAsync(row.Id, row.Generation, "new-configuration"));
-            }
-            Assert.Empty(await store.GetPendingAsync(10));
+                Assert.Equal("test message", job.Text);
+                Assert.Equal(kind == MessageKind.SuperChat ? 1 : 0, job.Priority);
+                Assert.Equal(TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation), job.ConfigurationFingerprint);
+            });
             Assert.Empty(await store.LoadRecentAsync(room.Id, kind, 10));
         }
         await using var reopened = new SqliteMessageStore(directory.DatabasePath);
         Assert.All(await reopened.LoadPageAsync(room.Id, kind, 0, 10), row => Assert.True(row.IsTest));
+        Assert.Equal(shouldTranslate ? 3 : 0, (await reopened.GetPendingAsync(10)).Count);
+    }
+
+    /// <summary>人工译文不重复请求模型；修改翻译配置后仍可通过普通入口重新排队。</summary>
+    [Theory]
+    [InlineData(MessageKind.Danmu, false)]
+    [InlineData(MessageKind.Danmu, true)]
+    [InlineData(MessageKind.SuperChat, false)]
+    [InlineData(MessageKind.SuperChat, true)]
+    public async Task ManualTranslationsRemainCompleteAndCanBeRequeuedWithNewSettings(MessageKind kind, bool enabled)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var store = new SqliteMessageStore(directory.DatabasePath);
+        var settings = new PanelSettings { Translation = new() { Enabled = enabled, Model = "test", TargetLanguage = "ja-JP" } };
+        var room = new RoomTabState { Id = "room", RoomId = "123" };
+        var notifications = 0;
+        var service = new TestMessageService(store, () => settings, _ => { }, () => notifications++);
+        await service.AddAsync(room, new()
+        {
+            Kind = kind, UserName = "viewer", Content = "source", Translation = "manual translation"
+        });
+        var record = Assert.Single(await store.LoadPageAsync(room.Id, kind, 0, 10));
+        var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation);
+        Assert.Equal("manual translation", record.Translation);
+        Assert.Equal(fingerprint, record.TranslationFingerprint);
+        Assert.Equal(0, notifications);
+        Assert.Empty(await store.GetPendingAsync(10));
+        Assert.False(await store.UpsertTranslationJobAsync(record.Id, record.Generation, fingerprint));
+        Assert.True(await store.UpsertTranslationJobAsync(record.Id, record.Generation, "new-configuration"));
+        var pending = Assert.Single(await store.GetPendingAsync(10));
+        Assert.Equal("new-configuration", pending.ConfigurationFingerprint);
+        Assert.True(await store.CompleteAsync(pending, "new translation"));
+        Assert.Equal("new translation", (await store.GetByIdAsync(record.Id))!.Translation);
     }
 
     /// <summary>清理当前房间测试数据保留真实消息、真实翻译任务、代次及其他房间测试数据。</summary>
@@ -75,7 +121,8 @@ public sealed class TestMessageServiceTests
         var room = new RoomTabState { Id = "room", RoomId = "123" };
         var other = new RoomTabState { Id = "other", RoomId = "456" };
         var changed = new List<string>();
-        var service = new TestMessageService(store, () => new(), changed.Add);
+        var settings = new PanelSettings { Translation = new() { Enabled = true, Model = "test" } };
+        var service = new TestMessageService(store, () => settings, changed.Add, () => { });
         var live = (await store.AppendAsync(new()
         {
             Id = "live", RoomTabId = room.Id, RoomId = room.RoomId, Content = "live message", MessageId = "source-live"
@@ -84,13 +131,20 @@ public sealed class TestMessageServiceTests
         var generation = await store.GetGenerationAsync(room.Id);
         await service.AddAsync(room, new() { UserName = "test", Content = "local", Count = 5 });
         await service.AddAsync(other, new() { UserName = "test", Content = "other", Count = 2 });
+        var beforeClear = await store.GetPendingAsync(100);
+        Assert.Equal(8, beforeClear.Count);
+        var removedJob = beforeClear.First(job => job.RoomTabId == room.Id && job.MessageId != live.Id);
         Assert.Equal(5, await service.ClearAsync(room));
         Assert.Equal(generation, await store.GetGenerationAsync(room.Id));
         var survivor = Assert.Single(await store.LoadPageAsync(room.Id, MessageKind.Danmu, 0, 100));
         Assert.Equal(live.Id, survivor.Id);
         Assert.True(survivor.IsPinned);
         Assert.False(survivor.IsTest);
-        Assert.Equal("live", Assert.Single(await store.GetPendingAsync(100)).MessageId);
+        var pending = await store.GetPendingAsync(100);
+        Assert.Equal(3, pending.Count);
+        Assert.Contains(pending, job => job.MessageId == "live");
+        Assert.Equal(2, pending.Count(job => job.RoomTabId == other.Id));
+        Assert.False(await store.CompleteAsync(removedJob, "late translation"));
         Assert.Equal(2, (await store.LoadPageAsync(other.Id, MessageKind.Danmu, 0, 100)).Count);
         Assert.Equal(new[] { room.Id, other.Id, room.Id }, changed);
         Assert.Equal(MessageAppendDisposition.Duplicate, (await store.AppendAsync(live with { Id = "duplicate" }, new())).Disposition);
@@ -102,7 +156,7 @@ public sealed class TestMessageServiceTests
     {
         using var directory = new MessageStoreTestDirectory();
         await using var store = new SqliteMessageStore(directory.DatabasePath);
-        var service = new TestMessageService(store, () => new(), _ => { });
+        var service = new TestMessageService(store, () => new(), _ => { }, () => { });
         var room = new RoomTabState { Id = "room", RoomId = "123" };
         var request = new TestMessageRequest { UserName = "viewer", Content = "batch", Count = 500 };
         Assert.Equal(500, await service.AddAsync(room, request));
@@ -110,7 +164,7 @@ public sealed class TestMessageServiceTests
         Assert.Equal(500, (await store.LoadPageAsync(room.Id, MessageKind.Danmu, 0, 1000)).Count);
     }
 
-    /// <summary>批量中途写入失败时整批回滚，不留下部分测试记录。</summary>
+    /// <summary>批量中途写入失败时消息和已创建的翻译任务一并回滚。</summary>
     [Fact]
     public async Task FailedBatchRollsBackEveryMessage()
     {
@@ -128,13 +182,14 @@ public sealed class TestMessageServiceTests
             new[] { "first", "reject", "last" }.Select(id => new MessageRecord
             {
                 Id = id, RoomTabId = "room", IsTest = true, Content = "test"
-            }).ToArray(), new()));
+            }).ToArray(), new(), "fingerprint"));
         Assert.Empty(await store.LoadPageAsync("room", MessageKind.Danmu, 0, 10));
+        Assert.Empty(await store.GetPendingAsync(10));
     }
 
-    /// <summary>普通入库入口即使显式携带测试标记和翻译配置，也不会安排真实请求。</summary>
+    /// <summary>普通入库入口携带测试标记时仍创建标准 SC 翻译任务。</summary>
     [Fact]
-    public async Task NormalAppendAlsoRejectsTranslationJobsForTestMessages()
+    public async Task NormalAppendUsesStandardTranslationJobsForTestMessages()
     {
         using var directory = new MessageStoreTestDirectory();
         await using var store = new SqliteMessageStore(directory.DatabasePath);
@@ -143,7 +198,10 @@ public sealed class TestMessageServiceTests
             RoomTabId = "room", Content = "test", IsTest = true, Kind = MessageKind.SuperChat
         }, new(), "fingerprint");
         Assert.NotNull(result.Record);
-        Assert.Empty(await store.GetPendingAsync(10));
+        var pending = Assert.Single(await store.GetPendingAsync(10));
+        Assert.Equal(result.Record.Id, pending.MessageId);
+        Assert.Equal("fingerprint", pending.ConfigurationFingerprint);
+        Assert.Equal(1, pending.Priority);
     }
 
     /// <summary>版本 1 数据库升级时将旧消息视为真实数据，保留正文、置顶和译文。</summary>

@@ -17,7 +17,6 @@ public sealed class MessageItemViewModel : ObservableObject
     private PanelSettings settings;
     private IReadOnlyList<DanmuEmoticon> emoticons = [];
     public MessageRecord Record { get; private set; }
-    public bool IsTest => Record.IsTest;
     public string Name => Record.UserName;
     public string NamePinyin => GetAnnotation(Name, settings.ShowUserPinyin);
     public bool HasNamePinyin => NamePinyin.Length > 0;

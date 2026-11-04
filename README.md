@@ -4,7 +4,7 @@
 
 ![工作台界面（演示消息）](Screenshots/1.png)
 
-界面预览：[工作区右键菜单](Screenshots/WorkspaceMenu.png) · [工作区设置](Screenshots/WorkspaceSettings.png) · [翻译设置](Screenshots/TranslationSettings.png)
+界面预览：[工作区右键菜单](Screenshots/WorkspaceMenu.png) · [工作区设置](Screenshots/WorkspaceSettings.png) · [翻译设置](Screenshots/TranslationSettings.png) · [测试面板](Screenshots/TestMessages.png)
 
 ## 阅读工作台
 
@@ -62,7 +62,7 @@
 
 ## 开发与测试
 
-测试面板向当前选中的房间添加带「测试」标记的本地弹幕、SC、礼物或上舰消息。可填写正文、人工译文、金额、数量及上舰等级，使用标题栏图标或右键菜单添加单条、批量添加（最多 500 条）或清除当前房间测试消息。批量用户名附序号，便于检查滚动位置；测试消息不发送到 B 站、不请求翻译 API，清理测试消息保留真实消息。
+测试面板向当前选中的房间添加本地弹幕、SC、礼物或上舰消息，直接使用各类消息的现有布局。可填写正文、人工译文、金额、数量及上舰等级，使用标题栏图标或右键菜单添加单条、批量添加（最多 500 条）或清除当前房间测试消息。批量用户名附序号，便于检查滚动位置；测试消息不发送到 B 站。弹幕和 SC 按当前自动翻译设置进入同一翻译队列，复用优先级、缓存和请求合并；填写人工译文时直接显示该译文。清理测试消息及其翻译任务时保留真实消息。
 
 需要 .NET SDK 10。
 

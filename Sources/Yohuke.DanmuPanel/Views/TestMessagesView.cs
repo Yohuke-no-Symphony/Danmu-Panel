@@ -282,12 +282,8 @@ public sealed class TestMessagesView : UserControl, IWorkbenchHeaderActions, IDi
         return new()
         {
             Name = name, HorizontalAlignment = HorizontalAlignment.Stretch,
-            ItemsSource = keys.Select(key =>
-            {
-                var item = new ComboBoxItem();
-                item.Bind(ContentControl.ContentProperty, Localization.Observe(key));
-                return item;
-            }).ToArray(),
+            ItemsSource = keys,
+            ItemTemplate = new FuncDataTemplate<string>((key, _) => key is null ? new TextBlock() : Ui.Text(key)),
             SelectedIndex = selected
         };
     }

@@ -15,7 +15,7 @@ public sealed partial class SqliteMessageStore
         {
             using var transaction = connection.BeginTransaction();
             var record = ReadMessage(connection, transaction, id);
-            if (record is null || record.IsTest || record.Generation != generation ||
+            if (record is null || record.Generation != generation ||
                 record.Kind is not (MessageKind.Danmu or MessageKind.SuperChat) ||
                 (record.TranslationFingerprint == fingerprint && record.Translation is not null))
             {
@@ -155,11 +155,6 @@ public sealed partial class SqliteMessageStore
 
     private static void EnsureJob(SqliteConnection connection, SqliteTransaction transaction, MessageRecord record, string fingerprint)
     {
-        if (record.IsTest)
-        {
-            return;
-        }
-
         var job = new TranslationJob
         {
             Id = record.Id,
