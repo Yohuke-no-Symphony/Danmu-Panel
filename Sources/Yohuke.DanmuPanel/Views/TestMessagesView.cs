@@ -41,6 +41,7 @@ public sealed class TestMessagesView : UserControl, IWorkbenchHeaderActions, IDi
     private readonly NumericUpDown quantity = new() { Name = "TestQuantity", Minimum = 1, Maximum = 1000000, Value = 1, FormatString = "0" };
     private readonly NumericUpDown batchCount = new() { Name = "TestBatchCount", Minimum = 1, Maximum = TestMessageRequest.MAX_BATCH_COUNT, Value = 100, FormatString = "0" };
     private readonly ComboBox guardLevel;
+    private readonly Control medalFields;
     private readonly Control textFields;
     private readonly Control giftField;
     private readonly Control priceField;
@@ -100,6 +101,14 @@ public sealed class TestMessagesView : UserControl, IWorkbenchHeaderActions, IDi
             Name = "TestTranslation", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap,
             MinHeight = 54, MaxHeight = 120
         };
+        medalFields = new StackPanel
+        {
+            Children =
+            {
+                Ui.Field("TestMessages.MedalName", medalName), Ui.Field("TestMessages.MedalLevel", medalLevel),
+                Ui.Field("TestMessages.MedalGuardLevel", medalGuardLevel)
+            }
+        };
         textFields = new StackPanel
         {
             Children = { Ui.Field("TestMessages.Content", messageContent), Ui.Field("TestMessages.Translation", translation) }
@@ -117,9 +126,7 @@ public sealed class TestMessagesView : UserControl, IWorkbenchHeaderActions, IDi
             Children =
             {
                 target, help, Ui.Field("TestMessages.Kind", kind), Ui.Field("TestMessages.UserName", userName),
-                Ui.Field("TestMessages.MedalName", medalName), Ui.Field("TestMessages.MedalLevel", medalLevel),
-                Ui.Field("TestMessages.MedalGuardLevel", medalGuardLevel),
-                textFields, giftField, priceField, quantityField, guardField,
+                medalFields, textFields, giftField, priceField, quantityField, guardField,
                 Ui.Field("TestMessages.BatchCount", batchCount), status
             }
         };
@@ -257,6 +264,7 @@ public sealed class TestMessagesView : UserControl, IWorkbenchHeaderActions, IDi
     private void RefreshFields()
     {
         var selected = (MessageKind)kind.SelectedIndex;
+        medalFields.IsVisible = selected == MessageKind.Danmu;
         textFields.IsVisible = selected is MessageKind.Danmu or MessageKind.SuperChat;
         giftField.IsVisible = selected == MessageKind.Gift;
         priceField.IsVisible = selected != MessageKind.Danmu;

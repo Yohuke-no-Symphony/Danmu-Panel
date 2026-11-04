@@ -96,7 +96,7 @@ public sealed class TestMessagesViewTests
                 shell.RequestedThemeVariant = theme;
                 Pump(shell);
                 var expected = Assert.IsAssignableFrom<ISolidColorBrush>(shell.Foreground).Color;
-                foreach (var choice in new[] { kind, Find<ComboBox>(view, "TestGuardLevel"), Find<ComboBox>(view, "TestMedalGuardLevel") })
+                foreach (var choice in new[] { kind, Find<ComboBox>(view, "TestGuardLevel") })
                 {
                     var labels = choice.GetVisualDescendants().OfType<TextBlock>()
                         .Where(label => !string.IsNullOrWhiteSpace(label.Text)).ToArray();
@@ -113,8 +113,8 @@ public sealed class TestMessagesViewTests
                 Assert.NotEmpty(records);
                 Assert.All(records, record =>
                 {
-                    Assert.Equal("测试粉丝牌", record.MedalName);
-                    Assert.Equal(28, record.MedalLevel);
+                    Assert.Equal(messageKind == MessageKind.Danmu ? "测试粉丝牌" : "", record.MedalName);
+                    Assert.Equal(messageKind == MessageKind.Danmu ? 28 : 0, record.MedalLevel);
                 });
             }
             var pending = await runtime.Messages.GetPendingAsync(10);
@@ -144,13 +144,13 @@ public sealed class TestMessagesViewTests
         }
     }
 
-    /// <summary>四种大航海身份应用于全部消息类型，批量生成与重新读取保留粉丝牌边框。</summary>
+    /// <summary>粉丝牌输入仅在弹幕显示，批量生成与重新读取只为弹幕保留粉丝牌身份和边框。</summary>
     [AvaloniaTheory]
     [InlineData(0, 0, "Transparent")]
     [InlineData(1, 3, "#4F8FDD")]
     [InlineData(2, 2, "#A46EE8")]
     [InlineData(3, 1, "#E9A23B")]
-    public async Task MembershipSelectionAppliesToAllMessageKinds(int selectedIndex, int expectedLevel, string expectedColor)
+    public async Task MembershipSelectionAppliesOnlyToDanmu(int selectedIndex, int expectedLevel, string expectedColor)
     {
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = new PanelRuntime(new(directory.Path), new());
@@ -173,7 +173,10 @@ public sealed class TestMessagesViewTests
             foreach (var messageKind in Enum.GetValues<MessageKind>())
             {
                 Find<ComboBox>(view, "TestKind").SelectedIndex = (int)messageKind;
-                Assert.True(membership.IsEffectivelyVisible);
+                var supportsMedal = messageKind == MessageKind.Danmu;
+                Assert.Equal(supportsMedal, membership.IsEffectivelyVisible);
+                Assert.Equal(supportsMedal, Find<TextBox>(view, "TestMedalName").IsEffectivelyVisible);
+                Assert.Equal(supportsMedal, Find<NumericUpDown>(view, "TestMedalLevel").IsEffectivelyVisible);
                 await view.AddBatchCommand.ExecuteAsync(null);
             }
             await using var reopened = new SqliteMessageStore(directory.DatabasePath);
@@ -183,11 +186,15 @@ public sealed class TestMessagesViewTests
                 Assert.Equal(2, records.Count);
                 Assert.All(records, record =>
                 {
-                    Assert.Equal(expectedLevel, record.MedalGuardLevel);
+                    var supportsMedal = messageKind == MessageKind.Danmu;
+                    Assert.Equal(supportsMedal ? "粉丝牌" : "", record.MedalName);
+                    Assert.Equal(supportsMedal ? 20 : 0, record.MedalLevel);
+                    Assert.Equal(supportsMedal ? expectedLevel : 0, record.MedalGuardLevel);
                     Assert.Equal(messageKind == MessageKind.Guard ? 2 : 0, record.GuardLevel);
                     var item = new MessageItemViewModel(record, runtime.Configuration.Settings, runtime.Pinyin);
-                    Assert.True(item.HasMedal);
-                    Assert.Equal(Color.Parse(expectedColor), Assert.IsAssignableFrom<ISolidColorBrush>(item.MedalBorderBrush).Color);
+                    Assert.Equal(supportsMedal, item.HasMedal);
+                    Assert.Equal(Color.Parse(supportsMedal ? expectedColor : "Transparent"),
+                        Assert.IsAssignableFrom<ISolidColorBrush>(item.MedalBorderBrush).Color);
                 });
             }
         }

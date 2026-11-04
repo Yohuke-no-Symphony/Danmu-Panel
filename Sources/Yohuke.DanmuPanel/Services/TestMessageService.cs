@@ -56,7 +56,7 @@ public sealed class TestMessageService
 
         var settings = getSettings();
         var medalName = request.MedalName.Trim();
-        var hasMedal = medalName.Length > 0 && request.MedalLevel > 0;
+        var hasMedal = request.Kind == MessageKind.Danmu && medalName.Length > 0 && request.MedalLevel > 0;
         var quantity = request.Kind is MessageKind.Gift or MessageKind.Guard ? request.Quantity : 1;
         var hasText = request.Kind is MessageKind.Danmu or MessageKind.SuperChat;
         var translation = hasText && !string.IsNullOrWhiteSpace(request.Translation) ? request.Translation : null;
@@ -73,7 +73,7 @@ public sealed class TestMessageService
             UserName = request.Count > 1 ? $"{request.UserName.Trim()} · {index + 1}" : request.UserName.Trim(),
             MedalName = hasMedal ? medalName : "",
             MedalLevel = hasMedal ? request.MedalLevel : 0,
-            MedalGuardLevel = request.MedalGuardLevel,
+            MedalGuardLevel = request.Kind == MessageKind.Danmu ? request.MedalGuardLevel : 0,
             Content = hasText ? request.Content : "",
             Time = now.AddMilliseconds(index - request.Count + 1),
             GiftName = request.Kind == MessageKind.Gift ? request.GiftName.Trim() : "",

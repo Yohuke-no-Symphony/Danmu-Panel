@@ -118,7 +118,7 @@ public sealed class MessageTextScaleTests
             .Where(text => text.Classes.Contains("danmuMedalText")).ToArray();
         var medalSlots = row.GetVisualDescendants().OfType<Grid>()
             .Where(control => control.Classes.Contains("danmuMedalSlot")).ToArray();
-        if (kind == MessageKind.SuperChat)
+        if (kind != MessageKind.Danmu)
         {
             Assert.Empty(medalText);
             Assert.Empty(medalSlots);

@@ -34,6 +34,7 @@ public sealed class TestMessageServiceTests
         var changed = new List<string>();
         var notifications = 0;
         var shouldTranslate = enabled && kind is MessageKind.Danmu or MessageKind.SuperChat;
+        var supportsMedal = kind == MessageKind.Danmu;
         await using (var store = new SqliteMessageStore(directory.DatabasePath))
         {
             var service = new TestMessageService(store, () => settings, changed.Add, () => notifications++);
@@ -41,7 +42,7 @@ public sealed class TestMessageServiceTests
             {
                 Kind = kind, UserName = "viewer", Content = "test message", GiftName = "gift",
                 UnitPrice = 2, Quantity = 5, GuardLevel = 2, Count = 3,
-                MedalName = " 测试粉丝牌 ", MedalLevel = 28
+                MedalName = " 测试粉丝牌 ", MedalLevel = 28, MedalGuardLevel = 2
             }));
             Assert.Equal(new[] { room.Id }, changed);
             var rows = await store.LoadPageAsync(room.Id, kind, 0, 10);
@@ -52,8 +53,9 @@ public sealed class TestMessageServiceTests
             {
                 Assert.True(row.IsTest);
                 Assert.Equal(room.RoomId, row.RoomId);
-                Assert.Equal("测试粉丝牌", row.MedalName);
-                Assert.Equal(28, row.MedalLevel);
+                Assert.Equal(supportsMedal ? "测试粉丝牌" : "", row.MedalName);
+                Assert.Equal(supportsMedal ? 28 : 0, row.MedalLevel);
+                Assert.Equal(supportsMedal ? 2 : 0, row.MedalGuardLevel);
                 Assert.Equal(kind != MessageKind.Danmu, row.IsPriority);
                 Assert.Equal(kind is MessageKind.Gift or MessageKind.Guard ? 5 : 1, row.Quantity);
                 Assert.Equal(kind is MessageKind.Gift or MessageKind.Guard ? 10 : kind == MessageKind.SuperChat ? 2 : 0, row.TotalPrice);
@@ -82,8 +84,9 @@ public sealed class TestMessageServiceTests
         Assert.All(await reopened.LoadPageAsync(room.Id, kind, 0, 10), row =>
         {
             Assert.True(row.IsTest);
-            Assert.Equal("测试粉丝牌", row.MedalName);
-            Assert.Equal(28, row.MedalLevel);
+            Assert.Equal(supportsMedal ? "测试粉丝牌" : "", row.MedalName);
+            Assert.Equal(supportsMedal ? 28 : 0, row.MedalLevel);
+            Assert.Equal(supportsMedal ? 2 : 0, row.MedalGuardLevel);
         });
         Assert.Equal(shouldTranslate ? 3 : 0, (await reopened.GetPendingAsync(10)).Count);
     }

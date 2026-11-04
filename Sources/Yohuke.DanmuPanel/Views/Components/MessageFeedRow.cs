@@ -23,7 +23,7 @@ internal sealed class MessageFeedRow : Button
         time.Classes.Add("danmuFeedMeta");
         DockPanel.SetDock(time, Avalonia.Controls.Dock.Right);
         identity.Children.Add(time);
-        if (kind != MessageKind.SuperChat)
+        if (kind == MessageKind.Danmu)
         {
             var medal = BoundText(nameof(MessageItemViewModel.MedalName));
             medal.Classes.Add("danmuMedalText");
