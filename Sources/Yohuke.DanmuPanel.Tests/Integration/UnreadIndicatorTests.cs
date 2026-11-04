@@ -168,7 +168,7 @@ public sealed class UnreadIndicatorTests
             AssertBadge(badge, "105");
             var title = Assert.Single(badge.GetVisualAncestors().OfType<Grid>().First().GetVisualDescendants().OfType<TextBlock>(), text => text.Name == "PART_Title");
             Assert.True(badge.TranslatePoint(default, title)!.Value.X >= title.Bounds.Width);
-            var first = view.Model.ScrollingItems[0];
+            var first = view.Model.ScrollingItems[^1];
             FindRow(view, first.Record.Id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             for (var attempt = 0; attempt < 100 && !first.Record.IsRead; attempt++)
             {

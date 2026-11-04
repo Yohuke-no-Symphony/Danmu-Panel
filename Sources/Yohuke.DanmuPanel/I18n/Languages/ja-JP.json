@@ -119,7 +119,7 @@
     "Panel.AddAccountManually": "アカウントを手動追加",
     "Panel.AddRoom": "ルームを追加",
     "Panel.AddWorkspace": "ワークスペースを追加",
-    "Panel.BackToTop": "先頭に戻る",
+    "Panel.BackToLatest": "最新に戻る",
     "Panel.BrowserLogin": "ブラウザーでログイン",
     "Panel.Cancel": "キャンセル",
     "Panel.ClearAllConfirm": "すべてのワークスペース・ルームのメッセージ履歴を消去しますか？アカウント・設定・レイアウトは保持されます。この操作は取り消せません。",

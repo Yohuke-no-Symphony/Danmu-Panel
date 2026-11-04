@@ -26,7 +26,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     private DanmuFeedScrollController? scroll;
     public FeedViewModel Model { get; }
 
-    /// <summary>为每个停靠或浮动宿主创建独立的回顶图标按钮。</summary>
+    /// <summary>为每个停靠或浮动宿主创建独立的回到最新图标按钮。</summary>
     public IDataTemplate HeaderActionsTemplate { get; }
 
     /// <inheritdoc />
@@ -47,7 +47,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         list.DetachedFromVisualTree += (_, _) => { scroll?.Dispose(); scroll = null; };
         HeaderActionsTemplate = new FuncDataTemplate<MessageFeedView>((_, _) =>
         {
-            var button = Ui.IconButton("Panel.BackToTop", LucideIconKind.ArrowUpToLine, ScrollToLatestAsync, reportError);
+            var button = Ui.IconButton("Panel.BackToLatest", LucideIconKind.ArrowDownToLine, ScrollToLatestAsync, reportError);
             button.Classes.Add("dockChromeButton");
             if (kind == MessageKind.Danmu)
             {
@@ -327,7 +327,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     private void AddPanelActions(LocalizedContextMenu menu)
     {
         AddAction(menu, "Panel.MoreHistory", LucideIconKind.History, Model.LoadMoreAsync);
-        AddAction(menu, "Panel.BackToTop", LucideIconKind.ArrowUpToLine, ScrollToLatestAsync);
+        AddAction(menu, "Panel.BackToLatest", LucideIconKind.ArrowDownToLine, ScrollToLatestAsync);
     }
 
     private MenuItem AddAction(LocalizedContextMenu menu, string key, LucideIconKind icon, Func<Task> action)
@@ -375,8 +375,14 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     {
         if (Model.ScrollingItems.Count > 0)
         {
-            scroll?.ScrollToLatest();
-            list.ScrollIntoView(Model.ScrollingItems[0]);
+            if (scroll is not null)
+            {
+                scroll.ScrollToLatest();
+            }
+            else
+            {
+                list.ScrollIntoView(Model.ScrollingItems[^1]);
+            }
         }
         if (Model.PinnedItems.Count > 0)
         {

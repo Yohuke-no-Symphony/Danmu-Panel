@@ -85,8 +85,8 @@ public sealed class PinnedFeedTests
 
             Assert.Empty(view.Model.PinnedItems);
             Assert.Equal(2, view.Model.ScrollingItems.Count);
-            Assert.Same(normalItem, view.Model.ScrollingItems[0]);
-            Assert.Same(targetItem, view.Model.ScrollingItems[1]);
+            Assert.Same(targetItem, view.Model.ScrollingItems[0]);
+            Assert.Same(normalItem, view.Model.ScrollingItems[1]);
             Assert.False(view.Model.HasPinnedItems);
             if (kind != MessageKind.Danmu)
             {
@@ -127,7 +127,7 @@ public sealed class PinnedFeedTests
             var before = pinnedRow.TranslatePoint(new Point(0, 0), window)!.Value;
             var pinnedOffset = pinnedViewer.Offset;
 
-            normalList.ScrollIntoView(view.Model.ScrollingItems.Last());
+            normalList.ScrollIntoView(view.Model.ScrollingItems[10]);
             Pump(window);
 
             Assert.True(normalViewer.Offset.Y > 0);
@@ -227,7 +227,7 @@ public sealed class PinnedFeedTests
             Assert.DoesNotContain(view.GetVisualDescendants().OfType<ListBox>(),
                 value => value.Name == "PinnedMessages" && value.IsEffectivelyVisible);
 
-            list.ScrollIntoView(view.Model.ScrollingItems.Last());
+            list.ScrollIntoView(view.Model.ScrollingItems[20]);
             Pump(window);
 
             Assert.True(viewer.Offset.Y > 0);
@@ -272,7 +272,7 @@ public sealed class PinnedFeedTests
         Assert.All(model.ScrollingItems.Take(105), item => Assert.False(item.Record.IsRead));
         Assert.All(model.ScrollingItems.Skip(105), item => Assert.True(item.Record.IsRead));
         Assert.Equal(205, model.Items.Count);
-        var oldest = model.ScrollingItems.Last();
+        var oldest = model.ScrollingItems.First(item => !item.Record.IsPriority);
         model.IsReadingHistory = true;
         var incoming = Message(kind, 1000);
         await runtime.Messages.AppendAsync(incoming, new());
@@ -282,7 +282,7 @@ public sealed class PinnedFeedTests
 
         Assert.Equal(106, model.ScrollingItems.Count(item => item.Record.IsPriority));
         Assert.Equal(101, model.ScrollingItems.Count(item => !item.Record.IsPriority));
-        Assert.Same(oldest, model.ScrollingItems.Last());
+        Assert.Same(oldest, model.ScrollingItems.First(item => !item.Record.IsPriority));
 
         await model.LoadMoreAsync();
 
@@ -308,11 +308,11 @@ public sealed class PinnedFeedTests
             Pump(window);
             Assert.Equal(100, view.Model.ScrollingItems.Count);
             var initial = view.Model.ScrollingItems.ToArray();
-            var oldest = initial[^1];
+            var oldest = initial[0];
             var normalList = FindList(view, "ScrollingMessages");
             normalList.ScrollIntoView(oldest);
             Pump(window);
-            Assert.True(FindScroll(normalList).Offset.Y > 0);
+            Assert.Equal(0, FindScroll(normalList).Offset.Y);
             Assert.True(view.Model.IsReadingHistory);
 
             await runtime.Messages.AppendAsync(Message(MessageKind.Danmu, 1000), new());
@@ -320,10 +320,10 @@ public sealed class PinnedFeedTests
             Pump(window);
 
             Assert.Equal(101, view.Model.ScrollingItems.Count);
-            Assert.Same(oldest, view.Model.ScrollingItems.Last());
+            Assert.Same(oldest, view.Model.ScrollingItems[0]);
             Assert.All(initial, item => Assert.Same(item,
                 view.Model.ScrollingItems.Single(current => current.Record.Id == item.Record.Id)));
-            Assert.True(FindScroll(normalList).Offset.Y > 0);
+            Assert.Equal(0, FindScroll(normalList).Offset.Y);
 
             await view.Model.LoadMoreAsync();
             Pump(window);
@@ -341,7 +341,7 @@ public sealed class PinnedFeedTests
         }
     }
 
-    /// <summary>停留顶部跟随消息时仍保持一页，旧条目不会因持续接收无限累积。</summary>
+    /// <summary>停留底部跟随消息时仍保持一页，旧条目不会因持续接收无限累积。</summary>
     [AvaloniaFact]
     public async Task FollowingLatestKeepsNormalWindowAtOneHundred()
     {
@@ -350,15 +350,15 @@ public sealed class PinnedFeedTests
         await AppendDanmuAsync(runtime, 0, 120);
         using var model = new FeedViewModel(runtime, MessageKind.Danmu);
         await model.SelectRoomAsync(Room());
-        var first = model.ScrollingItems[0];
-        var oldest = model.ScrollingItems.Last();
+        var latest = model.ScrollingItems[^1];
+        var oldest = model.ScrollingItems.First(item => !item.Record.IsPriority);
         Assert.False(model.IsReadingHistory);
 
         await runtime.Messages.AppendAsync(Message(MessageKind.Danmu, 1000), new());
         await model.RefreshAsync();
 
         Assert.Equal(100, model.ScrollingItems.Count);
-        Assert.Same(first, model.ScrollingItems[1]);
+        Assert.Same(latest, model.ScrollingItems[^2]);
         Assert.DoesNotContain(oldest, model.ScrollingItems);
     }
 

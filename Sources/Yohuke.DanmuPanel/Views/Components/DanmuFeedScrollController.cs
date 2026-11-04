@@ -6,11 +6,10 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
-/// <summary>管理顶部跟随，并仅在消息内容改变时按条目身份保留阅读位置。</summary>
+/// <summary>管理底部跟随，并在渲染前按条目身份保留阅读位置。</summary>
 internal sealed class DanmuFeedScrollController : IDisposable
 {
     private const double LATEST_OFFSET_THRESHOLD = 1;
@@ -45,7 +44,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
         scrollViewer.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel, true);
     }
 
-    /// <summary>切换消息集合并从顶部开始阅读；空集合解除监听。</summary>
+    /// <summary>切换消息集合并从底部开始阅读；空集合解除监听。</summary>
     public void Attach(INotifyCollectionChanged? collection)
     {
         ObjectDisposedException.ThrowIf(isDisposed, this);
@@ -69,7 +68,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
         }
     }
 
-    /// <summary>立即回顶并恢复随后新消息的顶部跟随。</summary>
+    /// <summary>立即回到底部并恢复随后新消息的跟随。</summary>
     public void ScrollToLatest()
     {
         ObjectDisposedException.ThrowIf(isDisposed, this);
@@ -134,7 +133,15 @@ internal sealed class DanmuFeedScrollController : IDisposable
 
     private void OnLayoutUpdated(object? sender, EventArgs e)
     {
-        if (items is not null && !isUpdatingScroll && !isAnchorCorrectionPending)
+        if (items is null || isUpdatingScroll || isAnchorCorrectionPending)
+        {
+            return;
+        }
+        if (isFollowingLatest && !IsAtLatest())
+        {
+            QueueFollowLatest();
+        }
+        else
         {
             CaptureReadingAnchor();
         }
@@ -146,7 +153,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
         {
             CancelPendingFollow();
             readingItem = null;
-            SetFollowingLatest(scrollViewer.Offset.Y <= LATEST_OFFSET_THRESHOLD);
+            SetFollowingLatest(IsAtLatest());
         }
     }
 
@@ -187,7 +194,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
         isUpdatingScroll = true;
         try
         {
-            scrollViewer.Offset = new(scrollViewer.Offset.X, 0);
+            MoveToLatest();
         }
         finally
         {
@@ -201,6 +208,22 @@ internal sealed class DanmuFeedScrollController : IDisposable
         session++;
         isFollowPending = false;
         isAnchorCorrectionPending = false;
+    }
+
+    private bool IsAtLatest()
+    {
+        return scrollViewer.ScrollBarMaximum.Y - scrollViewer.Offset.Y <= LATEST_OFFSET_THRESHOLD;
+    }
+
+    private void MoveToLatest()
+    {
+        if (itemsControl.Items.Count > 0)
+        {
+            itemsControl.ScrollIntoView(itemsControl.Items[^1]!);
+            scrollViewer.UpdateLayout();
+        }
+        scrollViewer.ScrollToEnd();
+        scrollViewer.UpdateLayout();
     }
 
     private void SetFollowingLatest(bool value)
@@ -280,7 +303,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
                     CaptureReadingAnchor();
                 }
             }
-        }, DispatcherPriority.Background);
+        }, DispatcherPriority.Normal);
     }
 
     private void ObserveItems(IEnumerable? values)
@@ -342,7 +365,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
                 scrollViewer.UpdateLayout();
                 if (requestedSession == session && !isDisposed && items is not null && isFollowingLatest)
                 {
-                    scrollViewer.Offset = new(scrollViewer.Offset.X, 0);
+                    MoveToLatest();
                 }
             }
             finally
@@ -353,6 +376,6 @@ internal sealed class DanmuFeedScrollController : IDisposable
                     isFollowPending = false;
                 }
             }
-        }, DispatcherPriority.Background);
+        }, DispatcherPriority.Normal);
     }
 }

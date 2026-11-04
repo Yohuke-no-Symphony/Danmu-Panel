@@ -50,7 +50,7 @@ public sealed class MessageFeedInteractionTests
             FindRow(view, older.Id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await WaitUntilAsync(async () => !(await runtime.Messages.GetByIdAsync(older.Id))!.IsPinned);
             await view.Model.RefreshAsync();
-            Assert.Equal(newer.Id, view.Model.Items[0].Record.Id);
+            Assert.Equal(older.Id, view.Model.Items[0].Record.Id);
             Assert.Null(error);
         }
         finally
@@ -167,7 +167,7 @@ public sealed class MessageFeedInteractionTests
             var action = Assert.IsType<MenuItem>(menu.Items[0]);
             Assert.IsType<LucideIcon>(action.Icon);
             Assert.Contains(menu.Items.OfType<MenuItem>(), item => Equals(item.Header, Localization.Get("Panel.MoreHistory")));
-            Assert.Contains(menu.Items.OfType<MenuItem>(), item => Equals(item.Header, Localization.Get("Panel.BackToTop")));
+            Assert.Contains(menu.Items.OfType<MenuItem>(), item => Equals(item.Header, Localization.Get("Panel.BackToLatest")));
             action.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             await WaitUntilAsync(async () =>
             {
@@ -201,12 +201,12 @@ public sealed class MessageFeedInteractionTests
             var second = Assert.IsType<Button>(view.HeaderActionsTemplate.Build(view));
             Assert.NotSame(first, second);
             Assert.Contains("iconButton", first.Classes);
-            Assert.Equal(LucideIconKind.ArrowUpToLine, Assert.IsType<LucideIcon>(first.Content).Kind);
+            Assert.Equal(LucideIconKind.ArrowDownToLine, Assert.IsType<LucideIcon>(first.Content).Kind);
             foreach (var language in new[] { "en-US", "ja-JP", "zh-CN" })
             {
                 Localization.SetLanguage(language);
-                Assert.Equal(Localization.Get("Panel.BackToTop"), ToolTip.GetTip(first));
-                Assert.Equal(Localization.Get("Panel.BackToTop"), AutomationProperties.GetName(first));
+                Assert.Equal(Localization.Get("Panel.BackToLatest"), ToolTip.GetTip(first));
+                Assert.Equal(Localization.Get("Panel.BackToLatest"), AutomationProperties.GetName(first));
                 Assert.IsType<LucideIcon>(first.Content);
             }
         }
@@ -244,7 +244,7 @@ public sealed class MessageFeedInteractionTests
             var more = Assert.IsType<MenuItem>(list.ContextMenu!.Items[0]);
             more.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             await WaitUntilAsync(() => Task.FromResult(view.Model.Items.Count == 105));
-            Assert.Same(first, view.Model.Items[0]);
+            Assert.Same(first, view.Model.Items[5]);
         }
         finally
         {

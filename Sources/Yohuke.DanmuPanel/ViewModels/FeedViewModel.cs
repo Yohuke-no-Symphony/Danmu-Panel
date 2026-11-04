@@ -133,7 +133,7 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
         try
         {
             var snapshot = await runtime.Messages.LoadFeedAsync(current.Id, kind, limit,
-                IsReadingHistory ? ScrollingItems.LastOrDefault(item => !item.Record.IsPriority)?.Record.Id : null,
+                IsReadingHistory ? ScrollingItems.FirstOrDefault(item => !item.Record.IsPriority)?.Record.Id : null,
                 cancellationToken);
             if (disposed || version != revision || cancellationToken.IsCancellationRequested)
             {

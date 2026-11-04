@@ -27,6 +27,71 @@ public sealed class FeedScrollStabilityTests
 {
     private static readonly IPinyinService pinyin = new PinyinService();
 
+    /// <summary>首次连接与底部追加在渲染前完成跟随，内容变高后仍贴住最新位置。</summary>
+    [AvaloniaFact]
+    public void LatestPositionIsResolvedBeforeRendering()
+    {
+        var (window, list, viewer, controller, items) = CreateFeed(startAtLatest: true);
+        using (controller)
+        {
+            try
+            {
+                AssertAtLatest(viewer);
+                Assert.True(controller.IsFollowingLatest);
+                for (var index = 0; index < 50; index++)
+                {
+                    items.Add(CreateItem($"arrived {index}"));
+                }
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+                window.UpdateLayout();
+                AssertAtLatest(viewer);
+                Assert.NotNull(list.ContainerFromItem(items[^1]));
+
+                var last = items[^1];
+                last.Update(last.Record with { Content = string.Concat(Enumerable.Repeat("a taller translated body ", 40)) }, new());
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+                window.UpdateLayout();
+                AssertAtLatest(viewer);
+                Assert.True(controller.IsFollowingLatest);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+    }
+
+    /// <summary>容器被批量插入回收时，阅读锚点必须在渲染前恢复，避免出现错位帧。</summary>
+    [AvaloniaFact]
+    public void RecycledReadingAnchorIsRestoredBeforeRendering()
+    {
+        var (window, list, viewer, controller, items) = CreateFeed(0);
+        using (controller)
+        {
+            try
+            {
+                viewer.Offset = new(0, 650);
+                Pump(window);
+                var anchor = Assert.IsAssignableFrom<Control>(viewer.CurrentAnchor);
+                var item = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(anchor));
+                var before = anchor.TranslatePoint(default, viewer)!.Value.Y;
+                for (var index = 0; index < 500; index++)
+                {
+                    items.Insert(0, CreateItem($"older history {index}"));
+                }
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+                window.UpdateLayout();
+
+                var after = Assert.IsAssignableFrom<Control>(list.ContainerFromItem(item));
+                Assert.InRange(Math.Abs(after.TranslatePoint(default, viewer)!.Value.Y - before), 0, 1);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+    }
+
     /// <summary>连续滚轮向下始终前进，静态布局不会恢复旧的阅读偏移。</summary>
     [AvaloniaFact]
     public void RepeatedWheelInputAndStaticLayoutsNeverJumpBack()
@@ -226,7 +291,7 @@ public sealed class FeedScrollStabilityTests
         }
     }
 
-    /// <summary>回顶恢复新消息跟随，用户后续滚动取消已排队的回顶。</summary>
+    /// <summary>回到底部恢复新消息跟随，用户后续滚动取消已排队的跟随。</summary>
     [AvaloniaFact]
     public void ReturnToLatestFollowsNewMessagesAndYieldsToNewInput()
     {
@@ -241,24 +306,24 @@ public sealed class FeedScrollStabilityTests
                 Pump(window);
                 controller.ScrollToLatest();
                 Pump(window);
-                Assert.Equal(0, viewer.Offset.Y);
+                AssertAtLatest(viewer);
                 Assert.True(controller.IsFollowingLatest);
-                items.Insert(0, CreateItem("arrived while following"));
+                items.Add(CreateItem("arrived while following"));
                 Pump(window);
-                Assert.Equal(0, viewer.Offset.Y);
-                items.Insert(0, CreateItem("queued before user scroll"));
+                AssertAtLatest(viewer);
+                items.Add(CreateItem("queued before user scroll"));
                 window.UpdateLayout();
                 viewer.Offset = new(0, 300);
                 Pump(window);
                 AssertStable(window, viewer, 300);
                 Assert.False(controller.IsFollowingLatest);
-                viewer.Offset = default;
+                viewer.ScrollToEnd();
                 Pump(window);
-                items.Insert(0, CreateItem("follow after manually scrolling back to top"));
+                items.Add(CreateItem("follow after manually scrolling back to bottom"));
                 Pump(window);
-                Assert.Equal(0, viewer.Offset.Y);
+                AssertAtLatest(viewer);
                 Assert.True(controller.IsFollowingLatest);
-                Assert.Equal(new[] { false, true, false, true }, states);
+                Assert.Equal(new[] { true, false, true }, states);
             }
             finally
             {
@@ -271,7 +336,7 @@ public sealed class FeedScrollStabilityTests
     [AvaloniaFact]
     public void DetachAndDisposeCancelQueuedFollowAndPublishStateChangesOnce()
     {
-        var (window, _, viewer, controller, items) = CreateFeed();
+        var (window, _, viewer, controller, items) = CreateFeed(startAtLatest: true);
         using (controller)
         {
             try
@@ -288,7 +353,7 @@ public sealed class FeedScrollStabilityTests
                 Assert.False(controller.IsFollowingLatest);
                 controller.Attach(items);
                 Pump(window);
-                Assert.Equal(0, viewer.Offset.Y);
+                AssertAtLatest(viewer);
                 controller.ScrollToLatest();
                 controller.Dispose();
                 viewer.Offset = new(0, 350);
@@ -305,7 +370,7 @@ public sealed class FeedScrollStabilityTests
     }
 
     private static (Window Window, ListBox List, ScrollViewer Viewer, DanmuFeedScrollController Controller,
-        ObservableCollection<MessageItemViewModel> Items) CreateFeed(double cacheLength = 1)
+        ObservableCollection<MessageItemViewModel> Items) CreateFeed(double cacheLength = 1, bool startAtLatest = false)
     {
         var items = new ObservableCollection<MessageItemViewModel>(
             Enumerable.Range(0, 200).Select(index => CreateItem($"message {index}")));
@@ -339,6 +404,11 @@ public sealed class FeedScrollStabilityTests
             var controller = new DanmuFeedScrollController(viewer, list);
             controller.Attach(items);
             Pump(window);
+            if (!startAtLatest)
+            {
+                viewer.Offset = default;
+                Pump(window);
+            }
             return (window, list, viewer, controller, items);
         }
         catch
@@ -364,6 +434,11 @@ public sealed class FeedScrollStabilityTests
     {
         Assert.IsType<VirtualizingStackPanel>(list.ItemsPanelRoot);
         Assert.InRange(list.GetRealizedContainers().Count(), 1, itemCount - 1);
+    }
+
+    private static void AssertAtLatest(ScrollViewer viewer)
+    {
+        Assert.InRange(Math.Abs(viewer.ScrollBarMaximum.Y - viewer.Offset.Y), 0, 1);
     }
 
     private static void AssertStable(Window window, ScrollViewer viewer, double offset)

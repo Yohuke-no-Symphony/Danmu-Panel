@@ -39,8 +39,11 @@ public sealed partial class SqliteMessageStore
             }
             var totalLimit = pinnedCount + Math.Max(retainedCount, historyLimit);
             using var command = Command(connection, transaction, """
-                SELECT payload FROM message_records WHERE room_tab_id=$room AND kind=$kind
-                ORDER BY priority DESC,pinned_ms DESC,occurred_ms DESC,sequence DESC LIMIT $limit;
+                SELECT payload FROM (
+                    SELECT payload,priority,occurred_ms,sequence FROM message_records
+                    WHERE room_tab_id=$room AND kind=$kind
+                    ORDER BY priority DESC,pinned_ms DESC,occurred_ms DESC,sequence DESC LIMIT $limit
+                ) ORDER BY priority DESC,occurred_ms ASC,sequence ASC;
                 """, ("$room", roomTabId), ("$kind", (int)kind), ("$limit", totalLimit));
             var records = ReadMessages(command);
             transaction.Commit();

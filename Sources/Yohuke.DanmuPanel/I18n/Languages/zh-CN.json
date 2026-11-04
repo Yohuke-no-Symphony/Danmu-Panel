@@ -118,7 +118,7 @@
     "Panel.AddAccountManually": "手动添加账号",
     "Panel.AddRoom": "新增直播间",
     "Panel.AddWorkspace": "新增工作区",
-    "Panel.BackToTop": "回到顶部",
+    "Panel.BackToLatest": "回到最新",
     "Panel.BrowserLogin": "浏览器登录",
     "Panel.Cancel": "取消",
     "Panel.ClearAllConfirm": "清空所有工作区、所有房间的全部消息记录？账号、设置和布局保留。此操作无法撤销。",
