@@ -20,6 +20,66 @@ namespace Yohuke.DanmuPanel.Tests.Integration;
 /// <summary>验证未读角标不占用消息布局，标题计数跟随房间和阅读状态。</summary>
 public sealed class UnreadIndicatorTests
 {
+    /// <summary>弹幕 pin 叠加在左上角，显示或隐藏时不挤占用户信息和正文。</summary>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PinBadgeOverlaysTopLeftWithoutChangingLayout(bool compact)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var runtime = CreateRuntime(directory);
+        runtime.Configuration.Settings.CompactDanmuDisplay = compact;
+        var message = Message(MessageKind.Danmu) with { MedalName = "粉丝牌", MedalLevel = 10 };
+        await runtime.Messages.AppendAsync(message, new());
+        var errors = new List<Exception>();
+        var view = new MessageFeedView(runtime, MessageKind.Danmu, errors.Add);
+        var window = new Window { Width = 480, Height = 360, Content = view };
+        try
+        {
+            await view.Model.SelectRoomAsync(new() { Id = "tab" });
+            window.Show();
+            Pump(window);
+            var item = Assert.Single(view.Model.Items);
+            var row = FindRow(view, message.Id);
+            var pin = Assert.Single(row.GetVisualDescendants().OfType<TextBlock>(), control => control.Classes.Contains("messagePinBadge"));
+            var identity = Assert.Single(row.GetVisualDescendants().OfType<DockPanel>(), control => control.Classes.Contains("danmuFeedIdentity"));
+            var body = Assert.Single(row.GetVisualDescendants().OfType<StackPanel>(), control => control.Classes.Contains("messageBody"));
+            Assert.False(pin.IsVisible);
+            var rowSize = row.Bounds.Size;
+            var identityBounds = identity.Children.Select(child => child.Bounds).ToArray();
+            var bodyBounds = body.Bounds;
+
+            item.Update(item.Record with { IsPinned = true }, runtime.Configuration.Settings);
+            Pump(window);
+
+            Assert.True(pin.IsEffectivelyVisible);
+            Assert.False(pin.IsHitTestVisible);
+            Assert.Equal("📌", pin.Text);
+            var position = pin.TranslatePoint(default, row)!.Value;
+            Assert.InRange(position.X, 0, 8);
+            Assert.InRange(position.Y, 0, 6);
+            Assert.Equal(default, Assert.IsType<Canvas>(pin.Parent).DesiredSize);
+            Assert.DoesNotContain(identity.GetVisualDescendants().OfType<TextBlock>(), text => text.Text == "📌");
+            Assert.Equal(rowSize, row.Bounds.Size);
+            Assert.Equal(identityBounds, identity.Children.Select(child => child.Bounds));
+            Assert.Equal(bodyBounds, body.Bounds);
+
+            item.Update(item.Record with { IsPinned = false }, runtime.Configuration.Settings);
+            Pump(window);
+
+            Assert.False(pin.IsVisible);
+            Assert.Equal(rowSize, row.Bounds.Size);
+            Assert.Equal(identityBounds, identity.Children.Select(child => child.Bounds));
+            Assert.Equal(bodyBounds, body.Bounds);
+            Assert.Empty(errors);
+        }
+        finally
+        {
+            view.Model.Dispose();
+            window.Close();
+        }
+    }
+
     /// <summary>普通与紧凑行的红点位于右上角，隐藏后内容尺寸与位置不变。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.SuperChat, false)]

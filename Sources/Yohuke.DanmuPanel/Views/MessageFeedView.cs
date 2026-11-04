@@ -122,10 +122,6 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         time.Classes.Add("danmuFeedMeta");
         DockPanel.SetDock(time, Avalonia.Controls.Dock.Right);
         identity.Children.Add(time);
-        var state = BoundText(nameof(MessageItemViewModel.State));
-        state.Margin = new Thickness(0, 0, 5, 0);
-        state.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.HasState)));
-        identity.Children.Add(state);
         var medal = BoundText(nameof(MessageItemViewModel.MedalName));
         medal.Classes.Add("danmuMedalText");
         var level = BoundText(nameof(MessageItemViewModel.MedalLevel));
@@ -229,25 +225,30 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             frame.Classes.Add("messageCard");
         }
         frame.Bind(Border.BorderBrushProperty, new Binding(nameof(MessageItemViewModel.BorderBrush)));
-        Control rowContent = frame;
+        var overlay = new Canvas
+        {
+            HorizontalAlignment = isCard ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            IsHitTestVisible = false
+        };
         if (isCard)
         {
             var dot = new Border { IsHitTestVisible = false };
             dot.Classes.Add("messageUnreadDot");
             dot.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.ShowUnreadDot)));
             Canvas.SetRight(dot, 0);
-            var overlay = new Canvas
-            {
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Top,
-                IsHitTestVisible = false,
-                Children = { dot }
-            };
-            rowContent = new Grid { Children = { frame, overlay } };
+            overlay.Children.Add(dot);
+        }
+        else
+        {
+            var pin = new TextBlock { Text = "📌", IsHitTestVisible = false };
+            pin.Classes.Add("messagePinBadge");
+            pin.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.ShowPinBadge)));
+            overlay.Children.Add(pin);
         }
         var button = new Button
         {
-            DataContext = item, Content = rowContent,
+            DataContext = item, Content = new Grid { Children = { frame, overlay } },
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch
         };

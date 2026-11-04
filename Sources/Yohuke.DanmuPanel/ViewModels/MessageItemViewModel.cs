@@ -41,8 +41,7 @@ public sealed class MessageItemViewModel : ObservableObject
         _ => Avalonia.Media.Brushes.Transparent
     };
     public string Time => Record.Time.ToLocalTime().ToString("HH:mm:ss");
-    public string State => Record.IsPinned ? "📌" : "";
-    public bool HasState => State.Length > 0;
+    public bool ShowPinBadge => Record.Kind == MessageKind.Danmu && Record.IsPinned;
     public bool ShowUnreadDot => Record.Kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard && !Record.IsRead;
     public string Detail => Record.Kind switch
     {
