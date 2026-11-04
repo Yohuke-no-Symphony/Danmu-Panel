@@ -36,8 +36,8 @@ public partial class App : Application
     /// <inheritdoc/>
     public override void Initialize()
     {
-        AvaloniaXamlLoader.Load(this);
         Localization.Initialize(Path.Combine(AppContext.BaseDirectory, "i18n"));
+        AvaloniaXamlLoader.Load(this);
     }
 
     /// <inheritdoc/>
@@ -80,6 +80,7 @@ public partial class App : Application
                 {
                     UseWindowMenuOnMac = configuration.Settings.UseWindowMenuOnMac
                 };
+                NativeMenu.GetMenu(this)!.Items.OfType<NativeMenuItem>().First().Command = shell.AboutCommand;
                 updateHttp = new(new HttpClientHandler { UseCookies = false });
                 updateModel = new(new AppUpdateService(new GitHubAppUpdateReleaseSource(updateHttp)),
                     configuration.Settings, AppUpdateVersion.Current,

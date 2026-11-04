@@ -3,6 +3,11 @@
              x:Class="Yohuke.DanmuPanel.App"
              Name="Danmu Panel"
              RequestedThemeVariant="Default">
+    <NativeMenu.Menu>
+        <NativeMenu>
+            <NativeMenuItem Header="{Loc Key=About.Menu}" />
+        </NativeMenu>
+    </NativeMenu.Menu>
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />

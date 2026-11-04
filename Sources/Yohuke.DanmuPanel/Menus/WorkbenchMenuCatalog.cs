@@ -21,12 +21,13 @@ internal sealed class WorkbenchMenuCatalog : IDisposable
     private readonly RelayCommand restoreDefault;
     private WorkbenchLayoutController? layouts;
 
-    internal WorkbenchMenuCatalog(Action settings, Action clearRoom, Action clearAll, Action exit,
+    internal WorkbenchMenuCatalog(Action settings, Action about, Action clearRoom, Action clearAll, Action exit,
         Action saveAs, Func<bool> isBlocked, Action<Exception> reportFailure)
     {
         this.isBlocked = isBlocked;
         this.reportFailure = reportFailure;
         SettingsCommand = CreateCommand(settings);
+        AboutCommand = CreateCommand(about);
         this.clearRoom = CreateCommand(clearRoom);
         this.clearAll = CreateCommand(clearAll);
         this.exit = CreateCommand(exit);
@@ -45,6 +46,7 @@ internal sealed class WorkbenchMenuCatalog : IDisposable
 
     internal event Action? Changed;
     internal RelayCommand SettingsCommand { get; }
+    internal RelayCommand AboutCommand { get; }
 
     internal IReadOnlyList<WorkbenchMenuEntry> Entries
     {
@@ -82,6 +84,7 @@ internal sealed class WorkbenchMenuCatalog : IDisposable
             [
                 new("application", Localization.Get("Shell.Menu.Application"), Children:
                 [
+                    new("about", Localization.Get("About.Menu"), LucideIconKind.Info, AboutCommand),
                     new("settings", Localization.Get("Shell.Settings"), LucideIconKind.Settings, SettingsCommand,
                         Gesture: new(Key.OemComma, OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control)),
                     new("separator:application-data", "", IsSeparator: true),

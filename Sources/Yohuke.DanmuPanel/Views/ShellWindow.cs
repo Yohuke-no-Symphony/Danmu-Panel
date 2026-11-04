@@ -4,10 +4,12 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.Input;
 using Lucide.Avalonia;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Layouts;
 using Yohuke.DanmuPanel.Menus;
+using Yohuke.DanmuPanel.Views.About;
 using Yohuke.DanmuPanel.Views.Components;
 using Yohuke.DanmuPanel.Windowing;
 
@@ -69,7 +71,7 @@ public sealed class ShellWindow : Window
         menu = new() { VerticalAlignment = VerticalAlignment.Center };
         menu.Classes.Add("workbenchMenu");
         menu.IsVisible = !supportsNativeMenus;
-        menuCatalog = new(() => SettingsRequested?.Invoke(), () => ClearRoomRequested?.Invoke(),
+        menuCatalog = new(() => SettingsRequested?.Invoke(), () => _ = ShowAboutAsync(), () => ClearRoomRequested?.Invoke(),
             () => ClearAllRequested?.Invoke(), () => _ = RequestCloseAsync(), () => _ = SaveLayoutAsAsync(),
             () => windows.IsInteractionBlocked, ReportFailure);
         windows.InteractionChanged += menuCatalog.Refresh;
@@ -133,6 +135,7 @@ public sealed class ShellWindow : Window
     public bool CanClose => canClose;
 
     internal bool IsInteractionBlocked => windows.IsInteractionBlocked;
+    internal RelayCommand AboutCommand => menuCatalog.AboutCommand;
 
     internal event Action? InteractionChanged
     {
@@ -378,6 +381,18 @@ public sealed class ShellWindow : Window
         pinButton.Classes.Set("selected", Topmost);
         pinIcon.Kind = Topmost ? LucideIconKind.PinOff : LucideIconKind.Pin;
         ToolTip.SetTip(pinButton, Localization.Get(Topmost ? "UI.TitleBarView.UnpinWindow" : "UI.TitleBarView.PinWindow"));
+    }
+
+    private async Task ShowAboutAsync()
+    {
+        try
+        {
+            await ShowModalAsync<object?>(new AboutWindow());
+        }
+        catch (Exception exception)
+        {
+            ReportFailure(exception);
+        }
     }
 
     private async Task SaveLayoutAsAsync()

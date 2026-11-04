@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:about="using:Yohuke.DanmuPanel.Views.About"
+             x:Class="Yohuke.DanmuPanel.Views.About.AboutSurface"
+             x:DataType="about:AboutWindow">
+    <Border Background="{DynamicResource AppCardBrush}" Padding="28">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="20">
+            <StackPanel Spacing="12" HorizontalAlignment="Stretch">
+                <Image Name="ApplicationIcon" Source="avares://Yohuke.DanmuPanel/Assets/favicon.png"
+                       Width="80" Height="80" HorizontalAlignment="Center" />
+                <TextBlock Text="{Binding ApplicationName}" FontSize="24" FontWeight="SemiBold"
+                           TextAlignment="Center" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+                    <TextBlock Text="{Loc Key=About.Version}" Classes="muted" />
+                    <SelectableTextBlock Name="VersionText" Text="{Binding CurrentVersion}" />
+                </StackPanel>
+                <TextBlock Name="DescriptionText" Text="{Loc Key=About.Description}" Classes="muted"
+                           TextAlignment="Center" TextWrapping="Wrap" />
+            </StackPanel>
+            <Border Grid.Row="1" Height="1" Background="{DynamicResource AppBorderBrush}" />
+            <StackPanel Grid.Row="2" Spacing="12">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+                    <TextBlock Text="{Loc Key=About.Author}" Classes="muted" />
+                    <SelectableTextBlock Grid.Column="1" Text="{Binding Publisher}" TextWrapping="Wrap" />
+                </Grid>
+                <TextBlock Name="CreditsText" Text="{Loc Key=About.Credits}" Classes="muted" TextWrapping="Wrap" />
+                <TextBlock Text="{Loc Key=About.LicenseNotice}" Classes="muted" TextWrapping="Wrap" />
+            </StackPanel>
+            <Grid Grid.Row="3" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="12">
+                <HyperlinkButton Name="ProjectLink" Content="GitHub" Padding="0" VerticalAlignment="Center"
+                                 NavigateUri="https://github.com/Yohuke-no-Symphony/DanmuPanel" />
+                <HyperlinkButton Grid.Column="1" Name="LicenseLink" Content="GPL-3.0" Padding="0"
+                                 VerticalAlignment="Center"
+                                 NavigateUri="https://github.com/Yohuke-no-Symphony/DanmuPanel/blob/main/LICENSE" />
+                <Button Grid.Column="3" Name="CloseAboutButton" Content="{Loc Key=About.Close}" />
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>
