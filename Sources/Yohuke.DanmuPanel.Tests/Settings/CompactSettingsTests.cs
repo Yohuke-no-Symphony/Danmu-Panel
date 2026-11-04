@@ -27,13 +27,15 @@ public sealed class CompactSettingsTests
         Assert.True(restored.CompactDanmuDisplay);
         Assert.False(restored.CompactDanmuWrap);
         Assert.True(restored.CompactSuperChatWrap);
-        Assert.False(restored.AutoScrollLongMessages);
+        Assert.True(restored.AutoScrollLongMessages);
         Assert.Equal("ja-JP", restored.Language);
     }
 
     /// <summary>关闭紧凑显示后仍保存两组独立换行偏好。</summary>
-    [Fact]
-    public async Task DisabledCompactDisplayAndIndependentWrapPreferencesRoundTrip()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DisabledCompactDisplayAndIndependentWrapPreferencesRoundTrip(bool autoScrollLongMessages)
     {
         using var directory = new MessageStoreTestDirectory();
         var store = new ConfigurationService(directory.Path);
@@ -44,7 +46,7 @@ public sealed class CompactSettingsTests
                 CompactDanmuDisplay = false,
                 CompactDanmuWrap = true,
                 CompactSuperChatWrap = false,
-                AutoScrollLongMessages = true
+                AutoScrollLongMessages = autoScrollLongMessages
             }
         });
 
@@ -53,7 +55,7 @@ public sealed class CompactSettingsTests
         Assert.False(restored.CompactDanmuDisplay);
         Assert.True(restored.CompactDanmuWrap);
         Assert.False(restored.CompactSuperChatWrap);
-        Assert.True(restored.AutoScrollLongMessages);
+        Assert.Equal(autoScrollLongMessages, restored.AutoScrollLongMessages);
     }
 
     /// <summary>主开关只禁用换行选项，草稿直到保存才应用到运行配置。</summary>
@@ -80,16 +82,16 @@ public sealed class CompactSettingsTests
             Assert.True(compact.IsChecked);
             Assert.False(messages.IsChecked);
             Assert.True(superChats.IsChecked);
-            Assert.False(autoScroll.IsChecked);
+            Assert.True(autoScroll.IsChecked);
 
             messages.IsChecked = true;
-            autoScroll.IsChecked = true;
+            autoScroll.IsChecked = false;
             superChats.IsChecked = false;
             compact.IsChecked = false;
             Assert.False(messages.IsEnabled);
             Assert.False(superChats.IsEnabled);
             Assert.False(autoScroll.IsEnabled);
-            Assert.True(autoScroll.IsChecked);
+            Assert.False(autoScroll.IsChecked);
             Assert.True(messages.IsChecked);
             Assert.False(superChats.IsChecked);
             compact.IsChecked = true;
@@ -102,7 +104,7 @@ public sealed class CompactSettingsTests
 
             Assert.True(configuration.Settings.CompactDanmuDisplay);
             Assert.False(configuration.Settings.CompactDanmuWrap);
-            Assert.False(configuration.Settings.AutoScrollLongMessages);
+            Assert.True(configuration.Settings.AutoScrollLongMessages);
             Assert.True(configuration.Settings.CompactSuperChatWrap);
             Assert.Equal(0, settingsChanged);
 
@@ -112,7 +114,7 @@ public sealed class CompactSettingsTests
             Assert.False(restored.CompactDanmuDisplay);
             Assert.True(restored.CompactDanmuWrap);
             Assert.False(restored.CompactSuperChatWrap);
-            Assert.True(restored.AutoScrollLongMessages);
+            Assert.False(restored.AutoScrollLongMessages);
         }
         finally
         {

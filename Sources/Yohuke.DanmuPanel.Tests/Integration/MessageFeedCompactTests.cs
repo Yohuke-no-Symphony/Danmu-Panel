@@ -222,10 +222,8 @@ public sealed class MessageFeedCompactTests
             var marquees = VisibleBodyContents(FindRow(view, message.Id)).Cast<HoverMarqueeTextBlock>().ToArray();
             Assert.Equal(2, marquees.Length);
             var viewers = marquees.Select(marquee => Assert.Single(marquee.GetVisualDescendants().OfType<ScrollViewer>())).ToArray();
-            Assert.All(marquees, marquee => Assert.False(marquee.AutoScroll));
+            Assert.All(marquees, marquee => Assert.True(marquee.AutoScroll));
 
-            settings.AutoScrollLongMessages = true;
-            await view.Model.RefreshAsync();
             await WaitUntilAsync(() => viewers.All(viewer => viewer.Offset.X > 0), window);
             Assert.Same(item, Assert.Single(view.Model.Items));
             Assert.All(marquees, marquee => Assert.True(marquee.AutoScroll));
