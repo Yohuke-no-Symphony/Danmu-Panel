@@ -21,7 +21,7 @@ public sealed class SettingsThemeTests
     /// <summary>主题在深浅之间切换时，全部设置下拉框仍使用当前主题的正文颜色。</summary>
     [AvaloniaTheory]
     [InlineData("Appearance", 3)]
-    [InlineData("Reading", 1)]
+    [InlineData("Reading", 2)]
     [InlineData("Translation", 4)]
     public async Task ChoiceTextFollowsThemeAndLanguage(string section, int expectedChoices)
     {

@@ -29,6 +29,7 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
     private bool isCompactDisplay;
     private bool isCompactMessageWrap;
     private bool isCompactSuperChatWrap;
+    private double messageTextScale = 1;
     private MessageDisplaySettings? displaySettings;
     private readonly HashSet<string> translationRequested = new();
     public ObservableCollection<MessageItemViewModel> Items { get; } = [];
@@ -56,6 +57,7 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
     public bool IsCompactDisplay => isCompactDisplay;
     public bool IsCompactMessageWrap => isCompactMessageWrap;
     public bool IsCompactSuperChatWrap => isCompactSuperChatWrap;
+    public double MessageTextScale => messageTextScale;
 
     /// <summary>连接一个独立消息类型的列表。</summary>
     public FeedViewModel(PanelRuntime runtime, MessageKind kind)
@@ -270,6 +272,7 @@ public sealed class FeedViewModel : ObservableObject, IDisposable
         SetProperty(ref isCompactDisplay, settings.CompactDanmuDisplay, nameof(IsCompactDisplay));
         SetProperty(ref isCompactMessageWrap, settings.CompactDanmuWrap, nameof(IsCompactMessageWrap));
         SetProperty(ref isCompactSuperChatWrap, settings.CompactSuperChatWrap, nameof(IsCompactSuperChatWrap));
+        SetProperty(ref messageTextScale, settings.MessageTextScale, nameof(MessageTextScale));
     }
 
     /// <inheritdoc/>

@@ -40,6 +40,10 @@ public sealed class SettingsView : UserControl
     private readonly ComboBox giftResetPolicy;
     private readonly CheckBox userPinyin;
     private readonly CheckBox giftPinyin;
+    private readonly CheckBox danmuPinyin;
+    private readonly CheckBox superChatPinyin;
+    private readonly ComboBox pinyinLayout;
+    private readonly NumericUpDown messageTextScale;
     private readonly CheckBox compactDisplay;
     private readonly CheckBox compactDanmuWrap;
     private readonly CheckBox compactSuperChatWrap;
@@ -106,6 +110,21 @@ public sealed class SettingsView : UserControl
         giftResetPolicy = Choices(["Settings.ComboOnce", "Settings.ComboNewQuantity", "Settings.ComboNewValue"], (int)settings.Reading.GiftReadResetPolicy);
         userPinyin = Check("Settings.UserPinyin", settings.ShowUserPinyin);
         giftPinyin = Check("Settings.GiftPinyin", settings.ShowGiftPinyin);
+        danmuPinyin = Check("Settings.DanmuPinyin", settings.ShowDanmuPinyin);
+        danmuPinyin.Name = "ShowDanmuPinyinCheckBox";
+        superChatPinyin = Check("Settings.SuperChatPinyin", settings.ShowSuperChatPinyin);
+        superChatPinyin.Name = "ShowSuperChatPinyinCheckBox";
+        pinyinLayout = Choices(["Settings.PinyinRuby", "Settings.PinyinSeparateLine"], (int)settings.PinyinLayout);
+        pinyinLayout.Name = "PinyinLayoutComboBox";
+        messageTextScale = new()
+        {
+            Name = "MessageTextScaleInput",
+            Minimum = 50,
+            Maximum = 200,
+            Increment = 10,
+            Value = (decimal)settings.MessageTextScale * 100,
+            FormatString = "0"
+        };
         compactDisplay = Check("Settings.CompactDisplay", settings.CompactDanmuDisplay);
         compactDisplay.Name = "CompactDanmuDisplayCheckBox";
         compactDanmuWrap = Check("Settings.CompactMessageWrap", settings.CompactDanmuWrap);
@@ -147,14 +166,17 @@ public sealed class SettingsView : UserControl
         targetLanguage.SelectionChanged += (_, _) => SelectGlossaryLanguage();
         AddSection("Settings.Appearance", "Settings.AppearanceDescription", BuildAppearance());
         AddSection("Settings.Reading", "Settings.ReadingDescription", Stack(
-            Card("Settings.MessageDisplay", compactDisplay,
+            Card("Settings.MessageDisplay", Row("Settings.MessageTextScale", messageTextScale),
+                Help("Settings.MessageTextScaleHelp"), compactDisplay,
                 new StackPanel
                 {
                     Margin = new Thickness(24, 0, 0, 0), Spacing = 8,
                     Children = { compactDanmuWrap, compactSuperChatWrap, autoScrollLongMessages, Help("Settings.AutoScrollLongMessagesHelp") }
                 }),
             Card("Settings.Reading", Row("Settings.GiftMinimum", giftMinimum), Row("Settings.ComboPolicy", giftResetPolicy)),
-            Card("Settings.UserPinyin", userPinyin, giftPinyin, Help("Settings.PinyinHelp"))));
+            Card("Settings.Pinyin", userPinyin, giftPinyin, danmuPinyin, superChatPinyin,
+                Row("Settings.PinyinLayout", pinyinLayout),
+                Help("Settings.PinyinHelp"), Help("Settings.PinyinScrollHelp"))));
         AddSection("Settings.Translation", "Settings.TranslationDescription", BuildTranslation());
         AddSection("Settings.Accounts", "Settings.AccountsDescription", accountsView);
         AddSection("Settings.Data", "Settings.DataDescription", BuildData());
@@ -219,6 +241,10 @@ public sealed class SettingsView : UserControl
             };
             settings.ShowUserPinyin = userPinyin.IsChecked == true;
             settings.ShowGiftPinyin = giftPinyin.IsChecked == true;
+            settings.ShowDanmuPinyin = danmuPinyin.IsChecked == true;
+            settings.ShowSuperChatPinyin = superChatPinyin.IsChecked == true;
+            settings.PinyinLayout = (PinyinLayoutMode)pinyinLayout.SelectedIndex;
+            settings.MessageTextScale = (double)(messageTextScale.Value ?? 100) / 100;
             settings.CompactDanmuDisplay = compactDisplay.IsChecked == true;
             settings.CompactDanmuWrap = compactDanmuWrap.IsChecked == true;
             settings.CompactSuperChatWrap = compactSuperChatWrap.IsChecked == true;

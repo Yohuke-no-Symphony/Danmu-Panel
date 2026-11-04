@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Models.Workspace;
 
 namespace Yohuke.DanmuPanel.Views.Components;
@@ -23,6 +24,7 @@ public sealed class HoverMarqueeTextBlock : UserControl
     private readonly HoverMarqueeController controller = new(START_DELAY, SCROLL_SPEED);
     private readonly Stopwatch stopwatch = new();
     private readonly ScrollViewer scrollViewer;
+    private readonly EmoticonTextBlock textBlock;
     private readonly List<Visual> visibilityAncestors = [];
     private bool initialized;
     private bool isAttached;
@@ -48,12 +50,36 @@ public sealed class HoverMarqueeTextBlock : UserControl
     public static readonly StyledProperty<bool> AutoScrollProperty =
         AvaloniaProperty.Register<HoverMarqueeTextBlock, bool>(nameof(AutoScroll));
 
+    /// <summary>保留原文位置的正文注音片段。</summary>
+    public static readonly StyledProperty<IReadOnlyList<PinyinAnnotation>?> AnnotationsProperty =
+        EmoticonTextBlock.AnnotationsProperty.AddOwner<HoverMarqueeTextBlock>();
+
+    /// <summary>正文拼音的排版方式。</summary>
+    public static readonly StyledProperty<PinyinLayoutMode> PinyinLayoutProperty =
+        EmoticonTextBlock.PinyinLayoutProperty.AddOwner<HoverMarqueeTextBlock>();
+
+    /// <summary>拼音使用的绝对字号。</summary>
+    public static readonly StyledProperty<double> PinyinFontSizeProperty =
+        EmoticonTextBlock.PinyinFontSizeProperty.AddOwner<HoverMarqueeTextBlock>();
+
+    /// <summary>普通拼音前景色。</summary>
+    public static readonly StyledProperty<IBrush?> PinyinForegroundProperty =
+        EmoticonTextBlock.PinyinForegroundProperty.AddOwner<HoverMarqueeTextBlock>();
+
+    /// <summary>悬停音节前景色。</summary>
+    public static readonly StyledProperty<IBrush?> PinyinHighlightForegroundProperty =
+        EmoticonTextBlock.PinyinHighlightForegroundProperty.AddOwner<HoverMarqueeTextBlock>();
+
+    /// <summary>悬停音节背景色。</summary>
+    public static readonly StyledProperty<IBrush?> PinyinHighlightBackgroundProperty =
+        EmoticonTextBlock.PinyinHighlightBackgroundProperty.AddOwner<HoverMarqueeTextBlock>();
+
     /// <summary>
     /// 初始化悬停滚动文本控件。
     /// </summary>
     public HoverMarqueeTextBlock()
     {
-        var textBlock = new EmoticonTextBlock
+        textBlock = new()
         {
             TextWrapping = TextWrapping.NoWrap,
             TextAlignment = TextAlignment.Left,
@@ -80,6 +106,14 @@ public sealed class HoverMarqueeTextBlock : UserControl
             Path = nameof(Emoticons),
             Source = this
         });
+        textBlock.Bind(EmoticonTextBlock.AnnotationsProperty, new Binding(nameof(Annotations)) { Source = this });
+        textBlock.Bind(EmoticonTextBlock.PinyinLayoutProperty, new Binding(nameof(PinyinLayout)) { Source = this });
+        textBlock.Bind(EmoticonTextBlock.PinyinFontSizeProperty, new Binding(nameof(PinyinFontSize)) { Source = this });
+        textBlock.Bind(EmoticonTextBlock.PinyinForegroundProperty, new Binding(nameof(PinyinForeground)) { Source = this });
+        textBlock.Bind(EmoticonTextBlock.PinyinHighlightForegroundProperty,
+            new Binding(nameof(PinyinHighlightForeground)) { Source = this });
+        textBlock.Bind(EmoticonTextBlock.PinyinHighlightBackgroundProperty,
+            new Binding(nameof(PinyinHighlightBackground)) { Source = this });
 
         scrollViewer = new()
         {
@@ -100,6 +134,14 @@ public sealed class HoverMarqueeTextBlock : UserControl
         timer.Tick += Timer_OnTick;
         PointerEntered += Control_OnPointerEntered;
         PointerExited += Control_OnPointerExited;
+        PointerMoved += (_, args) => textBlock.UpdateHighlight(args.GetPosition(textBlock));
+        textBlock.AnnotationLayoutChanged += () =>
+        {
+            if (initialized)
+            {
+                UpdateScrolling();
+            }
+        };
         AttachedToVisualTree += (_, _) =>
         {
             isAttached = true;
@@ -155,7 +197,51 @@ public sealed class HoverMarqueeTextBlock : UserControl
         set => SetValue(AutoScrollProperty, value);
     }
 
-    private bool CanAnimate => isAttached && isInViewport && IsEffectivelyVisible && (AutoScroll || IsPointerOver);
+    /// <summary>保留原文位置的正文注音片段。</summary>
+    public IReadOnlyList<PinyinAnnotation>? Annotations
+    {
+        get => GetValue(AnnotationsProperty);
+        set => SetValue(AnnotationsProperty, value);
+    }
+
+    /// <summary>正文拼音的排版方式。</summary>
+    public PinyinLayoutMode PinyinLayout
+    {
+        get => GetValue(PinyinLayoutProperty);
+        set => SetValue(PinyinLayoutProperty, value);
+    }
+
+    /// <summary>拼音使用的绝对字号。</summary>
+    public double PinyinFontSize
+    {
+        get => GetValue(PinyinFontSizeProperty);
+        set => SetValue(PinyinFontSizeProperty, value);
+    }
+
+    /// <summary>普通拼音前景色。</summary>
+    public IBrush? PinyinForeground
+    {
+        get => GetValue(PinyinForegroundProperty);
+        set => SetValue(PinyinForegroundProperty, value);
+    }
+
+    /// <summary>悬停音节前景色。</summary>
+    public IBrush? PinyinHighlightForeground
+    {
+        get => GetValue(PinyinHighlightForegroundProperty);
+        set => SetValue(PinyinHighlightForegroundProperty, value);
+    }
+
+    /// <summary>悬停音节背景色。</summary>
+    public IBrush? PinyinHighlightBackground
+    {
+        get => GetValue(PinyinHighlightBackgroundProperty);
+        set => SetValue(PinyinHighlightBackgroundProperty, value);
+    }
+
+    private bool IsAnimationAvailable => isAttached && isInViewport && IsEffectivelyVisible;
+    private bool IsPausedForAnnotation => textBlock.HasAnnotations && IsPointerOver;
+    private bool CanAnimate => IsAnimationAvailable && (AutoScroll || IsPointerOver) && !IsPausedForAnnotation;
 
     /// <inheritdoc/>
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -167,7 +253,8 @@ public sealed class HoverMarqueeTextBlock : UserControl
         }
 
         if (change.Property == TextProperty || change.Property == EmoticonsProperty ||
-            change.Property == AutoScrollProperty || change.Property == DataContextProperty)
+            change.Property == AutoScrollProperty || change.Property == DataContextProperty ||
+            change.Property == AnnotationsProperty || change.Property == PinyinLayoutProperty)
         {
             StopScrolling();
             UpdateScrolling();
@@ -180,6 +267,11 @@ public sealed class HoverMarqueeTextBlock : UserControl
 
     private void Control_OnPointerEntered(object? sender, PointerEventArgs e)
     {
+        if (textBlock.HasAnnotations)
+        {
+            UpdateScrolling();
+            return;
+        }
         if (AutoScroll)
         {
             return;
@@ -190,17 +282,39 @@ public sealed class HoverMarqueeTextBlock : UserControl
 
     private void Control_OnPointerExited(object? sender, PointerEventArgs e)
     {
+        textBlock.ClearHighlight();
+        if (textBlock.HasAnnotations)
+        {
+            UpdateScrolling();
+            return;
+        }
         if (!AutoScroll)
         {
             StopScrolling();
         }
     }
 
+    /// <inheritdoc />
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+    {
+        var horizontal = e.Delta.X != 0 ? e.Delta.X :
+            e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? e.Delta.Y : 0;
+        if (textBlock.HasAnnotations && horizontal != 0)
+        {
+            UpdateViewport();
+            controller.Seek(controller.Offset - horizontal * FontSize * 3);
+            ApplyOffset();
+            textBlock.UpdateHighlight(e.GetPosition(textBlock));
+            e.Handled = true;
+        }
+        base.OnPointerWheelChanged(e);
+    }
+
     private void Timer_OnTick(object? sender, EventArgs e)
     {
         if (!CanAnimate)
         {
-            StopScrolling();
+            UpdateScrolling();
             return;
         }
         var elapsed = stopwatch.Elapsed;
@@ -236,9 +350,23 @@ public sealed class HoverMarqueeTextBlock : UserControl
 
     private void UpdateScrolling()
     {
-        if (!CanAnimate)
+        if (!IsAnimationAvailable)
         {
             StopScrolling();
+            textBlock.ClearHighlight();
+            return;
+        }
+
+        if (!CanAnimate)
+        {
+            if (textBlock.HasAnnotations)
+            {
+                PauseScrolling();
+            }
+            else
+            {
+                StopScrolling();
+            }
             return;
         }
 
@@ -276,5 +404,11 @@ public sealed class HoverMarqueeTextBlock : UserControl
         stopwatch.Reset();
         controller.Reset();
         ApplyOffset();
+    }
+
+    private void PauseScrolling()
+    {
+        timer.Stop();
+        stopwatch.Reset();
     }
 }

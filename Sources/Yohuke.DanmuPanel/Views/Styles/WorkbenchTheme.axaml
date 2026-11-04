@@ -8,6 +8,13 @@
             <CornerRadius x:Key="WorkbenchControlCornerRadius">6</CornerRadius>
             <Thickness x:Key="WorkbenchButtonPadding">12,6</Thickness>
             <Thickness x:Key="WorkbenchPanelPadding">12</Thickness>
+            <x:Double x:Key="MessageFontSizeBody">13</x:Double>
+            <x:Double x:Key="MessageFontSizeCompact">12</x:Double>
+            <x:Double x:Key="MessageFontSizeMetadata">11</x:Double>
+            <x:Double x:Key="MessageFontSizePinyin">10</x:Double>
+            <x:Double x:Key="MessageMedalSlotWidth">66</x:Double>
+            <x:Double x:Key="MessageMedalLevelWidth">20</x:Double>
+            <x:Double x:Key="MessagePinBadgeSize">14</x:Double>
             <FontFamily x:Key="ContentControlThemeFontFamily">PingFang SC, Microsoft YaHei UI, Noto Sans CJK SC, Noto Sans SC, sans-serif</FontFamily>
             <SolidColorBrush x:Key="AppErrorBrush" Color="#EF4444" />
             <SolidColorBrush x:Key="AppUnreadBrush" Color="#EF4444" />

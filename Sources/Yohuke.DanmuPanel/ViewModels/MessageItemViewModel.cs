@@ -18,7 +18,9 @@ public sealed class MessageItemViewModel : ObservableObject
     private readonly IPinyinService pinyin;
     private MessageDisplaySettings settings;
     private string namePinyin = "";
+    private IReadOnlyList<PinyinAnnotation> nameAnnotations = [];
     private string detailPinyin = "";
+    private IReadOnlyList<PinyinAnnotation> contentPinyin = [];
     private string medal = "";
     private string medalName = "";
     private string time = "";
@@ -32,6 +34,7 @@ public sealed class MessageItemViewModel : ObservableObject
     public string Name => Record.UserName;
     public string NamePinyin => namePinyin;
     public bool HasNamePinyin => NamePinyin.Length > 0;
+    public IReadOnlyList<PinyinAnnotation> NameAnnotations => nameAnnotations;
     public string Medal => medal;
     public string MedalName => medalName;
     public int MedalLevel => Record.MedalLevel;
@@ -42,6 +45,9 @@ public sealed class MessageItemViewModel : ObservableObject
     public string Detail => detail ??= FormatDetail();
     public string DetailPinyin => detailPinyin;
     public bool HasDetailPinyin => DetailPinyin.Length > 0;
+    public IReadOnlyList<PinyinAnnotation> ContentPinyin => contentPinyin;
+    public bool HasContentPinyin => contentPinyin.Count > 0;
+    public PinyinLayoutMode PinyinLayout => settings.PinyinLayout;
     public string Price => price;
     public string Translation => translation;
     public bool HasTranslation => Translation.Length > 0;
@@ -91,6 +97,7 @@ public sealed class MessageItemViewModel : ObservableObject
         var previousSettings = settings;
         var hadNamePinyin = HasNamePinyin;
         var hadDetailPinyin = HasDetailPinyin;
+        var hadContentPinyin = HasContentPinyin;
         var hadMedal = HasMedal;
         var hadTranslation = HasTranslation;
         var showedOriginal = ShowOriginal;
@@ -104,16 +111,27 @@ public sealed class MessageItemViewModel : ObservableObject
         NotifyChange(showedPin, ShowPinBadge, nameof(ShowPinBadge));
         NotifyChange(showedUnread, ShowUnreadDot, nameof(ShowUnreadDot));
         NotifyChange(previousSettings.AutoScrollLongMessages, settings.AutoScrollLongMessages, nameof(AutoScrollLongMessages));
+        NotifyChange(previousSettings.PinyinLayout, settings.PinyinLayout, nameof(PinyinLayout));
 
         if (initialize || previous.UserName != record.UserName || previousSettings.ShowUserPinyin != settings.ShowUserPinyin)
         {
             SetProperty(ref namePinyin, GetAnnotation(Name, settings.ShowUserPinyin), nameof(NamePinyin));
+            SetProperty(ref nameAnnotations, HasNamePinyin ? pinyin.GetAnnotations(Name) : [], nameof(NameAnnotations));
         }
         if (initialize || previous.Kind != record.Kind || previous.GiftName != record.GiftName ||
             previousSettings.ShowGiftPinyin != settings.ShowGiftPinyin)
         {
             SetProperty(ref detailPinyin, record.Kind == MessageKind.Gift
                 ? GetAnnotation(record.GiftName, settings.ShowGiftPinyin) : "", nameof(DetailPinyin));
+        }
+        if (initialize || previous.Kind != record.Kind || previous.Content != record.Content ||
+            record.Kind == MessageKind.Gift && (previous.GiftName != record.GiftName ||
+                previous.Quantity != record.Quantity || previous.TotalPrice != record.TotalPrice ||
+                previousSettings.CultureName != settings.CultureName) ||
+            IsContentPinyinEnabled(previous.Kind, previousSettings) != IsContentPinyinEnabled(record.Kind, settings))
+        {
+            SetProperty(ref contentPinyin, IsContentPinyinEnabled(record.Kind, settings)
+                ? GetContentAnnotations(record) : [], nameof(ContentPinyin));
         }
         if (initialize || previous.MedalName != record.MedalName || previous.MedalLevel != record.MedalLevel)
         {
@@ -151,6 +169,7 @@ public sealed class MessageItemViewModel : ObservableObject
         }, nameof(MedalBorderBrush));
         NotifyChange(hadNamePinyin, HasNamePinyin, nameof(HasNamePinyin));
         NotifyChange(hadDetailPinyin, HasDetailPinyin, nameof(HasDetailPinyin));
+        NotifyChange(hadContentPinyin, HasContentPinyin, nameof(HasContentPinyin));
         NotifyChange(hadMedal, HasMedal, nameof(HasMedal));
         NotifyChange(hadTranslation, HasTranslation, nameof(HasTranslation));
         NotifyChange(showedOriginal, ShowOriginal, nameof(ShowOriginal));
@@ -162,6 +181,26 @@ public sealed class MessageItemViewModel : ObservableObject
         {
             OnPropertyChanged(propertyName);
         }
+    }
+
+    private static bool IsContentPinyinEnabled(MessageKind kind, MessageDisplaySettings displaySettings)
+    {
+        return kind switch
+        {
+            MessageKind.Danmu => displaySettings.ShowDanmuPinyin,
+            MessageKind.SuperChat => displaySettings.ShowSuperChatPinyin,
+            MessageKind.Gift => displaySettings.ShowGiftPinyin,
+            _ => false
+        };
+    }
+
+    private IReadOnlyList<PinyinAnnotation> GetContentAnnotations(MessageRecord record)
+    {
+        if (record.Kind == MessageKind.Gift)
+        {
+            return HasDetailPinyin ? pinyin.GetAnnotations(FormatDetail()) : [];
+        }
+        return pinyin.GetAnnotations(record.Content);
     }
 
     private string FormatDetail()

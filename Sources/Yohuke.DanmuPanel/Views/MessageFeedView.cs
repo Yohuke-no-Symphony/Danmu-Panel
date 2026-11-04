@@ -4,6 +4,7 @@ using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Data.Converters;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
@@ -39,6 +40,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         this.runtime = runtime;
         this.reportError = reportError;
         Model = new(runtime, kind);
+        UpdateTextScale();
         Model.Failed += reportError;
         list = CreateList(Model.ScrollingItems, kind, "ScrollingMessages");
         pinnedList = CreateList(Model.PinnedItems, kind, "PinnedMessages");
@@ -87,8 +89,24 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             {
                 UpdatePinnedHeight();
             }
+            else if (args.PropertyName == nameof(FeedViewModel.MessageTextScale))
+            {
+                UpdateTextScale();
+            }
         };
         Content = surface;
+    }
+
+    private void UpdateTextScale()
+    {
+        var scale = Model.MessageTextScale;
+        Resources["MessageFontSizeBody"] = 13 * scale;
+        Resources["MessageFontSizeCompact"] = 12 * scale;
+        Resources["MessageFontSizeMetadata"] = 11 * scale;
+        Resources["MessageFontSizePinyin"] = 10 * scale;
+        Resources["MessageMedalSlotWidth"] = 66 * scale;
+        Resources["MessageMedalLevelWidth"] = 20 * scale;
+        Resources["MessagePinBadgeSize"] = 14 * scale;
     }
 
     private async Task ClearAsync(MessageKind kind)
@@ -169,16 +187,16 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         var medalSlot = new Grid { Children = { medalFrame, noMedal } };
         medalSlot.Classes.Add("danmuMedalSlot");
         identity.Children.Add(medalSlot);
-        var name = BoundText(nameof(MessageItemViewModel.Name));
+        var name = new EmoticonTextBlock();
+        name.Bind(EmoticonTextBlock.ContentTextProperty, new Binding(nameof(MessageItemViewModel.Name)));
+        name.Bind(EmoticonTextBlock.AnnotationsProperty, new Binding(nameof(MessageItemViewModel.NameAnnotations)));
+        name.Bind(EmoticonTextBlock.PinyinLayoutProperty, new Binding(nameof(MessageItemViewModel.PinyinLayout)));
+        name.Bind(EmoticonTextBlock.PinyinForegroundProperty, new DynamicResourceExtension("MessagePinyinBrush"));
+        name.Bind(EmoticonTextBlock.PinyinFontSizeProperty, new DynamicResourceExtension("MessageFontSizePinyin"));
         name.Classes.Add("danmuFeedUser");
         name.TextAlignment = TextAlignment.Center;
         name.Bind(ToolTip.TipProperty, new Binding(nameof(MessageItemViewModel.Name)));
-        var namePinyin = BoundPinyin(nameof(MessageItemViewModel.NamePinyin), nameof(MessageItemViewModel.HasNamePinyin));
-        identity.Children.Add(new StackPanel
-        {
-            VerticalAlignment = VerticalAlignment.Center,
-            Children = { namePinyin, name }
-        });
+        identity.Children.Add(name);
         identity.Classes.Add("danmuFeedIdentity");
         var original = new EmoticonTextBlock { TextWrapping = TextWrapping.Wrap };
         original.Classes.Add("danmuFeedContent");
@@ -186,6 +204,10 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         original.Classes.Add("originalText");
         original.Bind(EmoticonTextBlock.ContentTextProperty, new Binding(nameof(MessageItemViewModel.Detail)));
         original.Bind(EmoticonTextBlock.EmoticonsProperty, new Binding(nameof(MessageItemViewModel.Emoticons)));
+        original.Bind(EmoticonTextBlock.AnnotationsProperty, new Binding(nameof(MessageItemViewModel.ContentPinyin)));
+        original.Bind(EmoticonTextBlock.PinyinLayoutProperty, new Binding(nameof(MessageItemViewModel.PinyinLayout)));
+        original.Bind(EmoticonTextBlock.PinyinForegroundProperty, new DynamicResourceExtension("MessagePinyinBrush"));
+        original.Bind(EmoticonTextBlock.PinyinFontSizeProperty, new DynamicResourceExtension("MessageFontSizePinyin"));
         var translation = BoundText(nameof(MessageItemViewModel.Translation));
         translation.Classes.Add("danmuFeedContent");
         translation.Classes.Add("regularFeedContent");
@@ -194,6 +216,10 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         var originalMarquee = CreateMarquee(nameof(MessageItemViewModel.Detail));
         originalMarquee.Classes.Add("originalText");
         originalMarquee.Bind(HoverMarqueeTextBlock.EmoticonsProperty, new Binding(nameof(MessageItemViewModel.Emoticons)));
+        originalMarquee.Bind(HoverMarqueeTextBlock.AnnotationsProperty, new Binding(nameof(MessageItemViewModel.ContentPinyin)));
+        originalMarquee.Bind(HoverMarqueeTextBlock.PinyinLayoutProperty, new Binding(nameof(MessageItemViewModel.PinyinLayout)));
+        originalMarquee.Bind(HoverMarqueeTextBlock.PinyinForegroundProperty, new DynamicResourceExtension("MessagePinyinBrush"));
+        originalMarquee.Bind(HoverMarqueeTextBlock.PinyinFontSizeProperty, new DynamicResourceExtension("MessageFontSizePinyin"));
         var translationMarquee = CreateMarquee(nameof(MessageItemViewModel.Translation));
         translationMarquee.Classes.Add("translatedText");
         var originalRegion = new Grid { Children = { original, originalMarquee } };
@@ -204,15 +230,19 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         var price = BoundText(nameof(MessageItemViewModel.Price));
         price.Classes.Add("scFeedPrice");
         price.HorizontalAlignment = HorizontalAlignment.Right;
-        var detailPinyin = BoundPinyin(nameof(MessageItemViewModel.DetailPinyin), nameof(MessageItemViewModel.HasDetailPinyin));
-        detailPinyin.TextAlignment = TextAlignment.Left;
         var body = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            Children = { detailPinyin, originalRegion, translationRegion }
+            Children = { originalRegion, translationRegion }
         };
         body.Classes.Add("messageBody");
+        if (item.Record.Kind != MessageKind.SuperChat)
+        {
+            identity.Bind(VerticalAlignmentProperty, CreateRowAlignmentBinding());
+            name.Bind(VerticalAlignmentProperty, CreateRowAlignmentBinding());
+            body.Bind(VerticalAlignmentProperty, CreateRowAlignmentBinding());
+        }
         var layout = new Grid();
         if (item.Record.Kind == MessageKind.SuperChat)
         {
@@ -290,10 +320,35 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         return button;
     }
 
+    private MultiBinding CreateRowAlignmentBinding()
+    {
+        return new()
+        {
+            Bindings =
+            {
+                new Binding(nameof(MessageItemViewModel.HasNamePinyin)),
+                new Binding(nameof(MessageItemViewModel.HasContentPinyin)),
+                new Binding(nameof(FeedViewModel.IsCompactDisplay)) { Source = Model },
+                new Binding(nameof(FeedViewModel.IsCompactMessageWrap)) { Source = Model }
+            },
+            Converter = new FuncMultiValueConverter<bool, VerticalAlignment>(values =>
+            {
+                var options = values.ToArray();
+                return options.Length == 4 && (options[0] || options[1]) && options[2] && !options[3]
+                    ? VerticalAlignment.Bottom : VerticalAlignment.Center;
+            })
+        };
+    }
+
     private Border CreateUnreadBadge()
     {
         var count = new TextBlock();
         count.Bind(TextBlock.TextProperty, new Binding(nameof(FeedViewModel.UnreadCount)) { Source = Model });
+        count.Bind(TextBlock.FontSizeProperty, new Binding(nameof(FeedViewModel.MessageTextScale))
+        {
+            Source = Model,
+            Converter = new FuncValueConverter<double, double>(scale => 13 * scale)
+        });
         var badge = new Border { Child = count, IsHitTestVisible = false };
         badge.Classes.Add("panelUnreadBadge");
         badge.Bind(IsVisibleProperty, new Binding(nameof(FeedViewModel.HasUnreadMessages)) { Source = Model });
@@ -429,15 +484,6 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         {
             reportError(exception);
         }
-    }
-
-    private static TextBlock BoundPinyin(string property, string visibilityProperty)
-    {
-        var text = BoundText(property);
-        text.TextTrimming = TextTrimming.None;
-        text.Classes.Add("danmuFeedPinyin");
-        text.Bind(IsVisibleProperty, new Binding(visibilityProperty));
-        return text;
     }
 
     private static TextBlock BoundText(string property)

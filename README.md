@@ -21,7 +21,7 @@
 - **Focused reading**: dedicated panels for chat, Super Chats, gifts, and membership purchases, with pinned chat and unread tracking.
 - **Your layout**: dock, split, float, and save panel layouts; keep the main window or individual floating windows on top.
 - **Multiple rooms**: organize workspaces and live rooms with independent reading states; import and export Danmu Neo workspace files.
-- **Translation and pinyin**: translate chat and Super Chats through an OpenAI-compatible API, with glossaries and caching; show local pinyin for usernames and gift names.
+- **Translation and pinyin**: translate chat and Super Chats through an OpenAI-compatible API, with glossaries and caching; generate local pinyin for usernames, gift names, and message content. Chat and Super Chat content have independent toggles. All annotations share character-aligned ruby (default) or a separate pinyin line; hover over a Chinese character to highlight its syllable. Text in chat, Super Chat, gift, and membership panels scales together from 50% to 200% (default 100%).
 - **Ready to resume**: SQLite preserves messages, translations, pins, and read states. Includes light/dark themes and English, Chinese, and Japanese interfaces.
 - **Update checks**: checks for new official releases after startup. Settings → Updates provides a startup toggle and manual check; update prompts open the GitHub release page for downloads.
 

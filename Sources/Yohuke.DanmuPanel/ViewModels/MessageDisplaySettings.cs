@@ -17,6 +17,9 @@ internal sealed class MessageDisplaySettings
     internal TranslationDisplayMode TranslationDisplayMode { get; }
     internal bool ShowUserPinyin { get; }
     internal bool ShowGiftPinyin { get; }
+    internal bool ShowDanmuPinyin { get; }
+    internal bool ShowSuperChatPinyin { get; }
+    internal PinyinLayoutMode PinyinLayout { get; }
     internal bool AutoScrollLongMessages { get; }
     internal string LanguageId { get; }
     internal string CultureName { get; }
@@ -27,6 +30,9 @@ internal sealed class MessageDisplaySettings
         TranslationDisplayMode = settings.Translation.DisplayMode;
         ShowUserPinyin = settings.ShowUserPinyin;
         ShowGiftPinyin = settings.ShowGiftPinyin;
+        ShowDanmuPinyin = settings.ShowDanmuPinyin;
+        ShowSuperChatPinyin = settings.ShowSuperChatPinyin;
+        PinyinLayout = settings.PinyinLayout;
         AutoScrollLongMessages = settings.AutoScrollLongMessages;
         LanguageId = languageId;
         CultureName = CultureInfo.CurrentCulture.Name;
@@ -40,6 +46,9 @@ internal sealed class MessageDisplaySettings
         if (previous is not null && previous.TranslationFingerprint == fingerprint &&
             previous.TranslationDisplayMode == settings.Translation.DisplayMode &&
             previous.ShowUserPinyin == settings.ShowUserPinyin && previous.ShowGiftPinyin == settings.ShowGiftPinyin &&
+            previous.ShowDanmuPinyin == settings.ShowDanmuPinyin &&
+            previous.ShowSuperChatPinyin == settings.ShowSuperChatPinyin &&
+            previous.PinyinLayout == settings.PinyinLayout &&
             previous.AutoScrollLongMessages == settings.AutoScrollLongMessages && previous.LanguageId == languageId &&
             previous.CultureName == CultureInfo.CurrentCulture.Name && previous.HasSameColors(settings))
         {

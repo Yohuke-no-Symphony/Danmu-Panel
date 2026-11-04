@@ -897,14 +897,14 @@
     </Style>
 
     <Style Selector="TextBlock.messagePinBadge">
-        <Setter Property="Width" Value="14" />
-        <Setter Property="Height" Value="14" />
-        <Setter Property="FontSize" Value="10" />
+        <Setter Property="Width" Value="{DynamicResource MessagePinBadgeSize}" />
+        <Setter Property="Height" Value="{DynamicResource MessagePinBadgeSize}" />
+        <Setter Property="FontSize" Value="{DynamicResource MessageFontSizePinyin}" />
         <Setter Property="TextAlignment" Value="Center" />
     </Style>
 
     <Style Selector="TextBlock.scFeedPrice">
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeBody}" />
         <Setter Property="FontWeight" Value="Bold" />
     </Style>
 
@@ -922,27 +922,19 @@
 
     <Style Selector="TextBlock.danmuFeedUser">
         <Setter Property="Foreground" Value="{DynamicResource MessageUserNameBrush}" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeBody}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <Style Selector="TextBlock.danmuFeedMeta">
-        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeMetadata}" />
         <Setter Property="Foreground" Value="{DynamicResource MessageTimeBrush}" />
     </Style>
 
-    <Style Selector="TextBlock.danmuFeedPinyin">
-        <Setter Property="FontSize" Value="10" />
-        <Setter Property="FontWeight" Value="Regular" />
-        <Setter Property="Foreground" Value="{DynamicResource MessagePinyinBrush}" />
-        <Setter Property="TextAlignment" Value="Center" />
-        <Setter Property="TextWrapping" Value="Wrap" />
-    </Style>
-
     <Style Selector="Grid.danmuMedalSlot">
-        <Setter Property="Width" Value="66" />
+        <Setter Property="Width" Value="{DynamicResource MessageMedalSlotWidth}" />
         <Setter Property="Margin" Value="0,0,6,0" />
         <Setter Property="HorizontalAlignment" Value="Left" />
         <Setter Property="VerticalAlignment" Value="Center" />
@@ -965,18 +957,18 @@
     </Style>
 
     <Style Selector="TextBlock.danmuMedalText">
-        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeMetadata}" />
         <Setter Property="Foreground" Value="{DynamicResource MedalTextBrush}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="TextBlock.danmuMedalLevel">
-        <Setter Property="Width" Value="20" />
+        <Setter Property="Width" Value="{DynamicResource MessageMedalLevelWidth}" />
         <Setter Property="TextAlignment" Value="Center" />
     </Style>
 
     <Style Selector="TextBlock.danmuFeedContent">
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeBody}" />
         <Setter Property="LineSpacing" Value="1" />
         <Setter Property="TextAlignment" Value="Left" />
         <Setter Property="VerticalAlignment" Value="Center" />
@@ -1001,7 +993,7 @@
 
     <Style Selector="components|HoverMarqueeTextBlock.compactFeedContent">
         <Setter Property="IsVisible" Value="False" />
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeCompact}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
@@ -1050,17 +1042,17 @@
     </Style>
 
     <Style Selector="Grid.compactDanmu TextBlock.danmuFeedUser">
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeCompact}" />
         <Setter Property="TextWrapping" Value="NoWrap" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
 
     <Style Selector="Grid.compactDanmu TextBlock.scFeedPrice">
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeCompact}" />
     </Style>
 
     <Style Selector="Grid.compactDanmu TextBlock.danmuFeedContent">
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeCompact}" />
         <Setter Property="LineSpacing" Value="0" />
     </Style>
 

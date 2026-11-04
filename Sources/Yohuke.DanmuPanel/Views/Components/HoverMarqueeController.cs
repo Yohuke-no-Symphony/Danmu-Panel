@@ -69,6 +69,12 @@ internal sealed class HoverMarqueeController
         return Offset;
     }
 
+    internal void Seek(double offset)
+    {
+        Offset = Math.Clamp(offset, 0, MaxOffset);
+        animationDuration = startDelay + TimeSpan.FromSeconds(Offset / scrollSpeed);
+    }
+
     internal void Reset()
     {
         animationDuration = TimeSpan.Zero;

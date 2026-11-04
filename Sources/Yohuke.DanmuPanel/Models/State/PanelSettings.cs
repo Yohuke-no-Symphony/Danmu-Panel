@@ -22,6 +22,18 @@ public sealed class PanelSettings
     public bool ShowUserPinyin { get; set; }
     public bool ShowGiftPinyin { get; set; }
 
+    /// <summary>为弹幕正文显示带声调拼音，默认关闭。</summary>
+    public bool ShowDanmuPinyin { get; set; }
+
+    /// <summary>为 SC 正文显示带声调拼音，默认关闭。</summary>
+    public bool ShowSuperChatPinyin { get; set; }
+
+    /// <summary>用户名、礼物名、弹幕及 SC 共用的拼音排版，默认在汉字上方逐字对齐。</summary>
+    public PinyinLayoutMode PinyinLayout { get; set; } = PinyinLayoutMode.Ruby;
+
+    /// <summary>弹幕、SC、礼物及舰长面板共用的文字缩放比例，默认 1。</summary>
+    public double MessageTextScale { get; set; } = 1;
+
     /// <summary>为四类消息启用 Neo 紧凑显示，旧配置默认启用。</summary>
     public bool CompactDanmuDisplay { get; set; } = true;
 
