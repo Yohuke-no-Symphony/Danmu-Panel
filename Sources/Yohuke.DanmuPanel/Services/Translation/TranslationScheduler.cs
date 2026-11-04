@@ -139,7 +139,7 @@ public sealed class TranslationScheduler : ITranslationScheduler
                         if (settings.BacklogMode == TranslationBacklogMode.Realtime)
                         {
                             await store.TrimPendingAsync(timeProvider.GetUtcNow() - MAX_ORDINARY_AGE,
-                                MAX_ORDINARY_PENDING, lifetime.Token).ConfigureAwait(false);
+                                MAX_ORDINARY_PENDING, running.Keys.ToArray(), lifetime.Token).ConfigureAwait(false);
                         }
 
                         var pending = await store.GetPendingAsync(MAX_ORDINARY_PENDING + MAX_CONCURRENCY, lifetime.Token).ConfigureAwait(false);

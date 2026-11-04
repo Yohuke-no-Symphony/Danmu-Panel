@@ -56,11 +56,13 @@ internal sealed class MemoryTranslationJobStore : ITranslationJobStore
         return Task.CompletedTask;
     }
 
-    public Task<int> TrimPendingAsync(DateTimeOffset olderThan, int maxOrdinary, CancellationToken cancellationToken = default)
+    public Task<int> TrimPendingAsync(DateTimeOffset olderThan, int maxOrdinary, IReadOnlyCollection<string> inFlightJobIds,
+        CancellationToken cancellationToken = default)
     {
         lock (gate)
         {
-            var remove = Pending.Where(job => job.Priority == 0).OrderByDescending(job => job.CreatedAt)
+            var remove = Pending.Where(job => job.Priority == 0 && !inFlightJobIds.Contains(job.Id))
+                .OrderByDescending(job => job.CreatedAt).ThenByDescending(job => job.Id, StringComparer.Ordinal)
                 .Where((job, index) => job.CreatedAt < olderThan || index >= maxOrdinary).ToHashSet();
             Pending.RemoveAll(remove.Contains);
             Skipped += remove.Count;

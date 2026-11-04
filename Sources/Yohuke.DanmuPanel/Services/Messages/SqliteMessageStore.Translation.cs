@@ -114,19 +114,24 @@ public sealed partial class SqliteMessageStore
     }
 
     /// <inheritdoc />
-    public Task<int> TrimPendingAsync(DateTimeOffset olderThan, int maxOrdinary, CancellationToken cancellationToken = default)
+    public Task<int> TrimPendingAsync(DateTimeOffset olderThan, int maxOrdinary, IReadOnlyCollection<string> inFlightJobIds,
+        CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(maxOrdinary);
+        var inFlight = JsonSerializer.Serialize(inFlightJobIds);
         return EnqueueAsync(connection =>
         {
             using var transaction = connection.BeginTransaction();
-            var trimmed = Execute(connection, transaction,
-                "UPDATE translation_jobs SET status=2 WHERE status=0 AND priority=0 AND created_ms<$cutoff;",
-                ("$cutoff", olderThan.ToUnixTimeMilliseconds()));
+            var trimmed = Execute(connection, transaction, """
+                UPDATE translation_jobs SET status=2 WHERE status=0 AND priority=0 AND created_ms<$cutoff
+                    AND id NOT IN (SELECT value FROM json_each($inFlight));
+                """, ("$cutoff", olderThan.ToUnixTimeMilliseconds()), ("$inFlight", inFlight));
             trimmed += Execute(connection, transaction, """
                 UPDATE translation_jobs SET status=2 WHERE id IN
-                (SELECT id FROM translation_jobs WHERE status=0 AND priority=0 ORDER BY created_ms DESC,id DESC LIMIT -1 OFFSET $limit);
-                """, ("$limit", maxOrdinary));
+                (SELECT id FROM translation_jobs WHERE status=0 AND priority=0
+                    AND id NOT IN (SELECT value FROM json_each($inFlight))
+                    ORDER BY created_ms DESC,id DESC LIMIT -1 OFFSET $limit);
+                """, ("$limit", maxOrdinary), ("$inFlight", inFlight));
             transaction.Commit();
             return trimmed;
         }, cancellationToken);

@@ -190,6 +190,60 @@ public sealed class SqliteMessageStoreTests
         Assert.False(await store.UpsertTranslationJobAsync(message.Id, 0, "new"));
     }
 
+    /// <summary>超时和数量清理均保留在途任务、SC 与置顶消息，在途任务完成后仍可保存译文。</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TranslationTrimmingProtectsInFlightAndImportantJobs(bool expireWaiting)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var store = new SqliteMessageStore(directory.DatabasePath);
+        var inFlight = Message(MessageKind.Danmu);
+        var waiting = new[] { Message(MessageKind.Danmu), Message(MessageKind.Danmu) };
+        var superChat = Message(MessageKind.SuperChat);
+        var pinned = Message(MessageKind.Danmu);
+        foreach (var message in new[] { inFlight, waiting[0], waiting[1], superChat, pinned })
+        {
+            await store.AppendAsync(message, new(), "config");
+        }
+        await store.TogglePinAsync(pinned.Id);
+        var jobs = await store.GetPendingAsync(10);
+        var cutoff = expireWaiting ? DateTimeOffset.UtcNow.AddMinutes(1) : DateTimeOffset.MinValue;
+
+        var trimmed = await store.TrimPendingAsync(cutoff, 1, [inFlight.Id]);
+
+        Assert.Equal(expireWaiting ? 2 : 1, trimmed);
+        var pending = await store.GetPendingAsync(10);
+        var expected = new[] { inFlight.Id, superChat.Id, pinned.Id }.ToHashSet();
+        if (!expireWaiting)
+        {
+            var newestWaiting = jobs.Where(job => waiting.Any(message => message.Id == job.Id))
+                .OrderByDescending(job => job.CreatedAt.ToUnixTimeMilliseconds())
+                .ThenByDescending(job => job.Id, StringComparer.Ordinal).First();
+            expected.Add(newestWaiting.Id);
+        }
+        Assert.True(expected.SetEquals(pending.Select(job => job.Id)));
+        Assert.True(await store.CompleteAsync(jobs.Single(job => job.Id == inFlight.Id), "译文"));
+        Assert.Equal("译文", (await store.GetByIdAsync(inFlight.Id))!.Translation);
+        foreach (var skipped in jobs.Where(job => !expected.Contains(job.Id)))
+        {
+            Assert.False(await store.CompleteAsync(skipped, "不应写入"));
+            Assert.Null((await store.GetByIdAsync(skipped.MessageId))!.Translation);
+        }
+    }
+
+    /// <summary>没有在途任务时，零等待容量仍跳过全部普通任务。</summary>
+    [Fact]
+    public async Task TranslationTrimmingWithNoInFlightJobsHonorsZeroCapacity()
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var store = new SqliteMessageStore(directory.DatabasePath);
+        await store.AppendAsync(Message(MessageKind.Danmu), new(), "config");
+
+        Assert.Equal(1, await store.TrimPendingAsync(DateTimeOffset.MinValue, 0, []));
+        Assert.Empty(await store.GetPendingAsync(10));
+    }
+
     /// <summary>礼物阈值更新只修改优先排序，不重置已读记录。</summary>
     [Fact]
     public async Task ThresholdReevaluationKeepsReadState()
