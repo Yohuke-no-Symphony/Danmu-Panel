@@ -25,6 +25,8 @@
 - **Ready to resume**: SQLite preserves messages, translations, pins, and read states. Includes light/dark themes and English, Chinese, and Japanese interfaces.
 - **Update checks**: checks for new official releases after startup. Settings → Updates provides a startup toggle and manual check; update prompts open the GitHub release page for downloads.
 
+![](Screenshots/1.gif)
+
 ## Development Quick Start
 
 Install the **.NET 10 SDK**, then run from the repository root:

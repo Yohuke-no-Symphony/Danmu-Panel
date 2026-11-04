@@ -441,7 +441,6 @@ public sealed class SettingsView : UserControl
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Content = content
         };
-        content.Classes.Add("scrollSafeContent");
         button.Click += (_, _) => SelectSection(button, page, descriptionKey);
         sectionButtons.Add(button);
         surface.FindControl<StackPanel>("SectionNavigation")!.Children.Add(button);

@@ -123,7 +123,6 @@ public sealed class TestMessagesView : UserControl, IWorkbenchHeaderActions, IDi
                 Ui.Field("TestMessages.BatchCount", batchCount), status
             }
         };
-        form.Classes.Add("scrollSafeContent");
         var contextMenu = new LocalizedContextMenu();
         AddMenuItem(contextMenu, "TestMessages.AddSingle", LucideIconKind.Plus, AddSingleCommand);
         AddMenuItem(contextMenu, "TestMessages.AddBatch", LucideIconKind.ListPlus, AddBatchCommand);

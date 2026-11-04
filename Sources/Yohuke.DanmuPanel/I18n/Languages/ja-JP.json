@@ -163,7 +163,7 @@
     "Panel.Guard.1": "総督",
     "Panel.Guard.2": "提督",
     "Panel.Guard.3": "艦長",
-    "Panel.InheritAccount": "上位設定を継承 / 匿名",
+    "Panel.InheritAccount": "上位設定を継承",
     "Panel.ListenerFailed": "エラーのため受信を停止しました",
     "Panel.Listening": "受信中",
     "Panel.MarkRead": "既読にする",

@@ -5,6 +5,7 @@
 
     <Style Selector=":is(TemplatedControl)">
         <Setter Property="FontFamily" Value="{StaticResource ContentControlThemeFontFamily}" />
+        <Setter Property="ScrollViewer.AllowAutoHide" Value="False" />
     </Style>
 
     <Style Selector="Grid.rootSurface">
@@ -105,10 +106,6 @@
 
     <Style Selector="TextBox[AcceptsReturn=True]">
         <Setter Property="VerticalContentAlignment" Value="Top" />
-    </Style>
-
-    <Style Selector="Control.scrollSafeContent">
-        <Setter Property="Margin" Value="0,0,16,0" />
     </Style>
 
     <Style Selector="TextBox.lyricRateInput">

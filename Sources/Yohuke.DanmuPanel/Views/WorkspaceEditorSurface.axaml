@@ -15,7 +15,7 @@
             </Border>
             <Border Grid.Row="1" Classes="settingsDialogContent">
                 <ScrollViewer>
-                    <StackPanel Spacing="18" Classes="scrollSafeContent">
+                    <StackPanel Spacing="18">
                         <Border Classes="panel" Padding="14">
                             <StackPanel Spacing="10">
                                 <TextBlock Text="{Loc Key=Panel.Name}" Classes="sectionTitle" />

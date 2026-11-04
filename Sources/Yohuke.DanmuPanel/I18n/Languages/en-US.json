@@ -163,7 +163,7 @@
     "Panel.Guard.1": "Governor",
     "Panel.Guard.2": "Admiral",
     "Panel.Guard.3": "Captain",
-    "Panel.InheritAccount": "Inherit / anonymous",
+    "Panel.InheritAccount": "Inherit",
     "Panel.ListenerFailed": "Listener stopped after an error",
     "Panel.Listening": "Listening",
     "Panel.MarkRead": "Mark as read",

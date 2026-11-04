@@ -22,7 +22,7 @@
             </ContextMenu>
         </Border.ContextMenu>
         <ScrollViewer Margin="14,10,14,12">
-            <ItemsControl Classes="workspaceTree scrollSafeContent"
+            <ItemsControl Classes="workspaceTree"
                           ItemsSource="{Binding Workspaces}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="items:WorkspaceTreeItemViewModel">
