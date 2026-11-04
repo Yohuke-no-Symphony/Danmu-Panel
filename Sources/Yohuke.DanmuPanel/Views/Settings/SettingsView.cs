@@ -44,7 +44,8 @@ public sealed class SettingsView : UserControl
     private readonly CheckBox compactSuperChatWrap;
     private readonly CheckBox autoScrollLongMessages;
     private readonly CheckBox windowMenuOnMac;
-    private readonly ObservableCollection<GlossaryEntry> glossary;
+    private readonly ObservableCollection<GlossaryRow> glossary;
+    private readonly TextBlock glossaryLanguage;
     private readonly DataGrid glossaryGrid;
     private readonly Button save;
     private bool saving;
@@ -108,7 +109,9 @@ public sealed class SettingsView : UserControl
         compactDanmuWrap.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
         compactSuperChatWrap.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
         autoScrollLongMessages.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
-        glossary = new(translation.Glossary);
+        glossary = new(translation.Glossary.GroupBy(entry => entry.Source.Trim(), StringComparer.Ordinal)
+            .Select(entries => new GlossaryRow(entries.Key, SelectedTargetLanguage, entries)));
+        glossaryLanguage = new() { Text = $"({SelectedTargetLanguage})", Opacity = 0.7 };
         glossaryGrid = new()
         {
             ItemsSource = glossary,
@@ -119,11 +122,21 @@ public sealed class SettingsView : UserControl
             GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
             Columns =
             {
-                new DataGridTextColumn { Header = Label("Settings.TermSource"), Binding = new Binding(nameof(GlossaryEntry.Source)) { Mode = BindingMode.TwoWay }, Width = new(1, DataGridLengthUnitType.Star) },
-                new DataGridTextColumn { Header = Label("Settings.TermTarget"), Binding = new Binding(nameof(GlossaryEntry.Target)) { Mode = BindingMode.TwoWay }, Width = new(1, DataGridLengthUnitType.Star) },
-                new DataGridTextColumn { Header = Label("Settings.TermLanguage"), Binding = new Binding(nameof(GlossaryEntry.TargetLanguage)) { Mode = BindingMode.TwoWay }, Width = new(120) }
+                new DataGridTextColumn { Header = Label("Settings.TermSource"), Binding = new Binding(nameof(GlossaryRow.Source)) { Mode = BindingMode.TwoWay }, Width = new(1, DataGridLengthUnitType.Star) },
+                new DataGridTextColumn
+                {
+                    Header = new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 6,
+                        Children = { Label("Settings.TermTarget"), glossaryLanguage }
+                    },
+                    Binding = new Binding(nameof(GlossaryRow.Target)) { Mode = BindingMode.TwoWay },
+                    Width = new(1, DataGridLengthUnitType.Star)
+                }
             }
         };
+        targetLanguage.SelectionChanged += (_, _) => SelectGlossaryLanguage();
         AddSection("Settings.Appearance", "Settings.AppearanceDescription", BuildAppearance());
         AddSection("Settings.Reading", "Settings.ReadingDescription", Stack(
             Card("Settings.MessageDisplay", compactDisplay,
@@ -160,10 +173,9 @@ public sealed class SettingsView : UserControl
                 SetStatus(colorError ?? Localization.Get("Colors.InvalidColor"));
                 return false;
             }
-            glossaryGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-            glossaryGrid.CommitEdit(DataGridEditingUnit.Row, true);
-            var terms = glossary.Where(entry => !string.IsNullOrWhiteSpace(entry.Source) || !string.IsNullOrWhiteSpace(entry.Target)).ToList();
-            if (terms.Any(entry => string.IsNullOrWhiteSpace(entry.Source) || string.IsNullOrWhiteSpace(entry.Target) || string.IsNullOrWhiteSpace(entry.TargetLanguage)))
+            CommitGlossaryEdits();
+            var terms = glossary.Where(entry => !string.IsNullOrWhiteSpace(entry.Source) || entry.HasTranslations).ToList();
+            if (terms.Any(entry => string.IsNullOrWhiteSpace(entry.Source) || !entry.HasTranslations))
             {
                 SetStatus(Localization.Get("Settings.IncompleteTerm"));
                 return false;
@@ -189,10 +201,7 @@ public sealed class SettingsView : UserControl
                 ExtraSystemPrompt = extraPrompt.Text ?? "",
                 DisplayMode = (TranslationDisplayMode)displayMode.SelectedIndex,
                 BacklogMode = (TranslationBacklogMode)backlogMode.SelectedIndex,
-                Glossary = terms.Select(entry => new GlossaryEntry
-                {
-                    Source = entry.Source.Trim(), Target = entry.Target.Trim(), TargetLanguage = entry.TargetLanguage.Trim()
-                }).ToList()
+                Glossary = terms.SelectMany(entry => entry.GetEntries()).ToList()
             };
             settings.Reading = new()
             {
@@ -290,20 +299,20 @@ public sealed class SettingsView : UserControl
         }, Report);
         var remove = Ui.IconButton("Settings.RemoveTerm", LucideIconKind.Trash2, () =>
         {
-            RemoveTerm(glossaryGrid.SelectedItem as GlossaryEntry);
+            RemoveTerm(glossaryGrid.SelectedItem as GlossaryRow);
             return Task.CompletedTask;
         }, Report);
         add.Name = "AddGlossaryTerm";
         remove.Name = "RemoveGlossaryTerm";
         remove.IsEnabled = false;
-        glossaryGrid.SelectionChanged += (_, _) => remove.IsEnabled = glossaryGrid.SelectedItem is GlossaryEntry;
+        glossaryGrid.SelectionChanged += (_, _) => remove.IsEnabled = glossaryGrid.SelectedItem is GlossaryRow;
         glossaryGrid.LoadingRow += (_, args) =>
         {
             var row = args.Row;
             var menu = new LocalizedContextMenu();
             var delete = new MenuItem { Icon = new LucideIcon { Kind = LucideIconKind.Trash2 } };
             menu.SetHeader(delete, "Panel.Delete");
-            delete.Click += (_, _) => RemoveTerm(row.DataContext as GlossaryEntry);
+            delete.Click += (_, _) => RemoveTerm(row.DataContext as GlossaryRow);
             menu.Items.Add(delete);
             row.ContextMenu = menu;
         };
@@ -325,20 +334,36 @@ public sealed class SettingsView : UserControl
 
     private void AddTerm()
     {
-        glossaryGrid.CommitEdit(DataGridEditingUnit.Row, true);
-        var term = new GlossaryEntry { TargetLanguage = SelectedTargetLanguage };
+        CommitGlossaryEdits();
+        var term = new GlossaryRow("", SelectedTargetLanguage, []);
         glossary.Add(term);
         glossaryGrid.SelectedItem = term;
         glossaryGrid.ScrollIntoView(term, glossaryGrid.Columns[0]);
     }
 
-    private void RemoveTerm(GlossaryEntry? term)
+    private void RemoveTerm(GlossaryRow? term)
     {
         if (term is not null)
         {
-            glossaryGrid.CommitEdit(DataGridEditingUnit.Row, true);
+            CommitGlossaryEdits();
             glossary.Remove(term);
         }
+    }
+
+    private void SelectGlossaryLanguage()
+    {
+        CommitGlossaryEdits();
+        foreach (var term in glossary)
+        {
+            term.SelectLanguage(SelectedTargetLanguage);
+        }
+        glossaryLanguage.Text = $"({SelectedTargetLanguage})";
+    }
+
+    private void CommitGlossaryEdits()
+    {
+        glossaryGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        glossaryGrid.CommitEdit(DataGridEditingUnit.Row, true);
     }
 
     private Control BuildData()
