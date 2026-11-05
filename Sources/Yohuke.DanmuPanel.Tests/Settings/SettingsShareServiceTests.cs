@@ -14,6 +14,30 @@ namespace Yohuke.DanmuPanel.Tests.Settings;
 /// <summary>验证设置分享格式、凭据保留和外部文件校验。</summary>
 public sealed class SettingsShareServiceTests
 {
+    /// <summary>本地缓存身份不导出，导入配置时也不能覆盖目标缓存身份。</summary>
+    [Fact]
+    public async Task TranslationCacheIdentityIsLocalAndSurvivesSettingsImport()
+    {
+        var source = CreateCompleteSettings("shared-key");
+        source.Translation.CacheFingerprints.Add("zh-CN", "foreign-cache");
+        var target = new PanelSettings();
+        target.Translation.CacheFingerprints.Add("zh-CN", "local-cache");
+        var service = new SettingsShareService();
+        await using var stream = new MemoryStream();
+
+        await service.ExportAsync(source, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        Assert.False(document.RootElement.GetProperty("Settings").GetProperty("Translation")
+            .TryGetProperty(nameof(TranslationSettings.CacheFingerprints), out _));
+        stream.Position = 0;
+        var imported = await service.ImportAsync(stream);
+        Assert.Empty(imported.Translation.CacheFingerprints);
+        service.ApplyTo(target, imported);
+        Assert.Equal("local-cache", target.Translation.CacheFingerprints["zh-CN"]);
+        Assert.Equal("foreign-cache", source.Translation.CacheFingerprints["zh-CN"]);
+    }
+
     /// <summary>全部可迁移设置和 API Key 完整往返，本地身份不进入文件。</summary>
     [Theory]
     [InlineData("")]
@@ -392,8 +416,9 @@ public sealed class SettingsShareServiceTests
 
     private static void AssertPortableSettingsEqual(PanelSettings expected, PanelSettings actual)
     {
-        var expectedJson = JsonSerializer.SerializeToElement(expected);
-        var actualJson = JsonSerializer.SerializeToElement(actual);
+        var sharing = new SettingsShareService();
+        var expectedJson = JsonSerializer.SerializeToElement(sharing.CreatePackage(expected).Settings);
+        var actualJson = JsonSerializer.SerializeToElement(sharing.CreatePackage(actual).Settings);
         foreach (var property in expectedJson.EnumerateObject().Where(property =>
                      property.Name is not (nameof(PanelSettings.DefaultAccountId) or nameof(PanelSettings.SelectedWorkspaceId))))
         {

@@ -58,6 +58,7 @@ public sealed class TranslationScheduler : ITranslationScheduler
             var snapshot = TranslationRequestFactory.Snapshot(value);
             var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(snapshot);
             var requestChanged = !configured || fingerprint != TranslationRequestFactory.GetConfigurationFingerprint(settings) ||
+                TranslationRequestFactory.GetRequestFingerprint(snapshot) != TranslationRequestFactory.GetRequestFingerprint(settings) ||
                 snapshot.ApiKey != settings.ApiKey || snapshot.Enabled != settings.Enabled;
             if (requestChanged)
             {

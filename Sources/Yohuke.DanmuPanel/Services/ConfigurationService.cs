@@ -3,6 +3,7 @@ using System.Text.Json;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Services.Appearance;
 using Yohuke.DanmuPanel.Services.Messages;
+using Yohuke.DanmuPanel.Services.Translation;
 
 namespace Yohuke.DanmuPanel.Services;
 
@@ -23,12 +24,14 @@ public sealed class ConfigurationService
     /// <summary>加载配置，损坏文件保留原件并恢复最近备份。</summary>
     public PanelConfiguration Load()
     {
-        return new()
+        var configuration = new PanelConfiguration
         {
             Settings = Read<PanelSettings>("settings.json"),
             Accounts = Read<ObservableCollection<BilibiliAccount>>("accounts.json"),
             Workspaces = Read<ObservableCollection<WorkspaceState>>("workspaces.json")
         };
+        TranslationRequestFactory.PreserveCacheIdentity(configuration.Settings.Translation);
+        return configuration;
     }
 
     /// <summary>串行保存当前配置快照。</summary>

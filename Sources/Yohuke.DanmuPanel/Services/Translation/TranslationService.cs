@@ -6,7 +6,9 @@ namespace Yohuke.DanmuPanel.Services.Translation;
 public sealed class TranslationService(ITranslationClient client, ITranslationCache cache) : IAsyncDisposable
 {
     private readonly Dictionary<string, SharedTranslationRequest> inFlight = new(StringComparer.Ordinal);
+    private readonly HashSet<SharedTranslationRequest> active = [];
     private readonly object gate = new();
+    private readonly SemaphoreSlim cacheWriteGate = new(1, 1);
     private readonly CancellationTokenSource lifetime = new();
 
     /// <summary>共享一次模型请求；所有等待者取消后才取消该请求。</summary>
@@ -18,14 +20,21 @@ public sealed class TranslationService(ITranslationClient client, ITranslationCa
             return cached;
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         SharedTranslationRequest shared;
         Task<string> task;
         lock (gate)
         {
-            if (!inFlight.TryGetValue(request.CacheKey, out shared!))
+            inFlight.TryGetValue(request.CacheKey, out var previous);
+            if (previous is null || previous.Request != request)
             {
-                shared = new(lifetime.Token);
-                inFlight.Add(request.CacheKey, shared);
+                shared = new(request, lifetime.Token);
+                inFlight[request.CacheKey] = shared;
+                active.Add(shared);
+            }
+            else
+            {
+                shared = previous;
             }
 
             shared.Waiters++;
@@ -97,7 +106,7 @@ public sealed class TranslationService(ITranslationClient client, ITranslationCa
         Task[] pending;
         lock (gate)
         {
-            pending = inFlight.Values.Where(item => item.Task is not null).Select(item => item.Task!).ToArray();
+            pending = [.. active.Select(item => item.Task!)];
         }
 
         try
@@ -109,6 +118,7 @@ public sealed class TranslationService(ITranslationClient client, ITranslationCa
         }
 
         lifetime.Dispose();
+        cacheWriteGate.Dispose();
     }
 
     private async Task<string> ExecuteAsync(TranslationRequest request, SharedTranslationRequest shared)
@@ -122,13 +132,30 @@ public sealed class TranslationService(ITranslationClient client, ITranslationCa
             }
 
             var result = await client.TranslateAsync(request, shared.Cancellation.Token).ConfigureAwait(false);
-            await cache.SetAsync(request.CacheKey, result, shared.Cancellation.Token).ConfigureAwait(false);
+            await cacheWriteGate.WaitAsync(shared.Cancellation.Token).ConfigureAwait(false);
+            try
+            {
+                bool currentRequest;
+                lock (gate)
+                {
+                    currentRequest = inFlight.TryGetValue(request.CacheKey, out var current) && ReferenceEquals(current, shared);
+                }
+                if (currentRequest)
+                {
+                    await cache.SetAsync(request.CacheKey, result, shared.Cancellation.Token).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                cacheWriteGate.Release();
+            }
             return result;
         }
         finally
         {
             lock (gate)
             {
+                active.Remove(shared);
                 if (inFlight.TryGetValue(request.CacheKey, out var current) && ReferenceEquals(current, shared))
                 {
                     inFlight.Remove(request.CacheKey);

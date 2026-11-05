@@ -5,13 +5,22 @@ using Yohuke.DanmuPanel.Models.Translation;
 
 namespace Yohuke.DanmuPanel.Services.Translation;
 
-/// <summary>构建稳定的翻译配置身份、提示词及请求快照。</summary>
+/// <summary>构建独立的译文缓存身份、请求配置身份、提示词及请求快照。</summary>
 public static class TranslationRequestFactory
 {
     private const string PROMPT_VERSION = "1";
 
-    /// <summary>返回不含明文凭据的配置指纹；显示模式和调度模式不影响译文身份。</summary>
+    /// <summary>按目标语言复用译文；API、模型、提示词和术语变化不使已有译文失效。</summary>
     public static string GetConfigurationFingerprint(TranslationSettings settings)
+    {
+        var language = settings.TargetLanguage.Trim();
+        return settings.CacheFingerprints.TryGetValue(language, out var fingerprint)
+            ? fingerprint
+            : Hash(JsonSerializer.Serialize(new { TargetLanguage = language }));
+    }
+
+    /// <summary>返回不含凭据的完整请求配置指纹，用于切换配置时取消在途请求。</summary>
+    public static string GetRequestFingerprint(TranslationSettings settings)
     {
         return Hash(JsonSerializer.Serialize(new
         {
@@ -77,6 +86,7 @@ public static class TranslationRequestFactory
             ExtraSystemPrompt = settings.ExtraSystemPrompt,
             DisplayMode = settings.DisplayMode,
             BacklogMode = settings.BacklogMode,
+            CacheFingerprints = new(settings.CacheFingerprints, StringComparer.Ordinal),
             Glossary = settings.Glossary.Select(entry => new GlossaryEntry
             {
                 Source = entry.Source,
@@ -84,6 +94,14 @@ public static class TranslationRequestFactory
                 TargetLanguage = entry.TargetLanguage
             }).ToList()
         };
+    }
+
+    internal static void PreserveCacheIdentity(TranslationSettings settings)
+    {
+        if (settings.CacheFingerprints.Count == 0)
+        {
+            settings.CacheFingerprints.Add(settings.TargetLanguage.Trim(), GetRequestFingerprint(settings));
+        }
     }
 
     private static IEnumerable<GlossaryEntry> EffectiveGlossary(TranslationSettings settings)

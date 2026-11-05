@@ -18,18 +18,18 @@ public sealed class TranslationRequestFactoryTests
     }
 
     [Fact]
-    public void TargetModelPromptAndGlossaryChangesInvalidate()
+    public void TargetModelPromptAndGlossaryChangesUpdateRequestIdentity()
     {
         var settings = new TranslationSettings { Model = "model" };
-        var fingerprints = new HashSet<string> { TranslationRequestFactory.GetConfigurationFingerprint(settings) };
+        var fingerprints = new HashSet<string> { TranslationRequestFactory.GetRequestFingerprint(settings) };
         settings.TargetLanguage = "ja-JP";
-        fingerprints.Add(TranslationRequestFactory.GetConfigurationFingerprint(settings));
+        fingerprints.Add(TranslationRequestFactory.GetRequestFingerprint(settings));
         settings.Model = "another";
-        fingerprints.Add(TranslationRequestFactory.GetConfigurationFingerprint(settings));
+        fingerprints.Add(TranslationRequestFactory.GetRequestFingerprint(settings));
         settings.ExtraSystemPrompt = "Use polite language.";
-        fingerprints.Add(TranslationRequestFactory.GetConfigurationFingerprint(settings));
+        fingerprints.Add(TranslationRequestFactory.GetRequestFingerprint(settings));
         settings.Glossary.Add(new() { Source = "主播", Target = "配信者", TargetLanguage = "ja-JP" });
-        fingerprints.Add(TranslationRequestFactory.GetConfigurationFingerprint(settings));
+        fingerprints.Add(TranslationRequestFactory.GetRequestFingerprint(settings));
         Assert.Equal(5, fingerprints.Count);
     }
 
@@ -59,8 +59,11 @@ public sealed class TranslationRequestFactoryTests
     public void SnapshotDoesNotObserveLaterEdits()
     {
         var settings = new TranslationSettings { Glossary = [new() { Source = "a", Target = "b" }] };
+        settings.CacheFingerprints.Add("zh-CN", "local-cache");
         var snapshot = TranslationRequestFactory.Snapshot(settings);
         settings.Glossary[0].Target = "changed";
+        settings.CacheFingerprints["zh-CN"] = "changed";
         Assert.Equal("b", snapshot.Glossary[0].Target);
+        Assert.Equal("local-cache", snapshot.CacheFingerprints["zh-CN"]);
     }
 }

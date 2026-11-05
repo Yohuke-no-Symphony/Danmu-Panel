@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Yohuke.DanmuPanel.Models.Settings;
 using Yohuke.DanmuPanel.Models.State;
+using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Services.Appearance;
 using Yohuke.DanmuPanel.Services.Messages;
 
@@ -43,7 +44,9 @@ public sealed class SettingsShareService
         target.ColorScheme = settings.ColorScheme;
         target.UseWindowMenuOnMac = settings.UseWindowMenuOnMac;
         target.CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
+        var cacheFingerprints = target.Translation.CacheFingerprints;
         target.Translation = settings.Translation;
+        target.Translation.CacheFingerprints = cacheFingerprints;
         target.Reading = settings.Reading;
         target.ShowUserPinyin = settings.ShowUserPinyin;
         target.ShowGiftPinyin = settings.ShowGiftPinyin;
@@ -94,12 +97,13 @@ public sealed class SettingsShareService
         var resolver = new DefaultJsonTypeInfoResolver();
         resolver.Modifiers.Add(typeInfo =>
         {
-            if (typeInfo.Type != typeof(PanelSettings))
+            if (typeInfo.Type != typeof(PanelSettings) && typeInfo.Type != typeof(TranslationSettings))
             {
                 return;
             }
             foreach (var property in typeInfo.Properties.Where(property =>
-                         property.Name is nameof(PanelSettings.DefaultAccountId) or nameof(PanelSettings.SelectedWorkspaceId)).ToArray())
+                         property.Name is nameof(PanelSettings.DefaultAccountId) or nameof(PanelSettings.SelectedWorkspaceId) or
+                             nameof(TranslationSettings.CacheFingerprints)).ToArray())
             {
                 typeInfo.Properties.Remove(property);
             }

@@ -247,7 +247,7 @@
     "Settings.BaseUrlHelp": "サービスを選択するか、Custom で任意の URL を入力してください。カスタムサービスは OpenAI Chat Completions 互換である必要があります。ベース URL または /chat/completions の完全な URL を指定できます。",
     "Settings.Bilingual": "原文と翻訳",
     "Settings.CacheCleared": "翻訳キャッシュを消去しました。",
-    "Settings.CacheHelp": "同じ文章の翻訳を再利用するキャッシュです。消去してもメッセージに保存済みの翻訳は削除されません。",
+    "Settings.CacheHelp": "同じ文章と翻訳先の言語では、API・モデル・プロンプト・用語集を変更しても翻訳を再利用します。キャッシュの消去は以降の翻訳に適用され、保存済みの翻訳は残ります。保存済みの翻訳はメッセージごとに再翻訳して更新できます。",
     "Settings.Chinese": "简体中文",
     "Settings.ClearAll": "すべてのルームの履歴を消去…",
     "Settings.ClearCache": "翻訳キャッシュを消去",

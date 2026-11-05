@@ -16,6 +16,7 @@ public sealed class PanelRuntime : IAsyncDisposable
     private readonly TranslationScheduler scheduler;
     private readonly TranslationService translationService;
     private readonly SqliteTranslationCache translationCache;
+    private readonly Dictionary<string, string> translationCacheFingerprints;
     private readonly SemaphoreSlim lifecycle = new(1, 1);
     public ConfigurationService ConfigurationStore { get; }
     public PanelConfiguration Configuration { get; }
@@ -39,6 +40,8 @@ public sealed class PanelRuntime : IAsyncDisposable
     {
         ConfigurationStore = configurationStore;
         Configuration = configuration;
+        TranslationRequestFactory.PreserveCacheIdentity(configuration.Settings.Translation);
+        translationCacheFingerprints = configuration.Settings.Translation.CacheFingerprints;
         DanmuFilter = CreateDanmuFilter();
         foreach (var account in configuration.Accounts)
         {
@@ -102,6 +105,7 @@ public sealed class PanelRuntime : IAsyncDisposable
     /// <summary>保存设置并刷新未读优先级和翻译配置。</summary>
     public async Task ApplySettingsAsync()
     {
+        Configuration.Settings.Translation.CacheFingerprints = translationCacheFingerprints;
         var danmuFilter = CreateDanmuFilter();
         await ConfigurationStore.SaveAsync(Configuration);
         await Messages.ReevaluateReadOptionsAsync(Configuration.Settings.Reading);

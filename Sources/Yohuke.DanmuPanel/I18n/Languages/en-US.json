@@ -247,7 +247,7 @@
     "Settings.BaseUrlHelp": "Choose a provider, or select Custom to enter a URL. Custom services must support OpenAI Chat Completions; use a base URL or a full /chat/completions URL.",
     "Settings.Bilingual": "Original and translation",
     "Settings.CacheCleared": "Translation cache cleared.",
-    "Settings.CacheHelp": "The cache reuses translations for identical text. Clearing it does not remove translations already saved with messages.",
+    "Settings.CacheHelp": "Translations are reused for identical text and target language across API, model, prompt and glossary changes. Clearing the cache affects future translations and keeps translations saved with messages. Retranslate individual messages to update saved translations.",
     "Settings.Chinese": "简体中文",
     "Settings.ClearAll": "Clear all room history…",
     "Settings.ClearCache": "Clear translation cache",
