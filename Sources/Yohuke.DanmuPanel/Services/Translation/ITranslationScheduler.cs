@@ -1,4 +1,5 @@
 using Yohuke.DanmuPanel.Models.Translation;
+using Yohuke.DanmuPanel.Models.Messages;
 
 namespace Yohuke.DanmuPanel.Services.Translation;
 
@@ -7,7 +8,7 @@ public interface ITranslationScheduler : IAsyncDisposable
 {
     event EventHandler<TranslationCompletedEventArgs>? Completed;
     event Action<string>? Error;
-    event Action<string>? PendingChanged;
+    event Action<string, MessageKind?>? PendingChanged;
     Task StartAsync(TranslationSettings settings, CancellationToken cancellationToken = default);
     Task UpdateSettingsAsync(TranslationSettings settings, CancellationToken cancellationToken = default);
     void NotifyWorkAvailable(bool retryAuthentication = false);

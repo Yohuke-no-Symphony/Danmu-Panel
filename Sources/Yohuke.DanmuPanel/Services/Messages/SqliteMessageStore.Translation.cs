@@ -167,6 +167,7 @@ public sealed partial class SqliteMessageStore
             Id = record.Id,
             MessageId = record.Id,
             RoomTabId = record.RoomTabId,
+            Kind = record.Kind,
             Generation = record.Generation,
             Text = record.Content,
             EmoticonTexts = record.Emoticons.Select(emoticon => emoticon.Text).ToArray(),

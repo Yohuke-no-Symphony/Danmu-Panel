@@ -14,6 +14,7 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
     private readonly Channel<MessageStoreOperation> operations = Channel.CreateBounded<MessageStoreOperation>(
         new BoundedChannelOptions(QUEUE_CAPACITY) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
     private readonly TaskCompletionSource ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly MessageRecordReadCache readCache = new();
     private readonly Task worker;
 
     /// <summary>创建独立消息数据库并启动有界写入队列。</summary>
@@ -57,6 +58,10 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
             {
                 operation.Fail(error);
             }
+        }
+        finally
+        {
+            readCache.Clear();
         }
     }
 

@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Media.TextFormatting;
+using Avalonia.VisualTree;
 using Yohuke.DanmuPanel.Models.Workspace;
 using Yohuke.DanmuPanel.Models.Translation;
 
@@ -22,8 +23,11 @@ public sealed class EmoticonTextBlock : TextBlock
     private readonly List<PinyinRubySyllable> rubySyllables = [];
     private readonly List<RenderedMessageTextSpan> renderedSpans = [];
     private readonly Dictionary<int, Run> pronunciationRuns = [];
+    private List<Visual>? visibilityAncestors;
     private PinyinSeparateLinePresenter? separateLine;
     private bool isAttached;
+    private bool isContentDeferred;
+    private bool isVisibilityTracking;
 
     internal int HighlightedSourceStart { get; private set; } = -1;
     internal bool HasAnnotations => rubySyllables.Count > 0 || pronunciationRuns.Count > 0;
@@ -180,7 +184,11 @@ public sealed class EmoticonTextBlock : TextBlock
             }
             UpdateTypography();
         }
-        else if (change.Property == DataContextProperty || change.Property == IsVisibleProperty && !IsVisible)
+        else if (change.Property == IsVisibleProperty)
+        {
+            UpdateContentVisibility();
+        }
+        else if (change.Property == DataContextProperty)
         {
             ClearHighlight();
         }
@@ -213,6 +221,7 @@ public sealed class EmoticonTextBlock : TextBlock
     {
         base.OnDetachedFromVisualTree(e);
         isAttached = false;
+        UpdateVisibilityTracking(false);
         ReleaseContent();
     }
 
@@ -257,10 +266,64 @@ public sealed class EmoticonTextBlock : TextBlock
         SetHighlightedSource(-1);
     }
 
+    private void OnAncestorPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs change)
+    {
+        if (change.Property == IsVisibleProperty)
+        {
+            UpdateContentVisibility();
+        }
+    }
+
+    private void UpdateContentVisibility()
+    {
+        if (isVisibilityTracking && isContentDeferred != !IsEffectivelyVisible)
+        {
+            RebuildContent();
+        }
+    }
+
+    private void UpdateVisibilityTracking(bool required)
+    {
+        if (isVisibilityTracking == required)
+        {
+            return;
+        }
+        isVisibilityTracking = required;
+        if (required)
+        {
+            visibilityAncestors ??= [];
+            foreach (var ancestor in this.GetVisualAncestors())
+            {
+                visibilityAncestors.Add(ancestor);
+                ancestor.PropertyChanged += OnAncestorPropertyChanged;
+            }
+        }
+        else
+        {
+            foreach (var ancestor in visibilityAncestors!)
+            {
+                ancestor.PropertyChanged -= OnAncestorPropertyChanged;
+            }
+            visibilityAncestors.Clear();
+        }
+    }
+
     private void RebuildContent()
     {
         ReleaseContent();
         var content = ContentText ?? "";
+        var hasRichContent = Annotations?.Any(annotation => annotation.HasPinyin) == true ||
+                             Emoticons?.Any(emoticon => !string.IsNullOrEmpty(emoticon.Text) &&
+                                 !string.IsNullOrWhiteSpace(emoticon.ImagePath)) == true;
+        UpdateVisibilityTracking(isAttached && hasRichContent);
+        isContentDeferred = !isAttached || !IsEffectivelyVisible;
+        if (isContentDeferred)
+        {
+            Inlines = null;
+            Text = content;
+            AnnotationLayoutChanged?.Invoke();
+            return;
+        }
         var candidates = Emoticons?.Where(emoticon => !string.IsNullOrEmpty(emoticon.Text) &&
                                                      !string.IsNullOrWhiteSpace(emoticon.ImagePath))
             .OrderByDescending(emoticon => emoticon.Text.Length).ToArray() ?? [];
@@ -268,7 +331,7 @@ public sealed class EmoticonTextBlock : TextBlock
         var hasAnnotations = Annotations is { Count: > 0 } &&
                              Annotations.Any(annotation => annotation.HasPinyin) &&
                              string.Concat(Annotations.Select(annotation => annotation.Text)) == content;
-        if (!isAttached || candidates.Length == 0 && !hasAnnotations)
+        if (candidates.Length == 0 && !hasAnnotations)
         {
             Inlines = null;
             Text = content;

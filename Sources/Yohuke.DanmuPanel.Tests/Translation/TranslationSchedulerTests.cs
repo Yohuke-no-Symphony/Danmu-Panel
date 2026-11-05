@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Xunit;
 using Yohuke.DanmuPanel.Models.Translation;
+using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Services.Translation;
 
 namespace Yohuke.DanmuPanel.Tests.Translation;
@@ -17,11 +18,11 @@ public sealed class TranslationSchedulerTests
         store.Pending.Add(Job("important", 1, DateTimeOffset.UtcNow.AddMinutes(-1)));
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var count = 0;
-        var pendingChanges = new ConcurrentQueue<string>();
+        var pendingChanges = new ConcurrentQueue<(string RoomId, MessageKind? Kind)>();
         await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient((request, _) => Task.FromResult(request.Text)), cache);
         await using var scheduler = new TranslationScheduler(store, service);
-        scheduler.PendingChanged += pendingChanges.Enqueue;
+        scheduler.PendingChanged += (room, kind) => pendingChanges.Enqueue((room, kind));
         scheduler.Completed += (_, _) =>
         {
             if (Interlocked.Increment(ref count) == completed)
@@ -33,7 +34,7 @@ public sealed class TranslationSchedulerTests
         await completion.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(skipped, store.Skipped);
         Assert.Equal(skipped, pendingChanges.Count);
-        Assert.All(pendingChanges, room => Assert.Equal("", room));
+        Assert.All(pendingChanges, change => Assert.Equal(("", (MessageKind?)null), change));
         Assert.Equal("important", store.Results["important"]);
     }
 
@@ -41,23 +42,26 @@ public sealed class TranslationSchedulerTests
     public async Task ConcurrencyNeverExceedsFour()
     {
         var store = new MemoryTranslationJobStore();
+        var createdAt = DateTimeOffset.UtcNow;
         for (var index = 0; index < 12; index++)
         {
-            store.Pending.Add(Job("message" + index, index == 11 ? 1 : 0, DateTimeOffset.UtcNow));
+            store.Pending.Add(Job("message" + index, index == 11 ? 1 : 0, createdAt.AddSeconds(index)));
         }
+        var expectedFirstBatch = (await store.GetPendingAsync(4)).Select(job => job.Text).ToArray();
+        Assert.Equal(new[] { "message11", "message0", "message1", "message2" }, expectedFirstBatch);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var fourStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var allDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var active = 0;
-        var maximum = 0;
         var completed = 0;
+        var activeCounts = new ConcurrentQueue<int>();
         var starts = new ConcurrentQueue<string>();
         await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient(async (request, token) =>
         {
             starts.Enqueue(request.Text);
             var current = Interlocked.Increment(ref active);
-            maximum = Math.Max(maximum, current);
+            activeCounts.Enqueue(current);
             if (current == 4)
             {
                 fourStarted.TrySetResult();
@@ -76,11 +80,15 @@ public sealed class TranslationSchedulerTests
         };
         await scheduler.StartAsync(new() { Enabled = true, Model = "test", BacklogMode = TranslationBacklogMode.AllMessages });
         await fourStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.Equal(4, active);
-        Assert.Equal("message11", starts.First());
+        Assert.Equal(4, Volatile.Read(ref active));
+        var firstBatch = starts.ToArray();
+        Assert.Equal(4, firstBatch.Length);
+        Assert.Equal(expectedFirstBatch.Order(StringComparer.Ordinal), firstBatch.Order(StringComparer.Ordinal));
         release.SetResult();
         await allDone.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.InRange(maximum, 1, 4);
+        Assert.Equal(12, starts.Distinct().Count());
+        Assert.Equal(12, activeCounts.Count);
+        Assert.Equal(4, activeCounts.Max());
     }
 
     [Fact]
@@ -146,7 +154,7 @@ public sealed class TranslationSchedulerTests
         await using var service = new TranslationService(new DelegateTranslationClient((_, _) =>
             throw new TranslationException("translation.failed")), cache);
         await using var scheduler = new TranslationScheduler(store, service);
-        scheduler.PendingChanged += room => changed.TrySetResult(room);
+        scheduler.PendingChanged += (room, _) => changed.TrySetResult(room);
 
         await scheduler.StartAsync(new() { Enabled = true, Model = "test" });
 

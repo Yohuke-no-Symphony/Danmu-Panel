@@ -91,6 +91,12 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             else if (args.PropertyName == nameof(FeedViewModel.MessageTextScale))
             {
                 UpdateTextScale();
+                scroll?.NotifyLayoutChanged();
+            }
+            else if (args.PropertyName is nameof(FeedViewModel.IsCompactDisplay) or
+                     nameof(FeedViewModel.IsCompactMessageWrap) or nameof(FeedViewModel.IsCompactSuperChatWrap))
+            {
+                scroll?.NotifyLayoutChanged();
             }
         };
         Content = surface;

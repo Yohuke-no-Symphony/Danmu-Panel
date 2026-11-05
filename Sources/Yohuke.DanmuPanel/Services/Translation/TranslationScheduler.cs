@@ -1,4 +1,5 @@
 using Yohuke.DanmuPanel.Models.Translation;
+using Yohuke.DanmuPanel.Models.Messages;
 
 namespace Yohuke.DanmuPanel.Services.Translation;
 
@@ -32,7 +33,7 @@ public sealed class TranslationScheduler : ITranslationScheduler
 
     public event EventHandler<TranslationCompletedEventArgs>? Completed;
     public event Action<string>? Error;
-    public event Action<string>? PendingChanged;
+    public event Action<string, MessageKind?>? PendingChanged;
 
     /// <summary>恢复待办并启动唯一调度循环。</summary>
     public async Task StartAsync(TranslationSettings settings, CancellationToken cancellationToken = default)
@@ -146,7 +147,7 @@ public sealed class TranslationScheduler : ITranslationScheduler
                                 MAX_ORDINARY_PENDING, running.Keys.ToArray(), lifetime.Token).ConfigureAwait(false);
                             if (trimmed > 0)
                             {
-                                PendingChanged?.Invoke("");
+                                PendingChanged?.Invoke("", null);
                             }
                         }
 
@@ -201,7 +202,7 @@ public sealed class TranslationScheduler : ITranslationScheduler
             {
                 if (await store.FailAsync(job, "skipped:emoticon", cancellationToken).ConfigureAwait(false))
                 {
-                    PendingChanged?.Invoke(job.RoomTabId);
+                    PendingChanged?.Invoke(job.RoomTabId, job.Kind);
                 }
                 return;
             }
@@ -233,7 +234,7 @@ public sealed class TranslationScheduler : ITranslationScheduler
             {
                 if (await store.FailAsync(job, message, cancellationToken).ConfigureAwait(false))
                 {
-                    PendingChanged?.Invoke(job.RoomTabId);
+                    PendingChanged?.Invoke(job.RoomTabId, job.Kind);
                     Error?.Invoke(message);
                 }
             }

@@ -24,6 +24,8 @@ internal sealed class DanmuFeedScrollController : IDisposable
     private double readingY;
     private long session;
     private long contentRevision;
+    private long lastFollowedRevision = -1;
+    private Size lastFollowedViewport;
     private IPointer? scrollingPointer;
     private bool isFollowingLatest;
     private bool isFollowPending;
@@ -86,6 +88,13 @@ internal sealed class DanmuFeedScrollController : IDisposable
         {
             ResetToLatest();
         }
+    }
+
+    /// <summary>显式通知字号、换行等外部布局设置变化，并保持当前跟随或阅读策略。</summary>
+    public void NotifyLayoutChanged()
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+        OnContentChanged();
     }
 
     /// <summary>在消息移组前选择可见的邻近行，避免阅读位置追随即将移走的消息。</summary>
@@ -173,14 +182,16 @@ internal sealed class DanmuFeedScrollController : IDisposable
         {
             return;
         }
-        if (isFollowingLatest && followNewMessages && !IsAtLatest())
+        if (isFollowingLatest && followNewMessages)
         {
-            QueueFollowLatest();
+            if (!IsAtLatest() && (contentRevision != lastFollowedRevision ||
+                scrollViewer.Viewport != lastFollowedViewport))
+            {
+                QueueFollowLatest();
+            }
+            return;
         }
-        else
-        {
-            CaptureReadingAnchor();
-        }
+        CaptureReadingAnchor();
     }
 
     private void OnScrollPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
@@ -268,16 +279,6 @@ internal sealed class DanmuFeedScrollController : IDisposable
         scrollingPointer = null;
         readingItem = null;
         SetFollowingLatest(true);
-        isUpdatingScroll = true;
-        try
-        {
-            MoveToLatest();
-        }
-        finally
-        {
-            isUpdatingScroll = false;
-        }
-        CaptureReadingAnchor();
         QueueFollowLatest();
     }
 
@@ -440,41 +441,98 @@ internal sealed class DanmuFeedScrollController : IDisposable
         }
         isFollowPending = true;
         var requestedSession = session;
-        Dispatcher.UIThread.Post(() =>
+        Dispatcher.UIThread.Post(() => FollowLatest(requestedSession), DispatcherPriority.Normal);
+    }
+
+    private void FollowLatest(long requestedSession)
+    {
+        if (!IsCurrentFollowSession(requestedSession) || !isFollowingLatest)
         {
-            if (requestedSession != session || isDisposed || items is null || !isFollowingLatest)
+            if (requestedSession == session)
             {
-                return;
+                isFollowPending = false;
             }
-            var followedRevision = contentRevision;
-            isUpdatingScroll = true;
-            try
+            return;
+        }
+        var followedRevision = contentRevision;
+        (Size Extent, Size Viewport, Rect? LastBounds) followedGeometry = default;
+        isUpdatingScroll = true;
+        try
+        {
+            scrollViewer.UpdateLayout();
+            if (IsCurrentFollowSession(requestedSession) && isFollowingLatest)
             {
-                scrollViewer.UpdateLayout();
-                if (requestedSession == session && !isDisposed && items is not null && isFollowingLatest)
-                {
-                    MoveToLatest();
-                }
+                MoveToLatest();
+                followedGeometry = CaptureFollowGeometry();
             }
-            finally
+        }
+        finally
+        {
+            isUpdatingScroll = false;
+            if (requestedSession == session)
             {
-                isUpdatingScroll = false;
-                if (requestedSession == session)
-                {
-                    Dispatcher.UIThread.Post(() =>
-                    {
-                        if (requestedSession != session || isDisposed || items is null)
-                        {
-                            return;
-                        }
-                        isFollowPending = false;
-                        if (isFollowingLatest && (followedRevision != contentRevision || !IsAtLatest()))
-                        {
-                            QueueFollowLatest();
-                        }
-                    }, DispatcherPriority.Loaded);
-                }
+                Dispatcher.UIThread.Post(() => SettleFollowLatest(requestedSession, followedRevision, followedGeometry),
+                    DispatcherPriority.Loaded);
             }
-        }, DispatcherPriority.Normal);
+        }
+    }
+
+    private void SettleFollowLatest(long requestedSession, long followedRevision,
+        (Size Extent, Size Viewport, Rect? LastBounds) followedGeometry)
+    {
+        if (!IsCurrentFollowSession(requestedSession))
+        {
+            return;
+        }
+        var settledRevision = contentRevision;
+        isUpdatingScroll = true;
+        try
+        {
+            if (isFollowingLatest && (followedRevision != contentRevision || !IsAtLatest() ||
+                CaptureFollowGeometry() != followedGeometry))
+            {
+                MoveToLatest();
+            }
+        }
+        finally
+        {
+            isUpdatingScroll = false;
+            if (requestedSession == session)
+            {
+                lastFollowedRevision = settledRevision;
+                lastFollowedViewport = scrollViewer.Viewport;
+                Dispatcher.UIThread.Post(() => CompleteFollowLatest(requestedSession), DispatcherPriority.Input);
+            }
+        }
+    }
+
+    private void CompleteFollowLatest(long requestedSession)
+    {
+        if (!IsCurrentFollowSession(requestedSession))
+        {
+            return;
+        }
+        isFollowPending = false;
+        if (isFollowingLatest && (lastFollowedRevision != contentRevision ||
+            lastFollowedViewport != scrollViewer.Viewport))
+        {
+            QueueFollowLatest();
+        }
+        else
+        {
+            CaptureReadingAnchor();
+        }
+    }
+
+    private bool IsCurrentFollowSession(long requestedSession)
+    {
+        return requestedSession == session && !isDisposed && items is not null;
+    }
+
+    private (Size Extent, Size Viewport, Rect? LastBounds) CaptureFollowGeometry()
+    {
+        var lastIndex = itemsControl.Items.Count - 1;
+        return (scrollViewer.Extent, scrollViewer.Viewport,
+            lastIndex >= 0 ? itemsControl.ContainerFromIndex(lastIndex)?.Bounds : null);
     }
 }
