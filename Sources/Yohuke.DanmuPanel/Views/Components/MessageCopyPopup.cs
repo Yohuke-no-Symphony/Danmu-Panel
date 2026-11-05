@@ -13,7 +13,9 @@ internal sealed class MessageCopyPopup : Flyout
         surface = new();
         surface.SetMessage(original, translation);
         Content = surface;
-        Placement = PlacementMode.Custom;
+        Placement = PlacementMode.AnchorAndGravity;
+        PlacementAnchor = PopupAnchor.BottomLeft;
+        PlacementGravity = PopupGravity.BottomRight;
         OverlayDismissEventPassThrough = false;
         FlyoutPresenterClasses.Add("messageCopyPopup");
         surface.CopyRequested += async text =>
@@ -35,12 +37,7 @@ internal sealed class MessageCopyPopup : Flyout
     internal void Show(Control owner, Rect anchorBounds)
     {
         surface.MaxWidth = Math.Max(0, TopLevel.GetTopLevel(owner)!.ClientSize.Width - 32);
-        CustomPopupPlacementCallback = placement =>
-        {
-            placement.AnchorRectangle = anchorBounds;
-            placement.Anchor = PopupAnchor.BottomLeft;
-            placement.Gravity = PopupGravity.BottomRight;
-        };
+        Popup.PlacementRect = anchorBounds;
         ShowAt(owner);
     }
 }

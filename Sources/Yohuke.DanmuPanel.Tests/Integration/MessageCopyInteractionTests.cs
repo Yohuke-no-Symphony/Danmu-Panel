@@ -6,6 +6,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
@@ -324,6 +325,59 @@ public sealed class MessageCopyInteractionTests
         root.MouseDown(point, MouseButton.Left);
         root.MouseUp(point, MouseButton.Left);
         Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>右侧嵌套面板和浮动窗口中的弹层贴近触发消息，并正确处理布局缩放。</summary>
+    [AvaloniaTheory]
+    [InlineData(MessageKind.SuperChat, false, 1.0)]
+    [InlineData(MessageKind.Danmu, false, 1.25)]
+    [InlineData(MessageKind.SuperChat, true, 1.25)]
+    [InlineData(MessageKind.Danmu, true, 1.0)]
+    public async Task CopyPopupPositionsBesideMessageInOffsetAndScaledPanels(MessageKind kind, bool floating, double scale)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var runtime = new PanelRuntime(new ConfigurationService(directory.Path), new());
+        var record = Message(kind);
+        await runtime.Messages.AppendAsync(record, new());
+        var errors = new List<Exception>();
+        var view = new MessageFeedView(runtime, kind, errors.Add);
+        var transformed = new LayoutTransformControl
+        {
+            Child = view, LayoutTransform = new ScaleTransform(scale, scale), Margin = new Thickness(24, 72, 16, 16)
+        };
+        var layout = new Grid { ColumnDefinitions = new("*,*") };
+        layout.Children.Add(new Border { Background = Brushes.DimGray });
+        layout.Children.Add(transformed);
+        Grid.SetColumn(transformed, 1);
+        var window = new Window
+        {
+            Width = 1200, Height = 650, Content = layout,
+            Position = floating ? new PixelPoint(200, 100) : default
+        };
+        try
+        {
+            await view.Model.SelectRoomAsync(new() { Id = "tab", RoomId = "123" });
+            await view.Model.WaitForPresentationAsync();
+            window.Show();
+            Pump(window);
+            var row = FindRow(view, record.Id);
+            view.ShowCopyPopup(row);
+            Pump(window);
+            var popup = Assert.IsType<MessageCopyPopup>(view.CopyPopup);
+            var surface = Assert.IsType<MessageCopySurface>(popup.Content);
+            var expected = row.PointToScreen(new Point(0, row.Bounds.Height));
+            var actual = surface.PointToScreen(default);
+
+            Assert.InRange(actual.X - expected.X, 0, 12);
+            Assert.InRange(actual.Y - expected.Y, 0, 12);
+            CaptureIfRequested(TopLevel.GetTopLevel(surface)!, $"position-{kind}-{floating}-{scale}");
+            Assert.Empty(errors);
+        }
+        finally
+        {
+            view.Model.Dispose();
+            window.Close();
+        }
     }
 
     /// <summary>新消息推进并复用原消息行时，浮层继续保留原文和选区，复制后关闭。</summary>
