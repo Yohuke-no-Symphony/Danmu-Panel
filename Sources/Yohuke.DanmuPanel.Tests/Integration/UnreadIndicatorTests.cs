@@ -6,6 +6,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Input;
+using Dock.Avalonia.Controls;
 using Yohuke.DanmuPanel.Layouts;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
@@ -225,6 +226,88 @@ public sealed class UnreadIndicatorTests
         }
     }
 
+    /// <summary>未选中标签显示未读计数，激活后与标题同步，并保持徽标文字颜色。</summary>
+    [AvaloniaTheory]
+    [InlineData(MessageKind.SuperChat, WorkbenchPanelIds.SUPER_CHAT)]
+    [InlineData(MessageKind.Gift, WorkbenchPanelIds.GIFT)]
+    [InlineData(MessageKind.Guard, WorkbenchPanelIds.GUARD)]
+    public async Task TabBadgeTracksUnreadWhilePanelIsInactive(MessageKind kind, string panelId)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var runtime = CreateRuntime(directory);
+        await runtime.Messages.AppendAsync(Message(kind), new());
+        var errors = new List<Exception>();
+        var view = new MessageFeedView(runtime, kind, errors.Add);
+        var panels = WorkbenchPanelIds.All.ToDictionary(id => id, id => (Control)new TextBlock { Text = id });
+        panels[panelId] = view;
+        await new WorkspaceLayoutStore(directory.Path).SaveAsync(new()
+        {
+            CurrentLayout = new()
+            {
+                Main = new() { PanelIds = [WorkbenchPanelIds.DANMU, panelId], ActivePanelId = WorkbenchPanelIds.DANMU },
+                HiddenPanelIds = WorkbenchPanelIds.All.Where(id => id != WorkbenchPanelIds.DANMU && id != panelId).ToList(),
+                FocusedPanelId = WorkbenchPanelIds.DANMU
+            }
+        });
+        var shell = new ShellWindow(panels, new TextBlock(), directory.Path);
+        try
+        {
+            await view.Model.SelectRoomAsync(new() { Id = "tab" });
+            await shell.InitializeLayoutAsync();
+            shell.Show();
+            Pump(shell);
+            var tab = Assert.Single(shell.GetVisualDescendants().OfType<ToolTabStripItem>(),
+                item => ReferenceEquals(item.DataContext, shell.Layouts.PanelAdapters[panelId]));
+            var danmuTab = Assert.Single(shell.GetVisualDescendants().OfType<ToolTabStripItem>(),
+                item => ReferenceEquals(item.DataContext, shell.Layouts.PanelAdapters[WorkbenchPanelIds.DANMU]));
+            Assert.DoesNotContain(danmuTab.GetVisualDescendants().OfType<Border>(),
+                control => control.Classes.Contains("panelUnreadBadge"));
+            Assert.False(tab.IsSelected);
+            var badge = Assert.Single(tab.GetVisualDescendants().OfType<Border>(),
+                control => control.Classes.Contains("panelUnreadBadge"));
+            AssertBadge(badge, "1");
+            var count = Assert.IsType<TextBlock>(badge.Child);
+            Assert.Equal(Colors.White, Assert.IsAssignableFrom<ISolidColorBrush>(count.Foreground).Color);
+            var title = Assert.Single(tab.GetVisualDescendants().OfType<TextBlock>(), text => text.Text == shell.Layouts.PanelAdapters[panelId].Title);
+            Assert.True(badge.TranslatePoint(default, title)!.Value.X >= title.Bounds.Width);
+
+            await runtime.Messages.AppendAsync(Message(kind), new());
+            await view.Model.RefreshAsync();
+            Pump(shell);
+            AssertBadge(badge, "2");
+
+            shell.Layouts.ShowPanel(panelId);
+            Pump(shell);
+            Assert.True(tab.IsSelected);
+            AssertBadge(badge, "2");
+            AssertBadge(FindBadge(shell), "2");
+            Assert.Equal(Colors.White, Assert.IsAssignableFrom<ISolidColorBrush>(count.Foreground).Color);
+
+            shell.Layouts.ShowPanel(WorkbenchPanelIds.DANMU);
+            Pump(shell);
+            Assert.False(tab.IsSelected);
+            await view.Model.MarkAllReadAsync();
+            Pump(shell);
+            Assert.False(badge.IsVisible);
+            Assert.Equal(0, badge.DesiredSize.Width);
+
+            await runtime.Messages.AppendAsync(Message(kind) with { RoomTabId = "second" }, new());
+            await view.Model.SelectRoomAsync(new() { Id = "second" });
+            Pump(shell);
+            AssertBadge(badge, "1");
+            await view.Model.SelectRoomAsync(null);
+            Pump(shell);
+            Assert.False(badge.IsVisible);
+            Assert.Empty(errors);
+        }
+        finally
+        {
+            view.Model.Dispose();
+            await shell.CloseAsync();
+            Dispatcher.UIThread.RunJobs();
+        }
+    }
+
     /// <summary>全部已读期间切换房间，只确认原房间，新的房间保留自身未读计数。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.SuperChat)]
@@ -269,7 +352,8 @@ public sealed class UnreadIndicatorTests
 
     private static Border FindBadge(Window window)
     {
-        return Assert.Single(window.GetVisualDescendants().OfType<Border>(), control => control.Classes.Contains("panelUnreadBadge"));
+        return Assert.Single(window.GetVisualDescendants().OfType<Border>(), control =>
+            control.Classes.Contains("panelUnreadBadge") && !control.GetVisualAncestors().OfType<ToolTabStripItem>().Any());
     }
 
     private static void AssertBadge(Border badge, string count)

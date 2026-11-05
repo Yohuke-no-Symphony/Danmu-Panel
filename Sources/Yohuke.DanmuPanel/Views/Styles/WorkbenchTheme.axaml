@@ -1,6 +1,8 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:dock="using:Dock.Avalonia.Controls">
+        xmlns:dock="using:Dock.Avalonia.Controls"
+        xmlns:dockCore="using:Dock.Model.Core"
+        xmlns:layouts="using:Yohuke.DanmuPanel.Layouts">
     <Styles.Resources>
         <ResourceDictionary>
             <x:Double x:Key="WorkbenchControlHeight">32</x:Double>
@@ -210,6 +212,21 @@
         <Setter Property="BorderThickness" Value="0" />
     </Style>
 
+    <Style Selector="dock|ToolControl">
+        <Setter Property="HeaderTemplate">
+            <DataTemplate x:DataType="dockCore:IDockable">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Classes="dockTabTitle" Text="{Binding Title}" VerticalAlignment="Center" />
+                    <ContentControl Content="{Binding}" VerticalContentAlignment="Center">
+                        <ContentControl.ContentTemplate>
+                            <layouts:WorkbenchHeaderBadgeTemplate />
+                        </ContentControl.ContentTemplate>
+                    </ContentControl>
+                </StackPanel>
+            </DataTemplate>
+        </Setter>
+    </Style>
+
     <Style Selector="dock|ToolTabStrip">
         <Setter Property="Background" Value="{DynamicResource AppPanelBrush}" />
         <Setter Property="BorderThickness" Value="0" />
@@ -244,11 +261,11 @@
         <Setter Property="Background" Value="{DynamicResource AppSidebarSelectedBrush}" />
     </Style>
 
-    <Style Selector="dock|ToolTabStripItem TextBlock">
+    <Style Selector="dock|ToolTabStripItem TextBlock.dockTabTitle">
         <Setter Property="Foreground" Value="{DynamicResource AppMutedTextBrush}" />
     </Style>
 
-    <Style Selector="dock|ToolTabStripItem:selected TextBlock">
+    <Style Selector="dock|ToolTabStripItem:selected TextBlock.dockTabTitle">
         <Setter Property="Foreground" Value="{DynamicResource AppPrimaryBrush}" />
     </Style>
 </Styles>

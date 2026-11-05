@@ -42,7 +42,7 @@ internal sealed class WorkbenchToolChromeControl : ToolChromeControl
                 Name = "PART_HeaderBadge",
                 VerticalContentAlignment = VerticalAlignment.Center,
                 [!ContentProperty] = new Binding(nameof(IDock.ActiveDockable)),
-                ContentTemplate = new FuncDataTemplate<WorkbenchDockPanel>((panel, _) => CreateHeaderBadge(panel))
+                ContentTemplate = new WorkbenchHeaderBadgeTemplate()
             };
             var titleLayout = new Grid
             {
@@ -93,21 +93,6 @@ internal sealed class WorkbenchToolChromeControl : ToolChromeControl
         }
 
         return actions;
-    }
-
-    private static Control? CreateHeaderBadge(WorkbenchDockPanel? panel)
-    {
-        if (panel?.View is not IWorkbenchHeaderBadge { HeaderBadgeTemplate: { } template })
-        {
-            return null;
-        }
-
-        var badge = template.Build(panel.View);
-        if (badge is not null)
-        {
-            badge.DataContext = panel.View;
-        }
-        return badge;
     }
 
     private void OnCloseButtonClick(object? sender, RoutedEventArgs e)
