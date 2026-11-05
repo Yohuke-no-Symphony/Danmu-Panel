@@ -265,7 +265,6 @@
     "Settings.DanmuRegexFilter": "弹幕正则屏蔽",
     "Settings.DanmuRegexEnabled": "启用正则屏蔽",
     "Settings.DanmuRegexPatterns": "屏蔽正则（每行一条）",
-    "Settings.DanmuRegexHelp": "任意一条正则匹配即隐藏普通弹幕，空行会被忽略。默认规则屏蔽以【…】结尾的同传弹幕，支持前面的人名缩写。关闭后恢复显示，不删除原始记录。",
     "Settings.DanmuRegexInvalidPattern": "第 {0} 行屏蔽正则无效，请修正后再保存。",
     "Settings.DanmuRegexTimedOut": "第 {0} 条弹幕屏蔽正则匹配超时，已暂时停用。请修改规则并重新保存设置。",
     "Settings.CustomProvider": "自定义（Custom）",

@@ -191,19 +191,27 @@ public sealed class SettingsView : UserControl
         targetLanguage.SelectionChanged += (_, _) => SelectGlossaryLanguage();
         AddSection("Settings.Appearance", "Settings.AppearanceDescription", BuildAppearance());
         AddSection("Settings.Reading", "Settings.ReadingDescription", Stack(
-            Card("Settings.MessageDisplay", Row("Settings.MessageTextScale", messageTextScale),
-                Help("Settings.MessageTextScaleHelp"), hideEmoticonDanmu, Help("Settings.HideEmoticonDanmuHelp"), compactDisplay,
+            Card("Settings.MessageDisplay",
+                WithHint(Row("Settings.MessageTextScale", messageTextScale), "Settings.MessageTextScaleHelp"),
+                WithHint(hideEmoticonDanmu, "Settings.HideEmoticonDanmuHelp"), compactDisplay,
                 new StackPanel
                 {
                     Margin = new Thickness(24, 0, 0, 0), Spacing = 8,
-                    Children = { compactDanmuWrap, compactSuperChatWrap, autoScrollLongMessages, Help("Settings.AutoScrollLongMessagesHelp") }
+                    Children =
+                    {
+                        compactDanmuWrap, compactSuperChatWrap,
+                        WithHint(autoScrollLongMessages, "Settings.AutoScrollLongMessagesHelp")
+                    }
                 }),
-            Card("Settings.DanmuRegexFilter", danmuRegexEnabled, Help("Settings.DanmuRegexHelp"),
+            Card("Settings.DanmuRegexFilter",
                 Row("Settings.DanmuRegexPatterns", danmuRegexPatterns)),
             Card("Settings.Reading", Row("Settings.GiftMinimum", giftMinimum), Row("Settings.ComboPolicy", giftResetPolicy)),
-            Card("Settings.Pinyin", userPinyin, giftPinyin, danmuPinyin, superChatPinyin,
-                Row("Settings.PinyinLayout", pinyinLayout),
-                Help("Settings.PinyinHelp"), Help("Settings.PinyinScrollHelp"))));
+            Card("Settings.Pinyin",
+                WithHint(userPinyin, "Settings.PinyinHelp"),
+                WithHint(giftPinyin, "Settings.PinyinHelp"),
+                WithHint(danmuPinyin, "Settings.PinyinHelp"),
+                WithHint(superChatPinyin, "Settings.PinyinHelp"),
+                WithHint(Row("Settings.PinyinLayout", pinyinLayout), "Settings.PinyinHelp", "Settings.PinyinScrollHelp"))));
         AddSection("Settings.Translation", "Settings.TranslationDescription", BuildTranslation());
         AddSection("Settings.Accounts", "Settings.AccountsDescription", accountsView);
         AddSection("Settings.Data", "Settings.DataDescription", BuildData());
@@ -551,9 +559,11 @@ public sealed class SettingsView : UserControl
         tableHeader.Children.Add(add);
         tableHeader.Children.Add(remove);
         return Stack(
-            Card("Settings.Translation", enabled, Row("Settings.BaseUrl", Stack(provider, baseUrl)), Help("Settings.BaseUrlHelp"),
+            Card("Settings.Translation", enabled,
+                WithHint(Row("Settings.BaseUrl", Stack(provider, baseUrl)), "Settings.BaseUrlHelp"),
                 Row("Settings.ApiKey", apiKey), Row("Settings.Model", model), Row("Settings.TargetLanguage", targetLanguage)),
-            Card("Settings.DisplayMode", Row("Settings.DisplayMode", displayMode), Row("Settings.Backlog", backlogMode), Help("Settings.BacklogHelp")),
+            Card("Settings.DisplayMode", Row("Settings.DisplayMode", displayMode),
+                WithHint(Row("Settings.Backlog", backlogMode), "Settings.BacklogHelp")),
             Card("Settings.ExtraPrompt", extraPrompt),
             Panel(Stack(tableHeader, glossaryGrid)));
     }
@@ -622,10 +632,15 @@ public sealed class SettingsView : UserControl
                 cache.IsEnabled = true;
             }
         };
-        return Stack(Card("Settings.Transfer", Help("Settings.TransferHelp"), Help("Settings.TransferKeyHelp"),
-                new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8, Children = { import, export } }),
-            Card("Settings.Data", Help("Settings.HistoryHelp"), clearCurrent, clearAll),
-            Card("Settings.ClearCache", Help("Settings.CacheHelp"), cache));
+        return Stack(Card("Settings.Transfer",
+                WithHint(new WrapPanel
+                {
+                    Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8,
+                    Children = { import, export }
+                }, "Settings.TransferHelp", "Settings.TransferKeyHelp")),
+            Card("Settings.Data",
+                WithHint(clearCurrent, "Settings.HistoryHelp"), WithHint(clearAll, "Settings.HistoryHelp")),
+            Card("Settings.ClearCache", WithHint(cache, "Settings.CacheHelp")));
     }
 
     private Control BuildUpdates()
@@ -649,7 +664,7 @@ public sealed class SettingsView : UserControl
                 Text = AppUpdateVersion.Current.ToString(),
                 VerticalAlignment = VerticalAlignment.Center
             }),
-            startup, Help("Settings.UpdatesHelp"), check));
+            WithHint(startup, "Settings.UpdatesHelp"), WithHint(check, "Settings.UpdatesHelp")));
     }
 
     private void AddSection(string key, string descriptionKey, Control content)
@@ -730,6 +745,18 @@ public sealed class SettingsView : UserControl
         Grid.SetColumn(content, 1);
         row.Children.Add(content);
         content.HorizontalAlignment = HorizontalAlignment.Stretch;
+        return row;
+    }
+
+    private static Border WithHint(Control content, params string[] keys)
+    {
+        var tooltip = new StackPanel { MaxWidth = 480, Spacing = 8 };
+        foreach (var key in keys)
+        {
+            tooltip.Children.Add(Label(key));
+        }
+        var row = new Border { Background = Brushes.Transparent, Child = content };
+        ToolTip.SetTip(row, tooltip);
         return row;
     }
 

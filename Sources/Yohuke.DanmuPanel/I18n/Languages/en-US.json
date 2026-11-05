@@ -266,7 +266,6 @@
     "Settings.DanmuRegexFilter": "Danmu regex blocking",
     "Settings.DanmuRegexEnabled": "Enable regex blocking",
     "Settings.DanmuRegexPatterns": "Blocking patterns (one per line)",
-    "Settings.DanmuRegexHelp": "Hide ordinary danmu matching any pattern. Blank lines are ignored. The default rule blocks live translations ending in 【…】, including those prefixed with a speaker abbreviation. Turn off to show them again; original records are retained.",
     "Settings.DanmuRegexInvalidPattern": "The blocking pattern on line {0} is invalid. Correct it before saving.",
     "Settings.DanmuRegexTimedOut": "Danmu blocking pattern {0} timed out and has been suspended. Edit the pattern and save settings again.",
     "Settings.CustomProvider": "Custom",
