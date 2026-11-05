@@ -2,6 +2,12 @@
   "LanguageName": "English",
   "LanguageID": "en-US",
   "Strings": {
+    "Panel.CopyText": "Select and copy…",
+    "Panel.CopyOriginal": "Original",
+    "Panel.CopyTranslation": "Translation",
+    "Panel.CopySelection": "Copy selection",
+    "Panel.CopyAll": "Copy all",
+    "Panel.CopyClose": "Close",
     "About.Menu": "About Yohuke Danmu Panel…",
     "About.Title": "About Yohuke Danmu Panel",
     "About.Version": "Version",

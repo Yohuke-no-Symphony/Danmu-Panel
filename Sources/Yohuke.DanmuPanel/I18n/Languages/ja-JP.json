@@ -2,6 +2,12 @@
   "LanguageName": "日本語",
   "LanguageID": "ja-JP",
   "Strings": {
+    "Panel.CopyText": "選択してコピー…",
+    "Panel.CopyOriginal": "原文",
+    "Panel.CopyTranslation": "訳文",
+    "Panel.CopySelection": "選択範囲をコピー",
+    "Panel.CopyAll": "全文をコピー",
+    "Panel.CopyClose": "閉じる",
     "About.Menu": "Yohuke Danmu Panel について…",
     "About.Title": "Yohuke Danmu Panel について",
     "About.Version": "バージョン",

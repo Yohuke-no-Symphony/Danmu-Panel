@@ -2,6 +2,12 @@
   "LanguageName": "简体中文",
   "LanguageID": "zh-CN",
   "Strings": {
+    "Panel.CopyText": "选择并复制…",
+    "Panel.CopyOriginal": "原文",
+    "Panel.CopyTranslation": "译文",
+    "Panel.CopySelection": "复制选中内容",
+    "Panel.CopyAll": "复制全文",
+    "Panel.CopyClose": "关闭",
     "About.Menu": "关于 Yohuke Danmu Panel…",
     "About.Title": "关于 Yohuke Danmu Panel",
     "About.Version": "版本",

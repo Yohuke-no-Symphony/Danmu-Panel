@@ -25,6 +25,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     private readonly ListBox list;
     private readonly ListBox pinnedList;
     private DanmuFeedScrollController? scroll;
+    internal MessageCopyPopup? CopyPopup { get; private set; }
     public FeedViewModel Model { get; }
 
     /// <summary>为每个停靠或浮动宿主创建独立的面板操作按钮。</summary>
@@ -97,7 +98,11 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         surface.SizeChanged += (_, _) => UpdatePinnedHeight();
         Model.PropertyChanged += (_, args) =>
         {
-            if (args.PropertyName == nameof(FeedViewModel.HasScrollingItems))
+            if (args.PropertyName == nameof(FeedViewModel.SelectedRoom))
+            {
+                CopyPopup?.Hide();
+            }
+            else if (args.PropertyName == nameof(FeedViewModel.HasScrollingItems))
             {
                 UpdatePinnedHeight();
             }
@@ -205,8 +210,24 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
                 await RunAsync(() => ActivateMessageAsync(item));
             }
         };
+        row.CopyRequested += (_, _) => ShowCopyPopup(row);
         row.ContextMenu = CreateMessageMenu(row, kind);
         return row;
+    }
+
+    internal void ShowCopyPopup(MessageFeedRow row)
+    {
+        if (row.DataContext is not MessageItemViewModel item)
+        {
+            return;
+        }
+        var anchorBounds = new Rect(row.TranslatePoint(default, this)!.Value, row.Bounds.Size);
+        row.ContextMenu?.Close();
+        CopyPopup?.Hide();
+        var popup = new MessageCopyPopup(item.Record.Content, item.HasTranslation ? item.Translation : "", reportError);
+        CopyPopup = popup;
+        popup.Closed += (_, _) => CopyPopup = null;
+        popup.Show(this, anchorBounds);
     }
 
     private Border CreateUnreadBadge()
@@ -250,6 +271,11 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         menu.Opened += (_, _) => RefreshActivation();
         if (kind is MessageKind.Danmu or MessageKind.SuperChat)
         {
+            AddAction(menu, "Panel.CopyText", LucideIconKind.Copy, () =>
+            {
+                ShowCopyPopup(row);
+                return Task.CompletedTask;
+            });
             var retry = AddAction(menu, "Panel.RetryTranslation", LucideIconKind.Languages, async () =>
             {
                 if (row.DataContext is MessageItemViewModel item && runtime.Configuration.Settings.Translation.Enabled)

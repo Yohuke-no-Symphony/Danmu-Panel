@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Data.Converters;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
@@ -13,11 +14,23 @@ namespace Yohuke.DanmuPanel.Views.Components;
 
 internal sealed class MessageFeedRow : Button
 {
+    private readonly bool canCopy;
+    private bool isCopyHoldEligible;
+    private bool suppressClick;
+    private Point copyPressPosition;
+    private IPointer? copyPointer;
+
+    internal event EventHandler? CopyRequested;
+
     /// <inheritdoc/>
     protected override Type StyleKeyOverride => typeof(Button);
 
     internal MessageFeedRow(MessageKind kind)
     {
+        canCopy = kind is MessageKind.Danmu or MessageKind.SuperChat;
+        Gestures.SetIsHoldingEnabled(this, canCopy);
+        Gestures.SetIsHoldWithMouseEnabled(this, canCopy);
+        Holding += OnHolding;
         var identity = new DockPanel { LastChildFill = true, VerticalAlignment = VerticalAlignment.Center };
         var time = BoundText(nameof(MessageItemViewModel.Time));
         time.Classes.Add("danmuFeedMeta");
@@ -190,6 +203,112 @@ internal sealed class MessageFeedRow : Button
         text.Bind(HoverMarqueeTextBlock.TextProperty, new Binding(property));
         text.Bind(HoverMarqueeTextBlock.AutoScrollProperty, new Binding(nameof(MessageItemViewModel.AutoScrollLongMessages)));
         return text;
+    }
+
+    /// <inheritdoc />
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        suppressClick = false;
+        copyPressPosition = e.GetPosition(this);
+        isCopyHoldEligible = canCopy &&
+            e.GetCurrentPoint(this).Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonPressed;
+        copyPointer = isCopyHoldEligible ? e.Pointer : null;
+        base.OnPointerPressed(e);
+        if (isCopyHoldEligible && e.Pointer.Type == PointerType.Mouse)
+        {
+            e.Pointer.Capture(this);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        ReleaseCopyPointer();
+        isCopyHoldEligible = false;
+        suppressClick = false;
+    }
+
+    /// <inheritdoc />
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        isCopyHoldEligible = false;
+        copyPointer = null;
+        base.OnPointerCaptureLost(e);
+    }
+
+    /// <inheritdoc />
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+    {
+        suppressClick |= copyPointer is not null;
+        isCopyHoldEligible = false;
+        base.OnPointerWheelChanged(e);
+    }
+
+    /// <inheritdoc />
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        if (isCopyHoldEligible)
+        {
+            var delta = e.GetPosition(this) - copyPressPosition;
+            var tolerance = TopLevel.GetTopLevel(this)!.PlatformSettings!.GetTapSize(e.Pointer.Type);
+            if (Math.Abs(delta.X) > tolerance.Width || Math.Abs(delta.Y) > tolerance.Height)
+            {
+                isCopyHoldEligible = false;
+                suppressClick = true;
+            }
+        }
+        base.OnPointerMoved(e);
+    }
+
+    /// <inheritdoc />
+    protected override void OnClick()
+    {
+        if (!suppressClick)
+        {
+            base.OnClick();
+        }
+    }
+
+    /// <inheritdoc />
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        CancelCopyInteraction();
+        base.OnDataContextChanged(e);
+    }
+
+    /// <inheritdoc />
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        CancelCopyInteraction();
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    private void OnHolding(object? sender, HoldingRoutedEventArgs e)
+    {
+        if (e.HoldingState == HoldingState.Started && isCopyHoldEligible)
+        {
+            suppressClick = true;
+            e.Handled = true;
+            CopyRequested?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void CancelCopyInteraction()
+    {
+        isCopyHoldEligible = false;
+        suppressClick |= copyPointer is not null;
+        ReleaseCopyPointer();
+    }
+
+    private void ReleaseCopyPointer()
+    {
+        var pointer = copyPointer;
+        copyPointer = null;
+        if (ReferenceEquals(pointer?.Captured, this))
+        {
+            pointer!.Capture(null);
+        }
     }
 
     private static PinyinLoadingPlaceholder CreatePinyinPlaceholder(string property, double length)
