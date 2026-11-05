@@ -15,4 +15,6 @@ public sealed record TranslationJob
     public int Priority { get; init; }
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
     public string ConfigurationFingerprint { get; init; } = "";
+    /// <summary>手动重译的唯一标识；非空时跳过缓存，并用于拒绝此前任务的回调。</summary>
+    public string RefreshId { get; init; } = "";
 }

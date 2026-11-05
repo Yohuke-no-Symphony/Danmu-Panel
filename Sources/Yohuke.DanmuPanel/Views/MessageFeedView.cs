@@ -254,7 +254,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             {
                 if (row.DataContext is MessageItemViewModel item && runtime.Configuration.Settings.Translation.Enabled)
                 {
-                    await runtime.Messages.UpsertTranslationJobAsync(item.Record.Id, item.Record.Generation,
+                    await runtime.Messages.RetryTranslationJobAsync(item.Record.Id, item.Record.Generation,
                         TranslationRequestFactory.GetConfigurationFingerprint(runtime.Configuration.Settings.Translation));
                     runtime.NotifyTranslation(retryAuthentication: true);
                     await Model.RefreshAsync();

@@ -42,8 +42,11 @@ public interface IMessageStore : IAsyncDisposable
     Task<long> GetGenerationAsync(string roomTabId, CancellationToken cancellationToken = default);
     /// <summary>保存阅读设置并重新计算礼物优先级，不清除已读确认。</summary>
     Task ReevaluateReadOptionsAsync(MessageReadOptions options, CancellationToken cancellationToken = default);
-    /// <summary>为可见或手动重试的现存消息建立当前翻译任务。</summary>
+    /// <summary>为可见的现存消息建立当前翻译任务，复用同配置的已有译文和待办。</summary>
     Task<bool> UpsertTranslationJobAsync(string id, long generation, string fingerprint,
+        CancellationToken cancellationToken = default);
+    /// <summary>清除指定消息的已有译文，建立跳过请求缓存的独立重译任务并使旧任务回调失效。</summary>
+    Task<bool> RetryTranslationJobAsync(string id, long generation, string fingerprint,
         CancellationToken cancellationToken = default);
     /// <summary>按输入消息的 ID 和代次校验现存记录，在一个事务中登记翻译任务并返回成功登记的 ID。</summary>
     Task<IReadOnlySet<string>> UpsertTranslationJobsAsync(IReadOnlyList<MessageRecord> messages, string fingerprint,

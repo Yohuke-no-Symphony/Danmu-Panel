@@ -47,6 +47,8 @@ internal sealed class BlockingReceptionStore(IMessageStore inner) : IMessageStor
     public Task ReevaluateReadOptionsAsync(MessageReadOptions options, CancellationToken cancellationToken = default) => inner.ReevaluateReadOptionsAsync(options, cancellationToken);
     public Task<bool> UpsertTranslationJobAsync(string id, long generation, string fingerprint,
         CancellationToken cancellationToken = default) => inner.UpsertTranslationJobAsync(id, generation, fingerprint, cancellationToken);
+    public Task<bool> RetryTranslationJobAsync(string id, long generation, string fingerprint,
+        CancellationToken cancellationToken = default) => inner.RetryTranslationJobAsync(id, generation, fingerprint, cancellationToken);
     public Task<IReadOnlySet<string>> UpsertTranslationJobsAsync(IReadOnlyList<MessageRecord> messages, string fingerprint,
         CancellationToken cancellationToken = default) => inner.UpsertTranslationJobsAsync(messages, fingerprint, cancellationToken);
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;

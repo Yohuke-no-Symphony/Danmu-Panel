@@ -12,12 +12,26 @@ public sealed class TranslationService(ITranslationClient client, ITranslationCa
     private readonly CancellationTokenSource lifetime = new();
 
     /// <summary>共享一次模型请求；所有等待者取消后才取消该请求。</summary>
-    public async Task<string> TranslateAsync(TranslationRequest request, CancellationToken cancellationToken = default)
+    public Task<string> TranslateAsync(TranslationRequest request, CancellationToken cancellationToken = default)
     {
-        var cached = await cache.GetAsync(request.CacheKey, cancellationToken).ConfigureAwait(false);
-        if (cached is not null)
+        return TranslateCoreAsync(request, false, cancellationToken);
+    }
+
+    /// <summary>跳过缓存及旧在途请求，独立请求模型并更新缓存，使旧请求无法覆盖新结果。</summary>
+    public Task<string> RefreshAsync(TranslationRequest request, CancellationToken cancellationToken = default)
+    {
+        return TranslateCoreAsync(request, true, cancellationToken);
+    }
+
+    private async Task<string> TranslateCoreAsync(TranslationRequest request, bool forceRefresh, CancellationToken cancellationToken)
+    {
+        if (!forceRefresh)
         {
-            return cached;
+            var cached = await cache.GetAsync(request.CacheKey, cancellationToken).ConfigureAwait(false);
+            if (cached is not null)
+            {
+                return cached;
+            }
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -26,7 +40,7 @@ public sealed class TranslationService(ITranslationClient client, ITranslationCa
         lock (gate)
         {
             inFlight.TryGetValue(request.CacheKey, out var previous);
-            if (previous is null || previous.Request != request)
+            if (forceRefresh || previous is null || previous.Request != request)
             {
                 shared = new(request, lifetime.Token);
                 inFlight[request.CacheKey] = shared;
@@ -40,7 +54,7 @@ public sealed class TranslationService(ITranslationClient client, ITranslationCa
             shared.Waiters++;
             if (shared.Task is null)
             {
-                shared.Task = ExecuteAsync(request, shared);
+                shared.Task = ExecuteAsync(request, shared, forceRefresh);
                 _ = shared.Task.ContinueWith(completed =>
                 {
                     _ = completed.Exception;
@@ -121,14 +135,17 @@ public sealed class TranslationService(ITranslationClient client, ITranslationCa
         cacheWriteGate.Dispose();
     }
 
-    private async Task<string> ExecuteAsync(TranslationRequest request, SharedTranslationRequest shared)
+    private async Task<string> ExecuteAsync(TranslationRequest request, SharedTranslationRequest shared, bool forceRefresh)
     {
         try
         {
-            var cached = await cache.GetAsync(request.CacheKey, shared.Cancellation.Token).ConfigureAwait(false);
-            if (cached is not null)
+            if (!forceRefresh)
             {
-                return cached;
+                var cached = await cache.GetAsync(request.CacheKey, shared.Cancellation.Token).ConfigureAwait(false);
+                if (cached is not null)
+                {
+                    return cached;
+                }
             }
 
             var result = await client.TranslateAsync(request, shared.Cancellation.Token).ConfigureAwait(false);

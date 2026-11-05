@@ -208,7 +208,9 @@ public sealed class TranslationScheduler : ITranslationScheduler
                 return;
             }
 
-            var translation = await service.TranslateAsync(request, cancellationToken).ConfigureAwait(false);
+            var translation = await (job.RefreshId.Length > 0
+                ? service.RefreshAsync(request, cancellationToken)
+                : service.TranslateAsync(request, cancellationToken)).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             if (await store.CompleteAsync(job, translation, cancellationToken).ConfigureAwait(false))
             {

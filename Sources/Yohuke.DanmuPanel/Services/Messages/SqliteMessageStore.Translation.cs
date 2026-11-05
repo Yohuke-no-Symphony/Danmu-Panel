@@ -21,6 +21,19 @@ public sealed partial class SqliteMessageStore
     }
 
     /// <inheritdoc />
+    public Task<bool> RetryTranslationJobAsync(string id, long generation, string fingerprint,
+        CancellationToken cancellationToken = default)
+    {
+        return EnqueueAsync(connection =>
+        {
+            using var transaction = connection.BeginTransaction();
+            var queued = UpsertTranslationJob(connection, transaction, id, generation, fingerprint, null, false, true);
+            transaction.Commit();
+            return queued;
+        }, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public Task<IReadOnlySet<string>> UpsertTranslationJobsAsync(IReadOnlyList<MessageRecord> messages,
         string fingerprint, CancellationToken cancellationToken = default)
     {
@@ -104,9 +117,10 @@ public sealed partial class SqliteMessageStore
     {
         return EnqueueAsync(connection => Execute(connection, null, """
             UPDATE translation_jobs SET status=1,error=$error
-            WHERE id=$id AND generation=$generation AND fingerprint=$fingerprint AND status=0;
+            WHERE id=$id AND generation=$generation AND fingerprint=$fingerprint AND status=0
+                AND COALESCE(json_extract(payload,'$.RefreshId'),'')=$refresh;
             """, ("$error", error), ("$id", job.Id), ("$generation", job.Generation),
-            ("$fingerprint", job.ConfigurationFingerprint)) > 0, cancellationToken);
+            ("$fingerprint", job.ConfigurationFingerprint), ("$refresh", job.RefreshId)) > 0, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -159,7 +173,8 @@ public sealed partial class SqliteMessageStore
     }
 
     private bool UpsertTranslationJob(SqliteConnection connection, SqliteTransaction transaction, string id,
-        long generation, string fingerprint, string? expectedFingerprint, bool checkExpectedFingerprint)
+        long generation, string fingerprint, string? expectedFingerprint, bool checkExpectedFingerprint,
+        bool forceRefresh = false)
     {
         var record = ReadMessage(connection, transaction, id);
         if (record is null || record.Generation != generation ||
@@ -167,11 +182,11 @@ public sealed partial class SqliteMessageStore
             ReadGeneration(connection, transaction, record.RoomTabId) != generation ||
             (checkExpectedFingerprint && record.TranslationFingerprint != expectedFingerprint &&
                 record.TranslationFingerprint != fingerprint) ||
-            (record.TranslationFingerprint == fingerprint && record.Translation is not null))
+            (!forceRefresh && record.TranslationFingerprint == fingerprint && record.Translation is not null))
         {
             return false;
         }
-        if (record.TranslationFingerprint == fingerprint)
+        if (!forceRefresh && record.TranslationFingerprint == fingerprint)
         {
             using var pending = Command(connection, transaction, """
                 SELECT 1 FROM translation_jobs
@@ -184,7 +199,7 @@ public sealed partial class SqliteMessageStore
         }
         record = record with { TranslationFingerprint = fingerprint, Translation = null };
         WriteMessage(connection, transaction, record);
-        EnsureJob(connection, transaction, record, fingerprint);
+        EnsureJob(connection, transaction, record, fingerprint, forceRefresh ? Guid.NewGuid().ToString("N") : "");
         return true;
     }
 
@@ -204,12 +219,17 @@ public sealed partial class SqliteMessageStore
     private static bool MatchesPendingJob(SqliteConnection connection, SqliteTransaction transaction, TranslationJob job)
     {
         using var command = Command(connection, transaction,
-            "SELECT 1 FROM translation_jobs WHERE id=$id AND message_id=$message AND generation=$generation AND fingerprint=$fingerprint AND status=0;",
-            ("$id", job.Id), ("$message", job.MessageId), ("$generation", job.Generation), ("$fingerprint", job.ConfigurationFingerprint));
+            """
+            SELECT 1 FROM translation_jobs
+            WHERE id=$id AND message_id=$message AND generation=$generation AND fingerprint=$fingerprint AND status=0
+                AND COALESCE(json_extract(payload,'$.RefreshId'),'')=$refresh;
+            """, ("$id", job.Id), ("$message", job.MessageId), ("$generation", job.Generation),
+            ("$fingerprint", job.ConfigurationFingerprint), ("$refresh", job.RefreshId));
         return command.ExecuteScalar() is not null;
     }
 
-    private static void EnsureJob(SqliteConnection connection, SqliteTransaction transaction, MessageRecord record, string fingerprint)
+    private static void EnsureJob(SqliteConnection connection, SqliteTransaction transaction, MessageRecord record, string fingerprint,
+        string refreshId = "")
     {
         var job = new TranslationJob
         {
@@ -222,7 +242,8 @@ public sealed partial class SqliteMessageStore
             EmoticonTexts = record.Emoticons.Select(emoticon => emoticon.Text).ToArray(),
             Priority = TranslationPriority(record),
             CreatedAt = DateTimeOffset.UtcNow,
-            ConfigurationFingerprint = fingerprint
+            ConfigurationFingerprint = fingerprint,
+            RefreshId = refreshId
         };
         WriteJob(connection, transaction, job);
     }

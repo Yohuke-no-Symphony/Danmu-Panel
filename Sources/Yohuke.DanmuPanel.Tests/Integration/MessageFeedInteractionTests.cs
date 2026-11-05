@@ -14,15 +14,87 @@ using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Services;
+using Yohuke.DanmuPanel.Services.Translation;
 using Yohuke.DanmuPanel.ViewModels;
 using Yohuke.DanmuPanel.Views;
 using Yohuke.DanmuPanel.Tests.Messages;
+using Yohuke.DanmuPanel.Tests.Translation;
 
 namespace Yohuke.DanmuPanel.Tests.Integration;
 
 /// <summary>通过真实消息行验证点击、切房间和列表释放行为。</summary>
 public sealed class MessageFeedInteractionTests
 {
+    /// <summary>菜单重译已完成消息时重新请求模型，更新译文与缓存，并保留其他消息的已有译文。</summary>
+    [AvaloniaTheory]
+    [InlineData(MessageKind.Danmu)]
+    [InlineData(MessageKind.SuperChat)]
+    public async Task RetryMenuRefreshesCompletedTranslationInsteadOfReusingCache(MessageKind kind)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var runtime = CreateRuntime(directory);
+        var settings = runtime.Configuration.Settings.Translation;
+        settings.Enabled = true;
+        settings.Model = "test";
+        var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings);
+        var message = Message(kind);
+        var other = Message(kind);
+        foreach (var record in new[] { message, other })
+        {
+            await runtime.Messages.AppendAsync(record, new(), fingerprint);
+            Assert.True(await runtime.Messages.ApplyTranslationAsync(record.Id, record.Generation, fingerprint, "旧译文"));
+        }
+        await using var cache = new SqliteTranslationCache(":memory:");
+        var request = TranslationRequestFactory.Create(settings, message.Content)!;
+        await cache.SetAsync(request.CacheKey, "旧译文");
+        var calls = 0;
+        await using var service = new TranslationService(new DelegateTranslationClient((_, _) =>
+        {
+            calls++;
+            return Task.FromResult("新译文");
+        }), cache);
+        await using var scheduler = new TranslationScheduler(runtime.Messages, service);
+        var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        scheduler.Completed += (_, _) => completed.TrySetResult();
+        Exception? error = null;
+        var view = new MessageFeedView(runtime, kind, value => error = value);
+        var window = new Window { Width = 800, Height = 600, Content = view };
+        try
+        {
+            await view.Model.SelectRoomAsync(new() { Id = "tab", RoomId = "123" });
+            await view.Model.WaitForPresentationAsync();
+            window.Show();
+            window.UpdateLayout();
+            var row = FindRow(view, message.Id);
+            var menu = Assert.IsType<LocalizedContextMenu>(row.ContextMenu);
+            var retry = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, Localization.Get("Panel.RetryTranslation")));
+
+            retry.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            await WaitUntilAsync(() => Task.FromResult(retry.IsEnabled));
+
+            Assert.Null(error);
+            Assert.Equal(message.Id, Assert.Single(await runtime.Messages.GetPendingAsync(10)).MessageId);
+            Assert.Null((await runtime.Messages.GetByIdAsync(message.Id))!.Translation);
+            await scheduler.StartAsync(settings);
+            await completed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
+
+            Assert.Equal(1, calls);
+            Assert.Equal("新译文", (await runtime.Messages.GetByIdAsync(message.Id))!.Translation);
+            Assert.Equal("新译文", view.Model.Items.Single(item => item.Record.Id == message.Id).Translation);
+            Assert.Equal("新译文", await cache.GetAsync(request.CacheKey));
+            Assert.Equal("旧译文", (await runtime.Messages.GetByIdAsync(other.Id))!.Translation);
+            Assert.Equal("新译文", await service.TranslateAsync(request));
+            Assert.Equal(1, calls);
+        }
+        finally
+        {
+            view.Model.Dispose();
+            window.Close();
+        }
+    }
+
     /// <summary>点击普通弹幕提交置顶，第二次点击取消并恢复时间排序。</summary>
     [AvaloniaFact]
     public async Task DanmuRowClickTogglesPersistedPin()
