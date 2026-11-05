@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Xunit;
@@ -93,6 +94,72 @@ public sealed class TranslationPlaceholderTests
             Assert.Equal(mode == TranslationDisplayMode.Bilingual, item.ShowOriginal);
             Assert.Contains(row.GetVisualDescendants().OfType<Control>(), control =>
                 control.Classes.Contains("translatedText") && control.IsEffectivelyVisible);
+        }
+        finally
+        {
+            view.Model.Dispose();
+            window.Close();
+        }
+    }
+
+    /// <summary>相同译文完成后折叠整行及间距，在两种显示模式下均保留居中的原文。</summary>
+    [AvaloniaTheory]
+    [InlineData(MessageKind.Danmu, false, TranslationDisplayMode.Bilingual)]
+    [InlineData(MessageKind.Danmu, true, TranslationDisplayMode.Bilingual)]
+    [InlineData(MessageKind.SuperChat, false, TranslationDisplayMode.Bilingual)]
+    [InlineData(MessageKind.SuperChat, true, TranslationDisplayMode.Bilingual)]
+    [InlineData(MessageKind.Danmu, false, TranslationDisplayMode.TranslationOnly)]
+    [InlineData(MessageKind.Danmu, true, TranslationDisplayMode.TranslationOnly)]
+    [InlineData(MessageKind.SuperChat, false, TranslationDisplayMode.TranslationOnly)]
+    [InlineData(MessageKind.SuperChat, true, TranslationDisplayMode.TranslationOnly)]
+    public async Task IdenticalTranslationCollapsesLineAndCentersOriginal(MessageKind kind, bool compact,
+        TranslationDisplayMode mode)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var runtime = new PanelRuntime(new(directory.Path), new());
+        var settings = runtime.Configuration.Settings;
+        settings.CompactDanmuDisplay = compact;
+        settings.Translation.Enabled = true;
+        settings.Translation.DisplayMode = mode;
+        var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation);
+        var message = new MessageRecord { RoomTabId = "tab", Kind = kind, UserName = "viewer", Content = "原文内容" };
+        await runtime.Messages.AppendAsync(message, settings.Reading, fingerprint);
+        var view = new MessageFeedView(runtime, kind, exception => throw exception);
+        var window = new Window { Width = 640, Height = 400, Content = view };
+        try
+        {
+            await view.Model.SelectRoomAsync(new() { Id = "tab" });
+            window.Show();
+            Pump(window);
+            var item = Assert.Single(view.Model.Items);
+            var row = FindRow(view, message.Id);
+            var body = row.GetVisualDescendants().OfType<StackPanel>().Single(panel => panel.Classes.Contains("messageBody"));
+            var pendingHeight = body.Bounds.Height;
+            Assert.True(item.IsTranslating);
+
+            Assert.True(await runtime.Messages.ApplyTranslationAsync(message.Id, message.Generation, fingerprint, message.Content));
+            await view.Model.RefreshAsync();
+            Pump(window);
+
+            Assert.Same(item, Assert.Single(view.Model.Items));
+            Assert.Same(row, FindRow(view, message.Id));
+            Assert.False(item.IsTranslating);
+            Assert.True(item.ShowOriginal);
+            var translationLine = row.GetVisualDescendants().OfType<Grid>().Single(grid => grid.Classes.Contains("translationLine"));
+            Assert.False(translationLine.IsVisible);
+            Assert.False(Assert.Single(row.GetVisualDescendants().OfType<ShimmerTextBlock>()).IsShimmering);
+            Assert.Single(row.GetVisualDescendants().OfType<Control>(), control =>
+                control.Classes.Contains("originalText") && control.IsEffectivelyVisible);
+            Assert.DoesNotContain(row.GetVisualDescendants().OfType<Control>(), control =>
+                control.Classes.Contains("translatedText") && control.IsEffectivelyVisible);
+            Assert.True(body.Bounds.Height < pendingHeight);
+            Assert.InRange(Math.Abs(body.Bounds.Height - body.Children[0].Bounds.Height), 0, 0.5);
+            Assert.Equal(VerticalAlignment.Center, body.VerticalAlignment);
+            if (kind == MessageKind.Danmu)
+            {
+                var layout = Assert.IsType<Grid>(body.Parent);
+                Assert.InRange(Math.Abs(body.Bounds.Center.Y - layout.Bounds.Height / 2), 0, 0.5);
+            }
         }
         finally
         {

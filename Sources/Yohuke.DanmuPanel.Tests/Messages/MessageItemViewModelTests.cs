@@ -3,6 +3,7 @@ using Xunit.Abstractions;
 using System.Text.Json;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
+using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Services.Translation;
 using Yohuke.DanmuPanel.ViewModels;
 
@@ -80,6 +81,57 @@ public sealed class MessageItemViewModelTests(ITestOutputHelper output)
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         output.WriteLine($"1000 translation getter groups allocated {allocated} bytes.");
         Assert.True(allocated < 1024, $"Repeated translation reads allocated {allocated} bytes.");
+    }
+
+    /// <summary>仅不同于原文的译文参与显示，已完成的相同译文也不恢复等待占位。</summary>
+    [Theory]
+    [InlineData("原文内容", "原文内容", false)]
+    [InlineData("原文内容", "译文内容", true)]
+    [InlineData("content", "Content", true)]
+    [InlineData("content", "content ", true)]
+    public void TranslationVisibilityUsesExactTextComparison(string content, string translated, bool visible)
+    {
+        var settings = new PanelSettings();
+        settings.Translation.Enabled = true;
+        settings.Translation.DisplayMode = TranslationDisplayMode.TranslationOnly;
+        var record = new MessageRecord
+        {
+            Content = content, Translation = translated,
+            TranslationFingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation)
+        };
+        var model = MessageItemViewModel.Create(record, MessageDisplaySettings.Capture(settings), new PinyinService(), true);
+
+        Assert.Equal(translated, model.Translation);
+        Assert.Equal(visible, model.HasTranslation);
+        Assert.Equal(visible, model.ShowTranslation);
+        Assert.Equal(!visible, model.ShowOriginal);
+        Assert.False(model.IsTranslating);
+    }
+
+    /// <summary>原文原位更新为与译文相同时，显隐通知必须折叠译文并恢复原文。</summary>
+    [Fact]
+    public void ContentUpdateNotifiesWhenExistingTranslationBecomesIdentical()
+    {
+        var settings = new PanelSettings();
+        settings.Translation.DisplayMode = TranslationDisplayMode.TranslationOnly;
+        var record = new MessageRecord
+        {
+            Content = "原文内容", Translation = "译文内容",
+            TranslationFingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation)
+        };
+        var model = new MessageItemViewModel(record, settings, new PinyinService());
+        var changes = new List<string?>();
+        model.PropertyChanged += (_, args) => changes.Add(args.PropertyName);
+
+        model.Update(record with { Content = record.Translation! }, settings);
+
+        Assert.False(model.HasTranslation);
+        Assert.False(model.ShowTranslation);
+        Assert.True(model.ShowOriginal);
+        Assert.Contains(nameof(MessageItemViewModel.HasTranslation), changes);
+        Assert.Contains(nameof(MessageItemViewModel.ShowTranslation), changes);
+        Assert.Contains(nameof(MessageItemViewModel.ShowOriginal), changes);
+        Assert.DoesNotContain(nameof(MessageItemViewModel.Translation), changes);
     }
 
     /// <summary>同一个可变设置对象被编辑后，显示快照仍能识别拼音与颜色变化。</summary>

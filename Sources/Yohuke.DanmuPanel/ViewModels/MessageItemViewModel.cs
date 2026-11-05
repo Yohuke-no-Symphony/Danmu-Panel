@@ -52,8 +52,8 @@ public sealed class MessageItemViewModel : ObservableObject
     public PinyinLayoutMode PinyinLayout => settings.PinyinLayout;
     public string Price => price;
     public string Translation => translation;
-    public bool HasTranslation => Translation.Length > 0;
-    public bool IsTranslating => settings.TranslationEnabled && translationPending && hasTranslatableContent && !HasTranslation;
+    public bool HasTranslation => Translation.Length > 0 && !string.Equals(Translation, Record.Content, StringComparison.Ordinal);
+    public bool IsTranslating => settings.TranslationEnabled && translationPending && hasTranslatableContent && Translation.Length == 0;
     public bool ShowTranslation => HasTranslation || IsTranslating;
     public bool ShowOriginal => !HasTranslation || settings.TranslationDisplayMode == TranslationDisplayMode.Bilingual;
     public bool HasMedal => Medal.Length > 0;
