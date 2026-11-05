@@ -19,6 +19,14 @@ internal sealed class BlockingReceptionStore(IMessageStore inner) : IMessageStor
         return await inner.AppendAsync(message, options, translationFingerprint, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<MessageAppendResult>> AppendBatchAsync(IReadOnlyList<MessageRecord> messages,
+        MessageReadOptions options, string? translationFingerprint = null, CancellationToken cancellationToken = default)
+    {
+        Entered.TrySetResult();
+        await Release.Task;
+        return await inner.AppendBatchAsync(messages, options, translationFingerprint, cancellationToken);
+    }
+
     public Task<IReadOnlyList<MessageRecord>> LoadPageAsync(string roomTabId, MessageKind kind, int offset, int limit,
         CancellationToken cancellationToken = default) => inner.LoadPageAsync(roomTabId, kind, offset, limit, cancellationToken);
     public Task<IReadOnlyList<MessageRecord>> LoadRecentAsync(string roomTabId, MessageKind kind, int limit,
@@ -39,5 +47,7 @@ internal sealed class BlockingReceptionStore(IMessageStore inner) : IMessageStor
     public Task ReevaluateReadOptionsAsync(MessageReadOptions options, CancellationToken cancellationToken = default) => inner.ReevaluateReadOptionsAsync(options, cancellationToken);
     public Task<bool> UpsertTranslationJobAsync(string id, long generation, string fingerprint,
         CancellationToken cancellationToken = default) => inner.UpsertTranslationJobAsync(id, generation, fingerprint, cancellationToken);
+    public Task<IReadOnlySet<string>> UpsertTranslationJobsAsync(IReadOnlyList<MessageRecord> messages, string fingerprint,
+        CancellationToken cancellationToken = default) => inner.UpsertTranslationJobsAsync(messages, fingerprint, cancellationToken);
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

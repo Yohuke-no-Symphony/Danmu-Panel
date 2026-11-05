@@ -14,18 +14,37 @@ public sealed partial class SqliteMessageStore
         return EnqueueAsync(connection =>
         {
             using var transaction = connection.BeginTransaction();
-            var record = ReadMessage(connection, transaction, id);
-            if (record is null || record.Generation != generation ||
-                record.Kind is not (MessageKind.Danmu or MessageKind.SuperChat) ||
-                (record.TranslationFingerprint == fingerprint && record.Translation is not null))
-            {
-                return false;
-            }
-            record = record with { TranslationFingerprint = fingerprint, Translation = null };
-            WriteMessage(connection, transaction, record);
-            EnsureJob(connection, transaction, record, fingerprint);
+            var queued = UpsertTranslationJob(connection, transaction, id, generation, fingerprint, null, false);
             transaction.Commit();
-            return true;
+            return queued;
+        }, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlySet<string>> UpsertTranslationJobsAsync(IReadOnlyList<MessageRecord> messages,
+        string fingerprint, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(messages.Count, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(messages.Count, IMessageStore.MAX_BATCH_COUNT);
+        var snapshot = messages.ToArray();
+        return EnqueueAsync<IReadOnlySet<string>>(connection =>
+        {
+            using var transaction = connection.BeginTransaction();
+            var queued = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var message in snapshot)
+            {
+                if (queued.Contains(message.Id))
+                {
+                    continue;
+                }
+                if (UpsertTranslationJob(connection, transaction, message.Id, message.Generation, fingerprint,
+                        message.TranslationFingerprint, true))
+                {
+                    queued.Add(message.Id);
+                }
+            }
+            transaction.Commit();
+            return queued;
         }, cancellationToken);
     }
 
@@ -139,7 +158,37 @@ public sealed partial class SqliteMessageStore
         }, cancellationToken);
     }
 
-    private static bool ApplyTranslation(SqliteConnection connection, SqliteTransaction transaction,
+    private bool UpsertTranslationJob(SqliteConnection connection, SqliteTransaction transaction, string id,
+        long generation, string fingerprint, string? expectedFingerprint, bool checkExpectedFingerprint)
+    {
+        var record = ReadMessage(connection, transaction, id);
+        if (record is null || record.Generation != generation ||
+            record.Kind is not (MessageKind.Danmu or MessageKind.SuperChat) ||
+            ReadGeneration(connection, transaction, record.RoomTabId) != generation ||
+            (checkExpectedFingerprint && record.TranslationFingerprint != expectedFingerprint &&
+                record.TranslationFingerprint != fingerprint) ||
+            (record.TranslationFingerprint == fingerprint && record.Translation is not null))
+        {
+            return false;
+        }
+        if (record.TranslationFingerprint == fingerprint)
+        {
+            using var pending = Command(connection, transaction, """
+                SELECT 1 FROM translation_jobs
+                WHERE id=$id AND message_id=$id AND generation=$generation AND fingerprint=$fingerprint AND status=0;
+                """, ("$id", id), ("$generation", generation), ("$fingerprint", fingerprint));
+            if (pending.ExecuteScalar() is not null)
+            {
+                return true;
+            }
+        }
+        record = record with { TranslationFingerprint = fingerprint, Translation = null };
+        WriteMessage(connection, transaction, record);
+        EnsureJob(connection, transaction, record, fingerprint);
+        return true;
+    }
+
+    private bool ApplyTranslation(SqliteConnection connection, SqliteTransaction transaction,
         string id, long generation, string fingerprint, string translation)
     {
         var record = ReadMessage(connection, transaction, id);

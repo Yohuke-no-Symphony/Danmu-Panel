@@ -24,6 +24,7 @@ internal sealed class MessageDisplaySettings
     internal bool AutoScrollLongMessages { get; }
     internal string LanguageId { get; }
     internal string CultureName { get; }
+    internal MessagePresentationOptions PresentationOptions { get; }
 
     private MessageDisplaySettings(PanelSettings settings, string fingerprint, string languageId)
     {
@@ -38,6 +39,7 @@ internal sealed class MessageDisplaySettings
         AutoScrollLongMessages = settings.AutoScrollLongMessages;
         LanguageId = languageId;
         CultureName = CultureInfo.CurrentCulture.Name;
+        PresentationOptions = new(ShowUserPinyin, ShowGiftPinyin, ShowDanmuPinyin, ShowSuperChatPinyin, CultureName);
         colors = new(settings.ColorScheme.Overrides, StringComparer.Ordinal);
     }
 

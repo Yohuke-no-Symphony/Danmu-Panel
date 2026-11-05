@@ -58,6 +58,7 @@ public sealed class MessageTextScaleTests
         try
         {
             await view.Model.SelectRoomAsync(new() { Id = "scale-room", RoomId = "123" });
+            await view.Model.WaitForPresentationAsync();
             window.Show();
             Pump(window);
             var item = Assert.Single(view.Model.Items);
@@ -76,6 +77,7 @@ public sealed class MessageTextScaleTests
             {
                 settings.MessageTextScale = scale;
                 await view.Model.RefreshAsync();
+                await view.Model.WaitForPresentationAsync();
                 Pump(window);
 
                 Assert.Equal(scale, view.Model.MessageTextScale);

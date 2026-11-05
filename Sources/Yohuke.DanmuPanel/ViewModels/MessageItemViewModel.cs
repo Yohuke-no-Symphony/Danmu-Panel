@@ -1,6 +1,5 @@
 using System.Globalization;
 using Avalonia.Media;
-using CommunityToolkit.Mvvm.ComponentModel;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
@@ -12,10 +11,13 @@ using Yohuke.DanmuPanel.Services.Appearance;
 namespace Yohuke.DanmuPanel.ViewModels;
 
 /// <summary>消息的显示投影，保留原始名称与阅读状态。</summary>
-public sealed class MessageItemViewModel : ObservableObject
+public sealed class MessageItemViewModel : FeedRowViewModel
 {
     private const int MAX_MEDAL_NAME_TEXT_ELEMENTS = 3;
     private readonly IPinyinService pinyin;
+    private readonly bool deferPresentation;
+    private MessagePresentationSnapshot? presentation;
+    private bool isPresentationPending;
     private MessageDisplaySettings settings;
     private string namePinyin = "";
     private IReadOnlyList<PinyinAnnotation> nameAnnotations = [];
@@ -33,9 +35,15 @@ public sealed class MessageItemViewModel : ObservableObject
     private IBrush medalBorderBrush = Brushes.Transparent;
     private IReadOnlyList<DanmuEmoticon> emoticons = [];
     public MessageRecord Record { get; private set; }
+    internal bool IsPresentationPending => isPresentationPending;
+    internal MessageDisplaySettings PresentationSettings => settings;
+    internal bool TranslationPending => translationPending;
     public string Name => Record.UserName;
     public string NamePinyin => namePinyin;
     public bool HasNamePinyin => NamePinyin.Length > 0;
+    public bool IsNamePinyinPending => isPresentationPending && settings.ShowUserPinyin &&
+        ContainsChinese(Record.UserName) && !Record.UserName.Any(character =>
+            character is >= '\u3040' and <= '\u30FF' or >= '\uFF66' and <= '\uFF9F');
     public IReadOnlyList<PinyinAnnotation> NameAnnotations => nameAnnotations;
     public string Medal => medal;
     public string MedalName => medalName;
@@ -49,6 +57,8 @@ public sealed class MessageItemViewModel : ObservableObject
     public bool HasDetailPinyin => DetailPinyin.Length > 0;
     public IReadOnlyList<PinyinAnnotation> ContentPinyin => contentPinyin;
     public bool HasContentPinyin => contentPinyin.Count > 0;
+    public bool IsContentPinyinPending => isPresentationPending && IsContentPinyinEnabled(Record.Kind, settings) &&
+        ContainsChinese(Record.Kind == MessageKind.Gift ? Record.GiftName : Record.Content);
     public PinyinLayoutMode PinyinLayout => settings.PinyinLayout;
     public string Price => price;
     public string Translation => translation;
@@ -72,11 +82,12 @@ public sealed class MessageItemViewModel : ObservableObject
     }
 
     private MessageItemViewModel(MessageRecord record, MessageDisplaySettings settings, IPinyinService pinyin,
-        bool isTranslationPending = false)
+        bool isTranslationPending = false, bool deferPresentation = false)
     {
         Record = record;
         this.settings = settings;
         this.pinyin = pinyin;
+        this.deferPresentation = deferPresentation;
         Update(record, settings, true, isTranslationPending);
     }
 
@@ -92,6 +103,60 @@ public sealed class MessageItemViewModel : ObservableObject
         return new(record, settings, pinyin, isTranslationPending);
     }
 
+    internal static MessageItemViewModel CreateDeferred(MessageRecord record, MessageDisplaySettings settings, IPinyinService pinyin,
+        bool isTranslationPending)
+    {
+        return new(record, settings, pinyin, isTranslationPending, deferPresentation: true);
+    }
+
+    internal bool ApplyPresentation(MessagePresentationSnapshot value)
+    {
+        if (!value.Matches(Record, settings.PresentationOptions))
+        {
+            return false;
+        }
+        presentation = value;
+        var wasTranslating = IsTranslating;
+        var showedTranslation = ShowTranslation;
+        var hadName = HasNamePinyin;
+        var hadDetail = HasDetailPinyin;
+        var hadContent = HasContentPinyin;
+        var nameWasPending = IsNamePinyinPending;
+        var contentWasPending = IsContentPinyinPending;
+        SetProperty(ref namePinyin, value.NamePinyin, nameof(NamePinyin));
+        SetProperty(ref nameAnnotations, value.NameAnnotations, nameof(NameAnnotations));
+        SetProperty(ref detailPinyin, value.DetailPinyin, nameof(DetailPinyin));
+        SetProperty(ref contentPinyin, value.ContentPinyin, nameof(ContentPinyin));
+        hasTranslatableContent = value.HasTranslatableContent;
+        isPresentationPending = false;
+        NotifyChange(nameWasPending, IsNamePinyinPending, nameof(IsNamePinyinPending));
+        NotifyChange(contentWasPending, IsContentPinyinPending, nameof(IsContentPinyinPending));
+        NotifyChange(hadName, HasNamePinyin, nameof(HasNamePinyin));
+        NotifyChange(hadDetail, HasDetailPinyin, nameof(HasDetailPinyin));
+        NotifyChange(hadContent, HasContentPinyin, nameof(HasContentPinyin));
+        NotifyChange(wasTranslating, IsTranslating, nameof(IsTranslating));
+        NotifyChange(showedTranslation, ShowTranslation, nameof(ShowTranslation));
+        return true;
+    }
+
+    internal void SetTranslationPending(bool value)
+    {
+        var wasTranslating = IsTranslating;
+        var showedTranslation = ShowTranslation;
+        translationPending = value;
+        NotifyChange(wasTranslating, IsTranslating, nameof(IsTranslating));
+        NotifyChange(showedTranslation, ShowTranslation, nameof(ShowTranslation));
+    }
+
+    internal void FailPresentation()
+    {
+        var nameWasPending = IsNamePinyinPending;
+        var contentWasPending = IsContentPinyinPending;
+        isPresentationPending = false;
+        NotifyChange(nameWasPending, IsNamePinyinPending, nameof(IsNamePinyinPending));
+        NotifyChange(contentWasPending, IsContentPinyinPending, nameof(IsContentPinyinPending));
+    }
+
     internal void Apply(MessageRecord record, MessageDisplaySettings currentSettings, bool isTranslationPending = false)
     {
         Update(record, currentSettings, false, isTranslationPending);
@@ -99,11 +164,18 @@ public sealed class MessageItemViewModel : ObservableObject
 
     private void Update(MessageRecord record, MessageDisplaySettings currentSettings, bool initialize, bool isTranslationPending)
     {
+        if (!initialize && ReferenceEquals(Record, record) && ReferenceEquals(settings, currentSettings) &&
+            translationPending == isTranslationPending)
+        {
+            return;
+        }
         var previous = Record;
         var previousSettings = settings;
         var hadNamePinyin = HasNamePinyin;
         var hadDetailPinyin = HasDetailPinyin;
         var hadContentPinyin = HasContentPinyin;
+        var nameWasPending = IsNamePinyinPending;
+        var contentWasPending = IsContentPinyinPending;
         var hadMedal = HasMedal;
         var hadTranslation = HasTranslation;
         var wasTranslating = IsTranslating;
@@ -115,8 +187,8 @@ public sealed class MessageItemViewModel : ObservableObject
         settings = currentSettings;
         translationPending = isTranslationPending;
 
-        if (initialize || previous.Kind != record.Kind || previous.Content != record.Content ||
-            !previous.Emoticons.SequenceEqual(record.Emoticons))
+        if (!deferPresentation && (initialize || previous.Kind != record.Kind || previous.Content != record.Content ||
+            !previous.Emoticons.SequenceEqual(record.Emoticons)))
         {
             hasTranslatableContent = record.Kind is MessageKind.Danmu or MessageKind.SuperChat &&
                 TranslationTextExtractor.Extract(record.Content, record.Emoticons.Select(emoticon => emoticon.Text)).Length > 0;
@@ -129,25 +201,34 @@ public sealed class MessageItemViewModel : ObservableObject
         NotifyChange(previousSettings.AutoScrollLongMessages, settings.AutoScrollLongMessages, nameof(AutoScrollLongMessages));
         NotifyChange(previousSettings.PinyinLayout, settings.PinyinLayout, nameof(PinyinLayout));
 
-        if (initialize || previous.UserName != record.UserName || previousSettings.ShowUserPinyin != settings.ShowUserPinyin)
+        if (!deferPresentation && (initialize || previous.UserName != record.UserName || previousSettings.ShowUserPinyin != settings.ShowUserPinyin))
         {
             SetProperty(ref namePinyin, GetAnnotation(Name, settings.ShowUserPinyin), nameof(NamePinyin));
             SetProperty(ref nameAnnotations, HasNamePinyin ? pinyin.GetAnnotations(Name) : [], nameof(NameAnnotations));
         }
-        if (initialize || previous.Kind != record.Kind || previous.GiftName != record.GiftName ||
-            previousSettings.ShowGiftPinyin != settings.ShowGiftPinyin)
+        if (!deferPresentation && (initialize || previous.Kind != record.Kind || previous.GiftName != record.GiftName ||
+            previousSettings.ShowGiftPinyin != settings.ShowGiftPinyin))
         {
             SetProperty(ref detailPinyin, record.Kind == MessageKind.Gift
                 ? GetAnnotation(record.GiftName, settings.ShowGiftPinyin) : "", nameof(DetailPinyin));
         }
-        if (initialize || previous.Kind != record.Kind || previous.Content != record.Content ||
+        if (!deferPresentation && (initialize || previous.Kind != record.Kind || previous.Content != record.Content ||
             record.Kind == MessageKind.Gift && (previous.GiftName != record.GiftName ||
                 previous.Quantity != record.Quantity || previous.TotalPrice != record.TotalPrice ||
                 previousSettings.CultureName != settings.CultureName) ||
-            IsContentPinyinEnabled(previous.Kind, previousSettings) != IsContentPinyinEnabled(record.Kind, settings))
+            IsContentPinyinEnabled(previous.Kind, previousSettings) != IsContentPinyinEnabled(record.Kind, settings)))
         {
             SetProperty(ref contentPinyin, IsContentPinyinEnabled(record.Kind, settings)
                 ? GetContentAnnotations(record) : [], nameof(ContentPinyin));
+        }
+        if (deferPresentation && presentation?.Matches(record, settings.PresentationOptions) != true)
+        {
+            SetProperty(ref namePinyin, "", nameof(NamePinyin));
+            SetProperty(ref nameAnnotations, Array.Empty<PinyinAnnotation>(), nameof(NameAnnotations));
+            SetProperty(ref detailPinyin, "", nameof(DetailPinyin));
+            SetProperty(ref contentPinyin, Array.Empty<PinyinAnnotation>(), nameof(ContentPinyin));
+            hasTranslatableContent = false;
+            isPresentationPending = true;
         }
         if (initialize || previous.MedalName != record.MedalName || previous.MedalLevel != record.MedalLevel)
         {
@@ -186,6 +267,8 @@ public sealed class MessageItemViewModel : ObservableObject
         NotifyChange(hadNamePinyin, HasNamePinyin, nameof(HasNamePinyin));
         NotifyChange(hadDetailPinyin, HasDetailPinyin, nameof(HasDetailPinyin));
         NotifyChange(hadContentPinyin, HasContentPinyin, nameof(HasContentPinyin));
+        NotifyChange(nameWasPending, IsNamePinyinPending, nameof(IsNamePinyinPending));
+        NotifyChange(contentWasPending, IsContentPinyinPending, nameof(IsContentPinyinPending));
         NotifyChange(hadMedal, HasMedal, nameof(HasMedal));
         NotifyChange(hadTranslation, HasTranslation, nameof(HasTranslation));
         NotifyChange(wasTranslating, IsTranslating, nameof(IsTranslating));
@@ -199,6 +282,11 @@ public sealed class MessageItemViewModel : ObservableObject
         {
             OnPropertyChanged(propertyName);
         }
+    }
+
+    private static bool ContainsChinese(string text)
+    {
+        return text.Any(character => character is >= '\u4E00' and <= '\u9FFF');
     }
 
     private static bool IsContentPinyinEnabled(MessageKind kind, MessageDisplaySettings displaySettings)

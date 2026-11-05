@@ -26,6 +26,7 @@ public sealed class FeedRefreshTests(ITestOutputHelper output)
             Kind = MessageKind.Danmu, UserName = "viewer", Content = "unchanged", Count = 100
         });
         await model.SelectRoomAsync(room);
+        await model.WaitForPresentationAsync();
         var originals = model.Items.ToArray();
         var changes = 0;
         foreach (var item in originals)
@@ -34,6 +35,7 @@ public sealed class FeedRefreshTests(ITestOutputHelper output)
         }
 
         await model.RefreshAsync();
+        await model.WaitForPresentationAsync();
 
         Assert.Equal(0, changes);
         Assert.Equal(originals, model.Items.ToArray());
@@ -52,6 +54,7 @@ public sealed class FeedRefreshTests(ITestOutputHelper output)
             Kind = MessageKind.Danmu, UserName = "viewer", Content = "unchanged", Count = 100
         });
         await model.SelectRoomAsync(room);
+        await model.WaitForPresentationAsync();
         var target = model.Items[50];
         var changed = new HashSet<MessageItemViewModel>();
         foreach (var item in model.Items)
@@ -61,6 +64,7 @@ public sealed class FeedRefreshTests(ITestOutputHelper output)
 
         await runtime.Messages.TogglePinAsync(target.Record.Id);
         await model.RefreshAsync();
+        await model.WaitForPresentationAsync();
 
         Assert.Same(target, Assert.Single(changed));
         Assert.Same(target, Assert.Single(model.PinnedItems));

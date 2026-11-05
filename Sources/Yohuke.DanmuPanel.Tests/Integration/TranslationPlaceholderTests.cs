@@ -45,6 +45,7 @@ public sealed class TranslationPlaceholderTests
         try
         {
             await view.Model.SelectRoomAsync(new() { Id = "tab" });
+            await view.Model.WaitForPresentationAsync();
             window.Show();
             Pump(window);
             var item = Assert.Single(view.Model.Items);
@@ -54,6 +55,7 @@ public sealed class TranslationPlaceholderTests
 
             settings.Translation.Enabled = true;
             await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
             Pump(window);
 
             Assert.True(item.IsTranslating);
@@ -68,21 +70,25 @@ public sealed class TranslationPlaceholderTests
 
             settings.MessageTextScale = 1.5;
             await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
             Pump(window);
             Assert.Equal((compact ? 12 : 13) * 1.5, placeholder.FontSize);
             settings.Translation.Enabled = false;
             await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
             Pump(window);
             Assert.False(placeholder.IsEffectivelyVisible);
             Assert.False(placeholder.IsShimmering);
             settings.Translation.Enabled = true;
             await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
             Pump(window);
             Assert.True(placeholder.IsEffectivelyVisible);
 
             var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation);
             Assert.True(await runtime.Messages.ApplyTranslationAsync(message.Id, message.Generation, fingerprint, "Translated content"));
             await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
             Pump(window);
 
             Assert.Same(item, Assert.Single(view.Model.Items));
@@ -129,6 +135,7 @@ public sealed class TranslationPlaceholderTests
         try
         {
             await view.Model.SelectRoomAsync(new() { Id = "tab" });
+            await view.Model.WaitForPresentationAsync();
             window.Show();
             Pump(window);
             var item = Assert.Single(view.Model.Items);
@@ -139,6 +146,7 @@ public sealed class TranslationPlaceholderTests
 
             Assert.True(await runtime.Messages.ApplyTranslationAsync(message.Id, message.Generation, fingerprint, message.Content));
             await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
             Pump(window);
 
             Assert.Same(item, Assert.Single(view.Model.Items));
@@ -183,6 +191,7 @@ public sealed class TranslationPlaceholderTests
         await runtime.Messages.AppendAsync(message, settings.Reading, fingerprint);
         using var model = new FeedViewModel(runtime, MessageKind.Danmu);
         await model.SelectRoomAsync(new() { Id = "tab" });
+        await model.WaitForPresentationAsync();
         var item = Assert.Single(model.Items);
         Assert.True(item.IsTranslating);
         if (expire)
@@ -194,12 +203,14 @@ public sealed class TranslationPlaceholderTests
             Assert.True(await runtime.Messages.FailAsync(Assert.Single(await runtime.Messages.GetPendingAsync(1)), "failed"));
         }
         await model.RefreshAsync();
+        await model.WaitForPresentationAsync();
         Assert.False(item.IsTranslating);
         Assert.False(item.ShowTranslation);
         Assert.True(item.ShowOriginal);
 
         Assert.True(await runtime.Messages.UpsertTranslationJobAsync(message.Id, message.Generation, fingerprint));
         await model.RefreshAsync();
+        await model.WaitForPresentationAsync();
         Assert.True(item.IsTranslating);
         Assert.Same(item, Assert.Single(model.Items));
     }
@@ -226,6 +237,7 @@ public sealed class TranslationPlaceholderTests
             TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation));
         using var model = new FeedViewModel(runtime, kind);
         await model.SelectRoomAsync(new() { Id = "tab" });
+        await model.WaitForPresentationAsync();
         Assert.False(Assert.Single(model.Items).IsTranslating);
     }
 

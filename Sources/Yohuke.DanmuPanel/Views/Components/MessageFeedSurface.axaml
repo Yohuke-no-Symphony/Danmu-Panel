@@ -1,8 +1,17 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Yohuke.DanmuPanel.ViewModels"
+             xmlns:components="clr-namespace:Yohuke.DanmuPanel.Views.Components"
              x:Class="Yohuke.DanmuPanel.Views.Components.MessageFeedSurface"
              x:DataType="vm:FeedViewModel">
+    <UserControl.Styles>
+        <Style Selector="Button.skeletonFeedRow">
+            <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeBody}" />
+        </Style>
+        <Style Selector="Grid.compactDanmu Button.skeletonFeedRow">
+            <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeCompact}" />
+        </Style>
+    </UserControl.Styles>
     <Border Padding="8">
         <Grid RowDefinitions="Auto,*"
               Classes.compactDanmu="{Binding IsCompactDisplay}"

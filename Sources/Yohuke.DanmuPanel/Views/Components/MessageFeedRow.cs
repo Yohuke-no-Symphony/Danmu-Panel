@@ -60,7 +60,15 @@ internal sealed class MessageFeedRow : Button
         name.Classes.Add("danmuFeedUser");
         name.TextAlignment = kind is MessageKind.Gift or MessageKind.Guard ? TextAlignment.Left : TextAlignment.Center;
         name.Bind(ToolTip.TipProperty, new Binding(nameof(MessageItemViewModel.Name)));
-        identity.Children.Add(name);
+        var namePending = CreatePinyinPlaceholder(nameof(MessageItemViewModel.IsNamePinyinPending), 4);
+        namePending.Classes.Add("namePinyinPending");
+        namePending.HorizontalAlignment = kind is MessageKind.Gift or MessageKind.Guard
+            ? HorizontalAlignment.Left : HorizontalAlignment.Center;
+        identity.Children.Add(new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { namePending, name }
+        });
         identity.Classes.Add("danmuFeedIdentity");
         var original = new EmoticonTextBlock { TextWrapping = TextWrapping.Wrap };
         original.Classes.Add("danmuFeedContent");
@@ -92,7 +100,12 @@ internal sealed class MessageFeedRow : Button
         pendingTranslation.Classes.Add("translationPending");
         pendingTranslation.Bind(ShimmerTextBlock.TextProperty, Localization.Observe("Panel.Translating"));
         pendingTranslation.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.IsTranslating)));
-        var originalRegion = new Grid { Children = { original, originalMarquee } };
+        var contentPending = CreatePinyinPlaceholder(nameof(MessageItemViewModel.IsContentPinyinPending), 6);
+        contentPending.Classes.Add("contentPinyinPending");
+        var originalRegion = new StackPanel
+        {
+            Children = { contentPending, new Grid { Children = { original, originalMarquee } } }
+        };
         originalRegion.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.ShowOriginal)));
         var translationRegion = new Grid { Children = { translatedContent, pendingTranslation } };
         translationRegion.Classes.Add("translationLine");
@@ -107,12 +120,10 @@ internal sealed class MessageFeedRow : Button
             Children = { originalRegion, translationRegion }
         };
         body.Classes.Add("messageBody");
-        var layout = new Grid();
+        var layout = MessageFeedLayout.CreateGrid(kind);
         if (kind == MessageKind.SuperChat)
         {
-            layout.RowDefinitions = new("Auto,Auto");
-            layout.Classes.Add("scFeedLayout");
-            var header = new Grid { ColumnDefinitions = new("*,Auto"), ColumnSpacing = 8 };
+            var header = MessageFeedLayout.CreateHeaderGrid();
             header.Children.Add(identity);
             Grid.SetColumn(price, 1);
             header.Children.Add(price);
@@ -122,11 +133,9 @@ internal sealed class MessageFeedRow : Button
         }
         else
         {
-            layout.ColumnDefinitions = new(kind == MessageKind.Guard ? "3*,2*" : "2*,3*");
             layout.Children.Add(identity);
             Grid.SetColumn(body, 1);
             layout.Children.Add(body);
-            layout.Classes.Add("danmuFeedLayout");
         }
         var isCard = kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard;
         var frame = new Border
@@ -181,6 +190,15 @@ internal sealed class MessageFeedRow : Button
         text.Bind(HoverMarqueeTextBlock.TextProperty, new Binding(property));
         text.Bind(HoverMarqueeTextBlock.AutoScrollProperty, new Binding(nameof(MessageItemViewModel.AutoScrollLongMessages)));
         return text;
+    }
+
+    private static PinyinLoadingPlaceholder CreatePinyinPlaceholder(string property, double length)
+    {
+        var placeholder = new PinyinLoadingPlaceholder { Length = length };
+        placeholder.Bind(IsVisibleProperty, new Binding(property));
+        placeholder.Bind(PinyinLoadingPlaceholder.FontSizeProperty, new DynamicResourceExtension("MessageFontSizePinyin"));
+        placeholder.Bind(PinyinLoadingPlaceholder.ForegroundProperty, new DynamicResourceExtension("MessagePinyinBrush"));
+        return placeholder;
     }
 
     private static TextBlock BoundText(string property)

@@ -18,6 +18,7 @@ public sealed class PanelRuntime : IAsyncDisposable
     private readonly SqliteTranslationCache translationCache;
     private readonly Dictionary<string, string> translationCacheFingerprints;
     private readonly SemaphoreSlim lifecycle = new(1, 1);
+    private PanelSettings receptionSettings;
     public ConfigurationService ConfigurationStore { get; }
     public PanelConfiguration Configuration { get; }
     public SqliteMessageStore Messages { get; }
@@ -29,19 +30,23 @@ public sealed class PanelRuntime : IAsyncDisposable
     public AvatarCacheService Avatars { get; }
     public ColorSchemeService Colors { get; } = new();
     public BilibiliAccountSessionService AccountSessions { get; } = new();
-    public IPinyinService Pinyin { get; } = new PinyinService();
+    public IPinyinService Pinyin { get; }
+    internal MessagePresentationService Presentations { get; }
     public event Action<string>? Changed;
 
     /// <summary>通知消息或译文变化；类型为空时重读该房间的所有消息面板。</summary>
     public event Action<string, MessageKind?>? MessagesChanged;
 
     /// <summary>组合应用依赖，不自动连接直播间。</summary>
-    public PanelRuntime(ConfigurationService configurationStore, PanelConfiguration configuration)
+    public PanelRuntime(ConfigurationService configurationStore, PanelConfiguration configuration, IPinyinService? pinyin = null)
     {
+        Pinyin = pinyin ?? new PinyinService();
+        Presentations = pinyin is null ? new(static () => new PinyinService()) : new(pinyin);
         ConfigurationStore = configurationStore;
         Configuration = configuration;
         TranslationRequestFactory.PreserveCacheIdentity(configuration.Settings.Translation);
         translationCacheFingerprints = configuration.Settings.Translation.CacheFingerprints;
+        receptionSettings = CaptureReceptionSettings();
         DanmuFilter = CreateDanmuFilter();
         foreach (var account in configuration.Accounts)
         {
@@ -107,10 +112,12 @@ public sealed class PanelRuntime : IAsyncDisposable
     {
         Configuration.Settings.Translation.CacheFingerprints = translationCacheFingerprints;
         var danmuFilter = CreateDanmuFilter();
+        var nextReceptionSettings = CaptureReceptionSettings();
         await ConfigurationStore.SaveAsync(Configuration);
         await Messages.ReevaluateReadOptionsAsync(Configuration.Settings.Reading);
         await scheduler.UpdateSettingsAsync(Configuration.Settings.Translation);
         DanmuFilter = danmuFilter;
+        Volatile.Write(ref receptionSettings, nextReceptionSettings);
         Changed?.Invoke("");
     }
 
@@ -197,6 +204,7 @@ public sealed class PanelRuntime : IAsyncDisposable
                 await StopAsync(id);
             }
             await scheduler.DisposeAsync();
+            await Presentations.DisposeAsync();
             await translationService.DisposeAsync();
             await translationCache.DisposeAsync();
             await ConfigurationStore.SaveAsync(Configuration);
@@ -234,8 +242,9 @@ public sealed class PanelRuntime : IAsyncDisposable
 
     private async Task StartAsync(WorkspaceState workspace, RoomTabState room)
     {
+        Volatile.Write(ref receptionSettings, CaptureReceptionSettings());
         var account = PanelAccountSelector.Resolve(Configuration, workspace, room);
-        var session = new RoomReceptionSession(room, account?.Cookie ?? "", Messages, () => Configuration.Settings,
+        var session = new RoomReceptionSession(room, account?.Cookie ?? "", Messages, () => Volatile.Read(ref receptionSettings),
             new BilibiliLiveDanmuSocketFactory(), new BilibiliDanmuHistoryService());
         session.Committed += message =>
         {
@@ -276,6 +285,15 @@ public sealed class PanelRuntime : IAsyncDisposable
         }
         statuses[id] = "Panel.Stopped";
         Changed?.Invoke(id);
+    }
+
+    private PanelSettings CaptureReceptionSettings()
+    {
+        return new()
+        {
+            Reading = Configuration.Settings.Reading,
+            Translation = TranslationRequestFactory.Snapshot(Configuration.Settings.Translation)
+        };
     }
 
     private DanmuRegexFilter CreateDanmuFilter()

@@ -7,13 +7,49 @@ namespace Yohuke.DanmuPanel.Services.Messages;
 
 public sealed partial class SqliteMessageStore
 {
+    private long appendTransactionCount;
+
+    internal long AppendTransactionCount => Interlocked.Read(ref appendTransactionCount);
+
     /// <inheritdoc />
-    public Task<MessageAppendResult> AppendAsync(MessageRecord message, MessageReadOptions options,
+    public async Task<MessageAppendResult> AppendAsync(MessageRecord message, MessageReadOptions options,
         string? translationFingerprint = null, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(message.RoomTabId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(message.Id);
-        return EnqueueAsync(connection => Append(connection, message, options, translationFingerprint), cancellationToken);
+        var results = await AppendBatchAsync([message], options, translationFingerprint, cancellationToken).ConfigureAwait(false);
+        return results[0];
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<MessageAppendResult>> AppendBatchAsync(IReadOnlyList<MessageRecord> messages,
+        MessageReadOptions options, string? translationFingerprint = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(messages.Count, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(messages.Count, IMessageStore.MAX_BATCH_COUNT);
+        var snapshot = messages.ToArray();
+        foreach (var message in snapshot)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(message.RoomTabId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(message.Id);
+        }
+
+        return EnqueueAsync<IReadOnlyList<MessageAppendResult>>(connection =>
+        {
+            using var transaction = connection.BeginTransaction();
+            var results = new MessageAppendResult[snapshot.Length];
+            for (var index = 0; index < snapshot.Length; index++)
+            {
+                transaction.Save("append_message");
+                results[index] = Append(connection, transaction, snapshot[index], options, translationFingerprint, out var keepChanges);
+                if (!keepChanges)
+                {
+                    transaction.Rollback("append_message");
+                }
+                transaction.Release("append_message");
+            }
+            transaction.Commit();
+            Interlocked.Increment(ref appendTransactionCount);
+            return results;
+        }, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -171,6 +207,7 @@ public sealed partial class SqliteMessageStore
                     WHERE room_tab_id=$room;
                     """, ("$room", roomTabId));
             }
+            readCache.InvalidateRoom(roomTabId, kind);
             Execute(connection, transaction, "DELETE FROM message_records WHERE room_tab_id=$room AND kind=$kind;",
                 ("$room", roomTabId), ("$kind", (int)kind));
             transaction.Commit();
@@ -246,10 +283,10 @@ public sealed partial class SqliteMessageStore
         }, cancellationToken);
     }
 
-    private static MessageAppendResult Append(SqliteConnection connection, MessageRecord message,
-        MessageReadOptions options, string? translationFingerprint)
+    private MessageAppendResult Append(SqliteConnection connection, SqliteTransaction transaction, MessageRecord message,
+        MessageReadOptions options, string? translationFingerprint, out bool keepChanges)
     {
-        using var transaction = connection.BeginTransaction();
+        keepChanges = false;
         Execute(connection, transaction, "INSERT OR IGNORE INTO message_rooms(id) VALUES($room);", ("$room", message.RoomTabId));
         if (ReadGeneration(connection, transaction, message.RoomTabId) != message.Generation)
         {
@@ -288,7 +325,8 @@ public sealed partial class SqliteMessageStore
         {
             IsRead = false, IsPinned = false, IsPriority = false, PinnedAt = null,
             HasBeenRead = false, ReadQuantity = 0, ReadTotalPrice = 0,
-            Translation = null, TranslationFingerprint = translationFingerprint
+            Translation = null,
+            TranslationFingerprint = message.Kind is MessageKind.Danmu or MessageKind.SuperChat ? translationFingerprint : null
         };
         var disposition = MessageAppendDisposition.Appended;
         if (message.Kind == MessageKind.Gift && !string.IsNullOrWhiteSpace(message.ComboId))
@@ -296,7 +334,7 @@ public sealed partial class SqliteMessageStore
             var result = MergeGift(connection, transaction, record, options);
             if (result.Record is null)
             {
-                transaction.Commit();
+                keepChanges = true;
                 return result;
             }
             record = result.Record;
@@ -314,7 +352,7 @@ public sealed partial class SqliteMessageStore
         {
             EnsureJob(connection, transaction, record, translationFingerprint);
         }
-        transaction.Commit();
+        keepChanges = true;
         return new(disposition, record);
     }
 
@@ -389,8 +427,9 @@ public sealed partial class SqliteMessageStore
         };
     }
 
-    private static void ClearRoom(SqliteConnection connection, SqliteTransaction transaction, string roomTabId)
+    private void ClearRoom(SqliteConnection connection, SqliteTransaction transaction, string roomTabId)
     {
+        readCache.InvalidateRoom(roomTabId);
         Execute(connection, transaction, """
             INSERT INTO message_rooms(id,generation,cleared_before) VALUES($room,1,$cutoff)
             ON CONFLICT(id) DO UPDATE SET generation=generation+1,cleared_before=excluded.cleared_before;

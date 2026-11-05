@@ -41,12 +41,25 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         Model = new(runtime, kind);
         UpdateTextScale();
         Model.Failed += reportError;
-        list = CreateList(Model.ScrollingItems, kind, "ScrollingMessages");
+        list = CreateList(Model.ScrollingRows, kind, "ScrollingMessages");
         pinnedList = CreateList(Model.PinnedItems, kind, "PinnedMessages");
         pinnedList.MaxHeight = 0;
         list.TemplateApplied += (_, _) => AttachScroll(list, kind);
-        list.AttachedToVisualTree += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => AttachScroll(list, kind));
-        list.DetachedFromVisualTree += (_, _) => { scroll?.Dispose(); scroll = null; };
+        list.AttachedToVisualTree += (_, _) =>
+        {
+            Model.InitialLoadCompleted += OnInitialLoadCompleted;
+            Model.ViewportUpdateStarted += OnViewportUpdateStarted;
+            Model.ViewportUpdateCompleted += OnViewportUpdateCompleted;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => AttachScroll(list, kind));
+        };
+        list.DetachedFromVisualTree += (_, _) =>
+        {
+            Model.InitialLoadCompleted -= OnInitialLoadCompleted;
+            Model.ViewportUpdateStarted -= OnViewportUpdateStarted;
+            Model.ViewportUpdateCompleted -= OnViewportUpdateCompleted;
+            scroll?.Dispose();
+            scroll = null;
+        };
         HeaderActionsTemplate = new FuncDataTemplate<MessageFeedView>((_, _) =>
         {
             var actions = new StackPanel { Orientation = Orientation.Horizontal };
@@ -114,6 +127,21 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         Resources["MessagePinBadgeSize"] = 14 * scale;
     }
 
+    private void OnInitialLoadCompleted()
+    {
+        scroll?.CompleteInitialLoad();
+    }
+
+    private void OnViewportUpdateStarted()
+    {
+        scroll?.BeginViewportUpdate();
+    }
+
+    private void OnViewportUpdateCompleted()
+    {
+        scroll?.EndViewportUpdate();
+    }
+
     private async Task ClearAsync(MessageKind kind)
     {
         var room = Model.SelectedRoom;
@@ -129,9 +157,9 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         }
     }
 
-    private ListBox CreateList(IEnumerable<MessageItemViewModel> items, MessageKind kind, string name)
+    private ListBox CreateList(IEnumerable<FeedRowViewModel> items, MessageKind kind, string name)
     {
-        var result = new MessageFeedListBox(() => CreateRow(kind))
+        var result = new MessageFeedListBox(() => CreateRow(kind), kind)
         {
             Name = name,
             ItemsSource = items,
@@ -153,11 +181,16 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
 
     private void AttachScroll(ListBox list, MessageKind kind)
     {
-        if (scroll is null && list.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault() is { } viewer)
+        if (list.GetVisualRoot() is not null && scroll is null &&
+            list.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault() is { } viewer)
         {
             scroll = new(viewer, list, followNewMessages: kind == MessageKind.Danmu);
             scroll.FollowingLatestChanged += following => Model.IsReadingHistory = !following;
-            scroll.Attach(Model.ScrollingItems);
+            scroll.Attach(Model.ScrollingRows);
+            for (var index = 0; index < Model.ViewportUpdateDepth; index++)
+            {
+                scroll.BeginViewportUpdate();
+            }
         }
     }
 
@@ -269,21 +302,28 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         {
             scroll?.PrepareForItemMove(item);
         }
-        if (record.Kind == MessageKind.Danmu)
+        try
         {
-            var updated = await runtime.Messages.TogglePinAsync(record.Id);
-            if (updated?.IsPinned == true && runtime.Configuration.Settings.Translation.Enabled)
+            if (record.Kind == MessageKind.Danmu)
             {
-                await runtime.Messages.UpsertTranslationJobAsync(updated.Id, updated.Generation,
-                    TranslationRequestFactory.GetConfigurationFingerprint(runtime.Configuration.Settings.Translation));
+                var updated = await runtime.Messages.TogglePinAsync(record.Id);
+                if (updated?.IsPinned == true && runtime.Configuration.Settings.Translation.Enabled)
+                {
+                    await runtime.Messages.UpsertTranslationJobAsync(updated.Id, updated.Generation,
+                        TranslationRequestFactory.GetConfigurationFingerprint(runtime.Configuration.Settings.Translation));
+                }
             }
+            else
+            {
+                await runtime.Messages.MarkReadAsync(record.Id, record.Quantity, record.TotalPrice);
+            }
+            runtime.NotifyTranslation();
+            await Model.RefreshAsync();
         }
-        else
+        finally
         {
-            await runtime.Messages.MarkReadAsync(record.Id, record.Quantity, record.TotalPrice);
+            scroll?.CompleteItemMove();
         }
-        runtime.NotifyTranslation();
-        await Model.RefreshAsync();
     }
 
     private Task ScrollToLatestAsync()

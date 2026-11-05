@@ -19,6 +19,12 @@ internal sealed class DanmuFeedScrollController : IDisposable
     private readonly ItemsControl itemsControl;
     private readonly bool followNewMessages;
     private readonly HashSet<INotifyPropertyChanged> observedItems = [];
+    private readonly HashSet<(Size Extent, Size Viewport, Rect AnchorBounds)> correctedAnchorGeometries = [];
+    private readonly HashSet<(Size Extent, Size Viewport, Rect? LastBounds)> followedGeometries = [];
+    private long followedGeometryRevision = -1;
+    private Size followedGeometryViewport;
+    private Size? followedTargetSize;
+    private bool hasFollowTargetChanged;
     private INotifyCollectionChanged? items;
     private object? readingItem;
     private double readingY;
@@ -30,8 +36,16 @@ internal sealed class DanmuFeedScrollController : IDisposable
     private bool isFollowingLatest;
     private bool isFollowPending;
     private bool isAnchorCorrectionPending;
+    private bool isAnchorStepQueued;
+    private bool hasRequestedAnchorRealization;
+    private long anchorContentRevision;
+    private long userScrollRevision;
+    private bool canFollowFromUserScroll;
+    private bool hasUserScrollInput;
+    private int viewportUpdateDepth;
     private bool isReadingAnchorPrepared;
     private bool isUpdatingScroll;
+    private bool hasUserScrolledSinceReset;
     private bool isDisposed;
 
     public bool IsFollowingLatest => isFollowingLatest;
@@ -49,7 +63,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
             RoutingStrategies.Tunnel, true);
         scrollViewer.AddHandler(InputElement.KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel, true);
         scrollViewer.AddHandler(Gestures.ScrollGestureEvent, OnScrollGesture,
-            RoutingStrategies.Tunnel, true);
+            RoutingStrategies.Bubble, true);
         scrollViewer.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel, true);
         scrollViewer.AddHandler(InputElement.PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Tunnel, true);
         scrollViewer.AddHandler(InputElement.PointerCaptureLostEvent, OnPointerCaptureLost, RoutingStrategies.Direct, true);
@@ -90,6 +104,39 @@ internal sealed class DanmuFeedScrollController : IDisposable
         }
     }
 
+    internal void CompleteInitialLoad()
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+        if (items is not null && !hasUserScrolledSinceReset)
+        {
+            ResetToLatest();
+        }
+    }
+
+    /// <summary>跨异步消息批次固定当前阅读消息与像素位置，支持原文和拼音任务交错。</summary>
+    public void BeginViewportUpdate()
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+        if (viewportUpdateDepth++ == 0 && !isFollowingLatest && !isAnchorCorrectionPending && !isReadingAnchorPrepared)
+        {
+            CaptureReadingAnchor();
+        }
+    }
+
+    /// <summary>结束一个消息批次；最外层批次完成后结算阅读位置。</summary>
+    public void EndViewportUpdate()
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+        if (viewportUpdateDepth == 0)
+        {
+            return;
+        }
+        if (--viewportUpdateDepth == 0 && !isFollowingLatest)
+        {
+            QueueAnchorCorrection();
+        }
+    }
+
     /// <summary>显式通知字号、换行等外部布局设置变化，并保持当前跟随或阅读策略。</summary>
     public void NotifyLayoutChanged()
     {
@@ -100,18 +147,30 @@ internal sealed class DanmuFeedScrollController : IDisposable
     /// <summary>在消息移组前选择可见的邻近行，避免阅读位置追随即将移走的消息。</summary>
     public void PrepareForItemMove(object movingItem)
     {
-        if (items is null || isFollowingLatest && followNewMessages)
+        if (items is null)
+        {
+            return;
+        }
+        hasUserScrolledSinceReset = true;
+        if (isFollowingLatest && followNewMessages)
         {
             return;
         }
         CancelPendingFollow();
         SetFollowingLatest(false);
-        CaptureReadingAnchor(movingItem, requireFullyVisible: true);
-        if (readingItem is null)
-        {
-            CaptureReadingAnchor(movingItem);
-        }
+        CaptureReadingAnchor(movingItem);
         isReadingAnchorPrepared = readingItem is not null;
+    }
+
+    /// <summary>结束消息操作；未发生移组或操作失败时也释放准备锚点并恢复正常位置纠正。</summary>
+    public void CompleteItemMove()
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+        if (isReadingAnchorPrepared)
+        {
+            isReadingAnchorPrepared = false;
+            QueueAnchorCorrection();
+        }
     }
 
     /// <inheritdoc/>
@@ -135,6 +194,18 @@ internal sealed class DanmuFeedScrollController : IDisposable
 
     private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (e.Action == NotifyCollectionChangedAction.Replace && readingItem is not null)
+        {
+            var anchorIndex = e.OldItems!.IndexOf(readingItem);
+            if (anchorIndex >= 0)
+            {
+                readingItem = e.NewItems![anchorIndex];
+                if (isAnchorCorrectionPending)
+                {
+                    CancelPendingFollow();
+                }
+            }
+        }
         if (e.Action == NotifyCollectionChangedAction.Reset)
         {
             ClearItemSubscriptions();
@@ -148,7 +219,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
                 UnobserveItems(e.OldItems);
                 ObserveItems(e.NewItems);
             }
-            OnContentChanged();
+            OnContentChanged(e.Action == NotifyCollectionChangedAction.Add, isCollectionChange: true);
         }
     }
 
@@ -157,35 +228,54 @@ internal sealed class DanmuFeedScrollController : IDisposable
         OnContentChanged();
     }
 
-    private void OnContentChanged()
+    private void OnContentChanged(bool hasNewMessages = false, bool isCollectionChange = false)
     {
         contentRevision++;
-        if (scrollingPointer is not null)
+        if (scrollingPointer is not null || isReadingAnchorPrepared && !isCollectionChange)
         {
             return;
         }
-        if (isFollowingLatest && followNewMessages)
+        if (isFollowingLatest && (followNewMessages || !hasNewMessages || isFollowPending))
         {
             QueueFollowLatest();
         }
         else
         {
             SetFollowingLatest(false);
-            QueueAnchorCorrection();
             isReadingAnchorPrepared = false;
+            QueueAnchorCorrection();
         }
     }
 
     private void OnLayoutUpdated(object? sender, EventArgs e)
     {
-        if (items is null || isUpdatingScroll || isAnchorCorrectionPending || isReadingAnchorPrepared)
+        if (items is null || isUpdatingScroll || isReadingAnchorPrepared || scrollingPointer is not null)
         {
             return;
         }
-        if (isFollowingLatest && followNewMessages)
+        if (isAnchorCorrectionPending)
+        {
+            ScheduleAnchorCorrectionStep();
+            return;
+        }
+        if (viewportUpdateDepth > 0 && !isFollowingLatest)
+        {
+            if (readingItem is null)
+            {
+                CaptureReadingAnchor();
+            }
+            if (readingItem is not null && (itemsControl.ContainerFromItem(readingItem) is not { } anchor ||
+                anchor.TranslatePoint(default, scrollViewer) is { } position && Math.Abs(position.Y - readingY) > 0.1))
+            {
+                QueueAnchorCorrection();
+            }
+            return;
+        }
+        if (isFollowingLatest)
         {
             if (!IsAtLatest() && (contentRevision != lastFollowedRevision ||
-                scrollViewer.Viewport != lastFollowedViewport))
+                scrollViewer.Viewport != lastFollowedViewport ||
+                !followedGeometries.Contains(CaptureFollowGeometry())))
             {
                 QueueFollowLatest();
             }
@@ -202,9 +292,19 @@ internal sealed class DanmuFeedScrollController : IDisposable
             {
                 return;
             }
+            if (isFollowingLatest && scrollingPointer is null && !hasUserScrollInput)
+            {
+                return;
+            }
+            if ((isReadingAnchorPrepared || isAnchorCorrectionPending || viewportUpdateDepth > 0) &&
+                scrollingPointer is null && !hasUserScrollInput)
+            {
+                return;
+            }
             CancelPendingFollow();
             readingItem = null;
-            SetFollowingLatest(scrollingPointer is null && IsAtLatest());
+            SetFollowingLatest(scrollingPointer is null && IsAtLatest() &&
+                (isFollowingLatest || canFollowFromUserScroll));
             if (isFollowingLatest && followNewMessages)
             {
                 QueueFollowLatest();
@@ -216,7 +316,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
     {
         if (e.Delta.Y != 0 && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
-            CancelPendingFollow();
+            CancelFollowForUserScroll(e.Delta.Y < 0);
         }
     }
 
@@ -224,7 +324,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
     {
         if (e.Key is Key.PageUp or Key.PageDown or Key.Home or Key.End or Key.Up or Key.Down)
         {
-            CancelPendingFollow();
+            CancelFollowForUserScroll(e.Key is Key.PageDown or Key.End or Key.Down);
         }
     }
 
@@ -232,8 +332,42 @@ internal sealed class DanmuFeedScrollController : IDisposable
     {
         if (e.Delta.Y != 0)
         {
-            CancelPendingFollow();
+            CancelFollowForUserScroll(e.Delta.Y > 0);
         }
+    }
+
+    private void CancelFollowForUserScroll(bool towardLatest)
+    {
+        hasUserScrolledSinceReset = true;
+        CancelPendingFollow();
+        readingItem = null;
+        canFollowFromUserScroll = towardLatest;
+        hasUserScrollInput = true;
+        var inputRevision = ++userScrollRevision;
+        if (!IsAtLatest() || !towardLatest)
+        {
+            SetFollowingLatest(false);
+        }
+        else
+        {
+            SetFollowingLatest(true);
+            if (followNewMessages)
+            {
+                QueueFollowLatest();
+            }
+        }
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (inputRevision == userScrollRevision)
+            {
+                canFollowFromUserScroll = false;
+                hasUserScrollInput = false;
+                if (viewportUpdateDepth > 0 && !isFollowingLatest && !isReadingAnchorPrepared && !isAnchorCorrectionPending)
+                {
+                    CaptureReadingAnchor();
+                }
+            }
+        }, DispatcherPriority.Background);
     }
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -241,6 +375,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
         CancelPendingFollow();
         if (e.Source is ScrollBar || e.Source is Visual source && source.GetVisualAncestors().OfType<ScrollBar>().Any())
         {
+            hasUserScrolledSinceReset = true;
             scrollingPointer = e.Pointer;
             readingItem = null;
             SetFollowingLatest(false);
@@ -267,6 +402,10 @@ internal sealed class DanmuFeedScrollController : IDisposable
         CancelPendingFollow();
         readingItem = null;
         SetFollowingLatest(IsAtLatest());
+        if (viewportUpdateDepth > 0 && !isFollowingLatest)
+        {
+            CaptureReadingAnchor();
+        }
         if (isFollowingLatest && followNewMessages)
         {
             QueueFollowLatest();
@@ -276,6 +415,10 @@ internal sealed class DanmuFeedScrollController : IDisposable
     private void ResetToLatest()
     {
         CancelPendingFollow();
+        hasUserScrolledSinceReset = false;
+        followedGeometries.Clear();
+        followedTargetSize = null;
+        hasFollowTargetChanged = false;
         scrollingPointer = null;
         readingItem = null;
         SetFollowingLatest(true);
@@ -287,6 +430,9 @@ internal sealed class DanmuFeedScrollController : IDisposable
         session++;
         isFollowPending = false;
         isAnchorCorrectionPending = false;
+        isAnchorStepQueued = false;
+        hasRequestedAnchorRealization = false;
+        correctedAnchorGeometries.Clear();
         isReadingAnchorPrepared = false;
     }
 
@@ -318,7 +464,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
         FollowingLatestChanged?.Invoke(value);
     }
 
-    private void CaptureReadingAnchor(object? excludedItem = null, bool requireFullyVisible = false)
+    private void CaptureReadingAnchor(object? excludedItem = null)
     {
         readingItem = null;
         if (isFollowingLatest && followNewMessages)
@@ -335,14 +481,13 @@ internal sealed class DanmuFeedScrollController : IDisposable
             }
             if (container.TranslatePoint(default, scrollViewer) is not { } position ||
                 position.Y + container.Bounds.Height <= 0 || position.Y >= scrollViewer.Viewport.Height ||
-                requireFullyVisible && (position.Y < 0 || position.Y + container.Bounds.Height > scrollViewer.Viewport.Height) ||
-                Math.Abs(position.Y) >= nearest)
+                position.Y >= nearest)
             {
                 continue;
             }
             readingItem = item;
             readingY = position.Y;
-            nearest = Math.Abs(position.Y);
+            nearest = position.Y;
         }
     }
 
@@ -353,45 +498,101 @@ internal sealed class DanmuFeedScrollController : IDisposable
             return;
         }
         isAnchorCorrectionPending = true;
+        hasRequestedAnchorRealization = false;
+        correctedAnchorGeometries.Clear();
+        anchorContentRevision = contentRevision;
+        ScheduleAnchorCorrectionStep();
+    }
+
+    private void ScheduleAnchorCorrectionStep()
+    {
+        if (isAnchorStepQueued || !isAnchorCorrectionPending)
+        {
+            return;
+        }
+        isAnchorStepQueued = true;
         var requestedSession = session;
-        var anchorItem = readingItem;
-        var anchorY = readingY;
         Dispatcher.UIThread.Post(() =>
         {
-            if (requestedSession != session || isDisposed || items is null || isFollowingLatest)
+            if (requestedSession != session)
             {
                 return;
             }
+            isAnchorStepQueued = false;
+            AdvanceAnchorCorrection();
+        }, DispatcherPriority.Background);
+    }
+
+    private void AdvanceAnchorCorrection()
+    {
+        if (isDisposed || items is null || !isAnchorCorrectionPending || isFollowingLatest)
+        {
+            return;
+        }
+        if (!scrollViewer.IsArrangeValid || !itemsControl.IsArrangeValid ||
+            itemsControl.ItemsPanelRoot is { IsMeasureValid: false } or { IsArrangeValid: false })
+        {
+            return;
+        }
+        var anchorItem = readingItem;
+        if (anchorItem is null || !itemsControl.Items.Contains(anchorItem))
+        {
+            CompleteAnchorCorrection();
+            return;
+        }
+        if (itemsControl.ContainerFromItem(anchorItem) is not { } anchor)
+        {
+            if (!hasRequestedAnchorRealization)
+            {
+                hasRequestedAnchorRealization = true;
+                isUpdatingScroll = true;
+                try
+                {
+                    itemsControl.ScrollIntoView(anchorItem);
+                }
+                finally
+                {
+                    isUpdatingScroll = false;
+                }
+                ScheduleAnchorCorrectionStep();
+            }
+            else
+            {
+                CompleteAnchorCorrection();
+            }
+            return;
+        }
+        if (anchor.TranslatePoint(default, scrollViewer) is { } position &&
+            Math.Abs(position.Y - readingY) > 0.1 &&
+            correctedAnchorGeometries.Add((scrollViewer.Extent, scrollViewer.Viewport, anchor.Bounds)))
+        {
             isUpdatingScroll = true;
             try
             {
-                scrollViewer.UpdateLayout();
-                if (itemsControl.ContainerFromItem(anchorItem) is null && itemsControl.Items.Contains(anchorItem))
-                {
-                    itemsControl.ScrollIntoView(anchorItem);
-                    scrollViewer.UpdateLayout();
-                }
-                if (itemsControl.ContainerFromItem(anchorItem) is { } anchor &&
-                    anchor.TranslatePoint(default, scrollViewer) is { } position)
-                {
-                    var correction = position.Y - anchorY;
-                    if (Math.Abs(correction) > 0.1)
-                    {
-                        scrollViewer.Offset = new(scrollViewer.Offset.X, scrollViewer.Offset.Y + correction);
-                        scrollViewer.UpdateLayout();
-                    }
-                }
+                scrollViewer.Offset = new(scrollViewer.Offset.X, scrollViewer.Offset.Y + position.Y - readingY);
             }
             finally
             {
                 isUpdatingScroll = false;
-                if (requestedSession == session)
-                {
-                    isAnchorCorrectionPending = false;
-                    CaptureReadingAnchor();
-                }
             }
-        }, DispatcherPriority.Normal);
+            ScheduleAnchorCorrectionStep();
+            return;
+        }
+        CompleteAnchorCorrection();
+    }
+
+    private void CompleteAnchorCorrection()
+    {
+        var changedDuringCorrection = anchorContentRevision != contentRevision;
+        isAnchorCorrectionPending = false;
+        if (changedDuringCorrection && readingItem is not null && itemsControl.Items.Contains(readingItem))
+        {
+            QueueAnchorCorrection();
+        }
+        else if (viewportUpdateDepth == 0)
+        {
+            CaptureReadingAnchor();
+        }
     }
 
     private void ObserveItems(IEnumerable? values)
@@ -439,6 +640,28 @@ internal sealed class DanmuFeedScrollController : IDisposable
         {
             return;
         }
+        if (followedGeometryRevision != contentRevision || followedGeometryViewport != scrollViewer.Viewport)
+        {
+            followedGeometryRevision = contentRevision;
+            followedGeometryViewport = scrollViewer.Viewport;
+            followedGeometries.Clear();
+            followedTargetSize = null;
+            hasFollowTargetChanged = false;
+        }
+        if (hasFollowTargetChanged)
+        {
+            return;
+        }
+        var geometry = CaptureFollowGeometry();
+        if (followedTargetSize is { } targetSize &&
+            (geometry.LastBounds is not { } lastBounds || lastBounds.Size != targetSize))
+        {
+            return;
+        }
+        if (!followedGeometries.Add(geometry))
+        {
+            return;
+        }
         isFollowPending = true;
         var requestedSession = session;
         Dispatcher.UIThread.Post(() => FollowLatest(requestedSession), DispatcherPriority.Normal);
@@ -464,6 +687,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
             {
                 MoveToLatest();
                 followedGeometry = CaptureFollowGeometry();
+                RecordFollowTargetSize(followedGeometry.LastBounds?.Size);
             }
         }
         finally
@@ -491,7 +715,11 @@ internal sealed class DanmuFeedScrollController : IDisposable
             if (isFollowingLatest && (followedRevision != contentRevision || !IsAtLatest() ||
                 CaptureFollowGeometry() != followedGeometry))
             {
+                var geometry = CaptureFollowGeometry();
+                followedGeometries.Add(geometry);
+                RecordFollowTargetSize(geometry.LastBounds?.Size);
                 MoveToLatest();
+                RecordFollowTargetSize(CaptureFollowGeometry().LastBounds?.Size);
             }
         }
         finally
@@ -514,7 +742,8 @@ internal sealed class DanmuFeedScrollController : IDisposable
         }
         isFollowPending = false;
         if (isFollowingLatest && (lastFollowedRevision != contentRevision ||
-            lastFollowedViewport != scrollViewer.Viewport))
+            lastFollowedViewport != scrollViewer.Viewport || !IsAtLatest() &&
+            !followedGeometries.Contains(CaptureFollowGeometry())))
         {
             QueueFollowLatest();
         }
@@ -522,6 +751,15 @@ internal sealed class DanmuFeedScrollController : IDisposable
         {
             CaptureReadingAnchor();
         }
+    }
+
+    private void RecordFollowTargetSize(Size? size)
+    {
+        if (followedTargetSize is { } targetSize && size is { } actualSize && targetSize != actualSize)
+        {
+            hasFollowTargetChanged = true;
+        }
+        followedTargetSize ??= size;
     }
 
     private bool IsCurrentFollowSession(long requestedSession)

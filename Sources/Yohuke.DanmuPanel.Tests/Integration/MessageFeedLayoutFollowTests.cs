@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Yohuke.DanmuPanel.Models.Messages;
@@ -59,14 +61,18 @@ public sealed class MessageFeedLayoutFollowTests
             Assert.False(view.Model.IsReadingHistory);
             if (readingHistory)
             {
-                viewer.Offset = new(0, viewer.ScrollBarMaximum.Y / 3);
+                var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),
+                presenter => ReferenceEquals(presenter.TemplatedParent, viewer));
+                presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(),
+                    new(0, viewer.ScrollBarMaximum.Y / 3 - viewer.Offset.Y)));
                 Pump(window);
+                Assert.True(viewer.Offset.Y > 0 && viewer.Offset.Y < viewer.ScrollBarMaximum.Y);
                 Assert.True(view.Model.IsReadingHistory);
             }
             var anchor = list.GetRealizedContainers()
                 .Where(container => container.TranslatePoint(default, viewer) is { } position &&
                     position.Y + container.Bounds.Height > 0 && position.Y < viewer.Viewport.Height)
-                .MinBy(container => Math.Abs(container.TranslatePoint(default, viewer)!.Value.Y))!;
+                .MinBy(container => container.TranslatePoint(default, viewer)!.Value.Y)!;
             var anchorItem = list.ItemFromContainer(anchor);
             var anchorY = anchor.TranslatePoint(default, viewer)!.Value.Y;
             var initialExtent = viewer.Extent.Height;

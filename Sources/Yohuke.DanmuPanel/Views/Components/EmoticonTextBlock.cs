@@ -1,4 +1,6 @@
 using Yohuke.DanmuPanel.I18n;
+using System.Globalization;
+using System.Text;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -21,6 +23,7 @@ public sealed class EmoticonTextBlock : TextBlock
     private const double EMOTICON_HEIGHT = 20;
     private readonly Dictionary<string, Bitmap> images = new(StringComparer.Ordinal);
     private readonly List<PinyinRubySyllable> rubySyllables = [];
+    private readonly List<TextBlock> indivisibleTextElements = [];
     private readonly List<RenderedMessageTextSpan> renderedSpans = [];
     private readonly Dictionary<int, Run> pronunciationRuns = [];
     private List<Visual>? visibilityAncestors;
@@ -362,7 +365,7 @@ public sealed class EmoticonTextBlock : TextBlock
                 {
                     if (!annotation.HasPinyin)
                     {
-                        Inlines.Add(new Run(annotation.Text));
+                        Inlines.Add(CreateUnannotatedInline(annotation.Text));
                         continue;
                     }
                     var syllable = new PinyinRubySyllable(annotation);
@@ -414,6 +417,19 @@ public sealed class EmoticonTextBlock : TextBlock
             position = matchIndex + match.Text.Length;
         }
         return result;
+    }
+
+    private Inline CreateUnannotatedInline(string text)
+    {
+        if (text.Length <= 1 || char.IsControl(text[0]) ||
+            Rune.GetRuneAt(text, 0).Utf16SequenceLength == text.Length ||
+            StringInfo.GetNextTextElementLength(text) != text.Length)
+        {
+            return new Run(text);
+        }
+        var element = new TextBlock { Text = text, TextWrapping = TextWrapping.NoWrap };
+        indivisibleTextElements.Add(element);
+        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Baseline };
     }
 
     private InlineCollection CreateOriginalInlines(IReadOnlyList<EmoticonTextSegment> segments)
@@ -509,6 +525,15 @@ public sealed class EmoticonTextBlock : TextBlock
         {
             syllable.UpdateTypography(this, foreground);
         }
+        foreach (var element in indivisibleTextElements)
+        {
+            element.FontFamily = FontFamily;
+            element.FontSize = FontSize;
+            element.FontWeight = FontWeight;
+            element.FontStyle = FontStyle;
+            element.FontStretch = FontStretch;
+            element.Foreground = Foreground;
+        }
         separateLine?.UpdateTypography(this, foreground);
         UpdateHighlightAppearance();
     }
@@ -575,6 +600,7 @@ public sealed class EmoticonTextBlock : TextBlock
     {
         HighlightedSourceStart = -1;
         rubySyllables.Clear();
+        indivisibleTextElements.Clear();
         renderedSpans.Clear();
         pronunciationRuns.Clear();
         separateLine = null;

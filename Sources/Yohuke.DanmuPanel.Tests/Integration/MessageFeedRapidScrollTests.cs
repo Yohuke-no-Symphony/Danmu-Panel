@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Input;
@@ -46,8 +48,12 @@ public sealed class MessageFeedRapidScrollTests
             Pump(window);
             var list = Assert.Single(view.GetVisualDescendants().OfType<ListBox>(), control => control.Name == "ScrollingMessages");
             var viewer = Assert.Single(list.GetVisualDescendants().OfType<ScrollViewer>(), control => control.TemplatedParent == list);
-            viewer.Offset = new(0, viewer.ScrollBarMaximum.Y / 2);
+            var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),
+                presenter => ReferenceEquals(presenter.TemplatedParent, viewer));
+            presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(),
+                new(0, viewer.ScrollBarMaximum.Y / 2 - viewer.Offset.Y)));
             Pump(window);
+            Assert.True(viewer.Offset.Y > 0 && viewer.Offset.Y < viewer.ScrollBarMaximum.Y);
             Assert.True(view.Model.IsReadingHistory);
             if (useButton)
             {
@@ -57,6 +63,7 @@ public sealed class MessageFeedRapidScrollTests
             }
             else
             {
+                viewer.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.End });
                 viewer.ScrollToEnd();
             }
             Pump(window);

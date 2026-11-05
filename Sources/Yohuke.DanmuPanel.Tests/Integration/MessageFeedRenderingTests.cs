@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -58,7 +60,10 @@ public sealed class MessageFeedRenderingTests(ITestOutputHelper output)
             {
                 foreach (var fraction in new[] { 0, 0.25, 0.5, 0.75, 1 })
                 {
-                    viewer.Offset = new(0, viewer.ScrollBarMaximum.Y * fraction);
+                    var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),
+                presenter => ReferenceEquals(presenter.TemplatedParent, viewer));
+                    presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(),
+                        new(0, viewer.ScrollBarMaximum.Y * fraction - viewer.Offset.Y)));
                     Pump(window);
                     var rows = Rows(list).ToArray();
                     Assert.Same(selected, list.SelectedItem);
@@ -139,7 +144,10 @@ public sealed class MessageFeedRenderingTests(ITestOutputHelper output)
             menu.Open(row);
             Assert.True(menu.IsOpen);
 
-            FindViewer(list).Offset = default;
+            var viewer = FindViewer(list);
+            var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),
+                presenter => ReferenceEquals(presenter.TemplatedParent, viewer));
+            presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(), new(0, -viewer.Offset.Y)));
             Pump(window);
 
             Assert.False(menu.IsOpen);

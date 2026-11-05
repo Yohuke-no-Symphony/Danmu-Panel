@@ -158,8 +158,9 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
         return command.ExecuteScalar() is string payload ? JsonSerializer.Deserialize<MessageRecord>(payload)! : null;
     }
 
-    private static void WriteMessage(SqliteConnection connection, SqliteTransaction transaction, MessageRecord record)
+    private void WriteMessage(SqliteConnection connection, SqliteTransaction transaction, MessageRecord record)
     {
+        readCache.Invalidate(record.Id);
         Execute(connection, transaction, """
             INSERT INTO message_records(id,room_tab_id,kind,occurred_ms,generation,priority,pinned_ms,payload,is_test)
             VALUES($id,$room,$kind,$time,$generation,$priority,$pinned,$payload,$test)

@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -18,7 +19,7 @@ namespace Yohuke.DanmuPanel.Tests.Integration;
 /// <summary>验证点击已读并重新排序时保留当前阅读位置。</summary>
 public sealed class MessageReadScrollTests
 {
-    /// <summary>阅读历史或停留底部时，点击视口顶部或中部消息均保留邻近未读消息的屏幕坐标。</summary>
+    /// <summary>点击视口顶部或中部消息后，固定最顶部可见且未被点击的消息；半行也作为阅读锚点。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.SuperChat, 0, false)]
     [InlineData(MessageKind.SuperChat, 2, false)]
@@ -69,8 +70,12 @@ public sealed class MessageReadScrollTests
             }
             else
             {
-                viewer.Offset = new(0, viewer.ScrollBarMaximum.Y / 3);
+                var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),
+                presenter => ReferenceEquals(presenter.TemplatedParent, viewer));
+                presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(),
+                    new(0, viewer.ScrollBarMaximum.Y / 3 - viewer.Offset.Y)));
                 Pump(window);
+                Assert.True(viewer.Offset.Y > 0 && viewer.Offset.Y < viewer.ScrollBarMaximum.Y);
             }
             var visible = list.GetRealizedContainers()
                 .Where(container => container.TranslatePoint(default, viewer) is { } position &&
@@ -79,7 +84,12 @@ public sealed class MessageReadScrollTests
                 .ToArray();
             var clicked = visible[visibleIndex];
             var target = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(clicked));
-            var retained = visible[visibleIndex == 0 ? 1 : 0];
+            var retained = list.GetRealizedContainers()
+                .Where(container => container.IsEffectivelyVisible &&
+                    list.ItemFromContainer(container) is MessageItemViewModel actual && !ReferenceEquals(actual, target) &&
+                    container.TranslatePoint(default, viewer) is { } position && position.Y < viewer.Viewport.Height &&
+                    position.Y + container.Bounds.Height > 0)
+                .OrderBy(container => container.TranslatePoint(default, viewer)!.Value.Y).First();
             var neighbor = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(retained));
             var before = retained.TranslatePoint(default, viewer)!.Value.Y;
             var row = clicked.GetVisualDescendants().OfType<Button>().Single(button => ReferenceEquals(button.DataContext, target));

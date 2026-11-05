@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -118,6 +119,8 @@ public sealed class FeedFollowSchedulingTests
             {
                 if (readHistory)
                 {
+                    viewer.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Home });
+                    Pump(window);
                     viewer.Offset = new(0, 650);
                     Pump(window);
                 }
@@ -236,6 +239,8 @@ public sealed class FeedFollowSchedulingTests
                 Pump(window);
                 Assert.True(inputExecuted);
 
+                viewer.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Home });
+                Pump(window);
                 viewer.Offset = new(0, 120);
                 Pump(window);
                 Assert.InRange(Math.Abs(viewer.Offset.Y - 120), 0, 0.1);
@@ -307,6 +312,102 @@ public sealed class FeedFollowSchedulingTests
                 Assert.True(inputExecuted);
                 Assert.Equal(0, requests);
                 Assert.InRange(Math.Abs(viewer.Offset.Y - expectedOffset), 0, 0.1);
+                Assert.False(controller.IsFollowingLatest);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+    }
+
+    /// <summary>消息移组前的属性通知和中途调度不能将已准备的邻居锚点改回待移动行。</summary>
+    [AvaloniaFact]
+    public void PreparedNeighborAnchorSurvivesPropertyNotificationsBeforeTheCollectionMove()
+    {
+        var (window, list, viewer, controller, items) = CreateFeed(followNewMessages: false);
+        using (controller)
+        {
+            try
+            {
+                viewer.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Home });
+                Pump(window);
+                viewer.Offset = new(0, viewer.ScrollBarMaximum.Y / 3);
+                Pump(window);
+                var clicked = list.GetRealizedContainers()
+                    .Where(container => container.TranslatePoint(default, viewer) is { } position &&
+                        position.Y >= 0 && position.Y + container.Bounds.Height <= viewer.Viewport.Height)
+                    .OrderBy(container => container.TranslatePoint(default, viewer)!.Value.Y).First();
+                var moving = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(clicked));
+                viewer.Offset = new(0, viewer.Offset.Y + clicked.TranslatePoint(default, viewer)!.Value.Y);
+                Pump(window);
+                var movingIndex = items.IndexOf(moving);
+                var retained = list.GetRealizedContainers().Where(container =>
+                        list.ItemFromContainer(container) is MessageItemViewModel actual && !ReferenceEquals(actual, moving) &&
+                        container.TranslatePoint(default, viewer) is { } position && position.Y < viewer.Viewport.Height &&
+                        position.Y + container.Bounds.Height > 0)
+                    .OrderBy(container => container.TranslatePoint(default, viewer)!.Value.Y).First();
+                var neighbor = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(retained));
+                var before = retained.TranslatePoint(default, viewer)!.Value.Y;
+                controller.PrepareForItemMove(moving);
+
+                moving.Update(moving.Record with { Content = "property updated before the collection move" }, new());
+                controller.NotifyLayoutChanged();
+                Pump(window);
+                Pump(window);
+                items.Move(movingIndex, items.Count - 1);
+                Pump(window);
+
+                var after = Assert.IsAssignableFrom<Control>(list.ContainerFromItem(neighbor));
+                Assert.InRange(Math.Abs(after.TranslatePoint(default, viewer)!.Value.Y - before), 0, 1);
+                Assert.False(controller.IsFollowingLatest);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+    }
+
+    /// <summary>消息无需移组时，结束操作会释放准备状态，后续属性及行高变化仍纠正阅读锚点。</summary>
+    [AvaloniaFact]
+    public void CompletingAnUnmovedItemRestoresAnchorCorrectionsForLaterPropertyChanges()
+    {
+        var (window, list, viewer, controller, items) = CreateFeed(followNewMessages: false);
+        using (controller)
+        {
+            try
+            {
+                viewer.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Home });
+                Pump(window);
+                viewer.Offset = new(0, viewer.ScrollBarMaximum.Y / 3);
+                Pump(window);
+                var clicked = list.GetRealizedContainers()
+                    .Where(container => container.TranslatePoint(default, viewer) is { } position &&
+                        position.Y >= 0 && position.Y + container.Bounds.Height <= viewer.Viewport.Height)
+                    .OrderBy(container => container.TranslatePoint(default, viewer)!.Value.Y).First();
+                var moving = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(clicked));
+                viewer.Offset = new(0, viewer.Offset.Y + clicked.TranslatePoint(default, viewer)!.Value.Y);
+                Pump(window);
+                var retained = list.GetRealizedContainers().Where(container =>
+                        list.ItemFromContainer(container) is MessageItemViewModel actual && !ReferenceEquals(actual, moving) &&
+                        container.TranslatePoint(default, viewer) is { } position && position.Y < viewer.Viewport.Height &&
+                        position.Y + container.Bounds.Height > 0)
+                    .OrderBy(container => container.TranslatePoint(default, viewer)!.Value.Y).First();
+                var neighbor = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(retained));
+                var before = retained.TranslatePoint(default, viewer)!.Value.Y;
+                controller.PrepareForItemMove(moving);
+                moving.Update(moving.Record with { Content = "operation keeps the same list position" }, new());
+                Pump(window);
+
+                controller.CompleteItemMove();
+                var unchangedContainer = Assert.IsAssignableFrom<Control>(list.ContainerFromItem(moving));
+                Assert.Single(unchangedContainer.GetVisualDescendants().OfType<TextBlock>()).Height = 72;
+                moving.Update(moving.Record with { Content = "later content and layout update" }, new());
+                Pump(window);
+
+                var after = Assert.IsAssignableFrom<Control>(list.ContainerFromItem(neighbor));
+                Assert.InRange(Math.Abs(after.TranslatePoint(default, viewer)!.Value.Y - before), 0, 1);
                 Assert.False(controller.IsFollowingLatest);
             }
             finally

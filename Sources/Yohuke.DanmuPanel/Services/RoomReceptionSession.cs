@@ -137,7 +137,7 @@ public sealed class RoomReceptionSession : IAsyncDisposable
 
     private async Task WriteIncomingAsync()
     {
-        await foreach (var record in incoming.Reader.ReadAllAsync())
+        await foreach (var record in incoming.Reader.ReadAllAsync().ConfigureAwait(false))
         {
             if (storageFailed)
             {
@@ -145,13 +145,21 @@ public sealed class RoomReceptionSession : IAsyncDisposable
             }
             try
             {
-                var current = settings();
-                var fingerprint = current.Translation.Enabled && record.Kind is MessageKind.Danmu or MessageKind.SuperChat
-                    ? TranslationRequestFactory.GetConfigurationFingerprint(current.Translation) : null;
-                var result = await store.AppendAsync(record, current.Reading, fingerprint);
-                if (result.Record is { } committed)
+                var batch = new List<MessageRecord>(IMessageStore.MAX_BATCH_COUNT) { record };
+                while (batch.Count < IMessageStore.MAX_BATCH_COUNT && incoming.Reader.TryRead(out var next))
                 {
-                    Notify(Committed, committed);
+                    batch.Add(next);
+                }
+                var current = settings();
+                var fingerprint = current.Translation.Enabled
+                    ? TranslationRequestFactory.GetConfigurationFingerprint(current.Translation) : null;
+                var results = await store.AppendBatchAsync(batch, current.Reading, fingerprint).ConfigureAwait(false);
+                foreach (var result in results)
+                {
+                    if (result.Record is { } committed)
+                    {
+                        Notify(Committed, committed);
+                    }
                 }
             }
             catch (Exception exception)

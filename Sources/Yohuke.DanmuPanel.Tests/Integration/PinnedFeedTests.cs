@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -69,7 +71,8 @@ public sealed class PinnedFeedTests
                 Assert.False(view.Model.HasPinnedItems);
                 Assert.Equal(new[] { targetItem, normalItem }, view.Model.ScrollingItems);
             }
-            Assert.Same(view.Model.ScrollingItems, FindList(view, "ScrollingMessages").ItemsSource);
+            Assert.Same(view.Model.ScrollingRows, FindList(view, "ScrollingMessages").ItemsSource);
+            Assert.Equal(view.Model.ScrollingItems, view.Model.ScrollingRows.OfType<MessageItemViewModel>());
             Assert.True(targetItem.Record.IsPriority);
             if (kind == MessageKind.Gift)
             {
@@ -124,13 +127,19 @@ public sealed class PinnedFeedTests
             var pinnedViewer = FindScroll(pinnedList);
             var normalViewer = FindScroll(normalList);
             var pinnedRow = FindRow(pinnedList, pinned.Id);
+            await view.Model.WaitForPresentationAsync();
             var before = pinnedRow.TranslatePoint(new Point(0, 0), window)!.Value;
             var pinnedOffset = pinnedViewer.Offset;
 
-            normalList.ScrollIntoView(view.Model.ScrollingItems[10]);
+            var presenter = Assert.Single(normalViewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),
+                presenter => ReferenceEquals(presenter.TemplatedParent, normalViewer));
+            presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(),
+                new(0, normalViewer.ScrollBarMaximum.Y * 0.25 - normalViewer.Offset.Y)));
             Pump(window);
 
             Assert.True(normalViewer.Offset.Y > 0);
+            Assert.True(normalViewer.Offset.Y < normalViewer.ScrollBarMaximum.Y);
+            Assert.True(view.Model.IsReadingHistory);
             var after = pinnedRow.TranslatePoint(new Point(0, 0), window)!.Value;
             Assert.InRange(Math.Abs(before.X - after.X), 0, 0.5);
             Assert.InRange(Math.Abs(before.Y - after.Y), 0, 0.5);
@@ -227,7 +236,11 @@ public sealed class PinnedFeedTests
             Assert.DoesNotContain(view.GetVisualDescendants().OfType<ListBox>(),
                 value => value.Name == "PinnedMessages" && value.IsEffectivelyVisible);
 
-            list.ScrollIntoView(view.Model.ScrollingItems[20]);
+            await view.Model.WaitForPresentationAsync();
+            var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),
+                presenter => ReferenceEquals(presenter.TemplatedParent, viewer));
+            presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(),
+                new(0, viewer.ScrollBarMaximum.Y * 0.5 - viewer.Offset.Y)));
             Pump(window);
 
             Assert.True(viewer.Offset.Y > 0);
@@ -310,7 +323,11 @@ public sealed class PinnedFeedTests
             var initial = view.Model.ScrollingItems.ToArray();
             var oldest = initial[0];
             var normalList = FindList(view, "ScrollingMessages");
-            normalList.ScrollIntoView(oldest);
+            await view.Model.WaitForPresentationAsync();
+            var viewer = FindScroll(normalList);
+            var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),
+                presenter => ReferenceEquals(presenter.TemplatedParent, viewer));
+            presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(), new(0, -viewer.Offset.Y)));
             Pump(window);
             Assert.Equal(0, FindScroll(normalList).Offset.Y);
             Assert.True(view.Model.IsReadingHistory);

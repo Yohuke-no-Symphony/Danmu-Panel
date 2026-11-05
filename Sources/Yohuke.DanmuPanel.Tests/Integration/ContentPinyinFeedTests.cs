@@ -55,6 +55,7 @@ public sealed class ContentPinyinFeedTests
         try
         {
             await view.Model.SelectRoomAsync(new() { Id = "tab", RoomId = "123" });
+            await view.Model.WaitForPresentationAsync();
             window.Show();
             Pump(window);
             var item = Assert.Single(view.Model.Items);
@@ -66,6 +67,7 @@ public sealed class ContentPinyinFeedTests
             settings.ShowDanmuPinyin = kind == MessageKind.Danmu;
             settings.ShowSuperChatPinyin = kind == MessageKind.SuperChat;
             await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
             Pump(window);
 
             Assert.Same(item, Assert.Single(view.Model.Items));
@@ -93,12 +95,14 @@ public sealed class ContentPinyinFeedTests
             settings.PinyinLayout = layout == PinyinLayoutMode.Ruby
                 ? PinyinLayoutMode.SeparateLine : PinyinLayoutMode.Ruby;
             await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
             Pump(window);
             Assert.Same(item, Assert.Single(view.Model.Items));
             Assert.Equal(settings.PinyinLayout, activeText.PinyinLayout);
 
             settings.Translation.DisplayMode = TranslationDisplayMode.TranslationOnly;
             await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
             Pump(window);
             Assert.False(original.IsEffectivelyVisible);
             Assert.False(marquee.IsEffectivelyVisible);
@@ -108,6 +112,7 @@ public sealed class ContentPinyinFeedTests
             settings.ShowDanmuPinyin = false;
             settings.ShowSuperChatPinyin = false;
             await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
             Pump(window);
             Assert.Empty(activeText.Annotations!);
             Assert.Empty(activeText.GetVisualDescendants().OfType<PinyinRubySyllable>());
@@ -147,6 +152,7 @@ public sealed class ContentPinyinFeedTests
         try
         {
             await view.Model.SelectRoomAsync(new() { Id = "tab", RoomId = "123" });
+            await view.Model.WaitForPresentationAsync();
             window.Show();
             Pump(window);
             var original = Original(view);
@@ -205,6 +211,7 @@ public sealed class ContentPinyinFeedTests
         try
         {
             await view.Model.SelectRoomAsync(new() { Id = "tab", RoomId = "123" });
+            await view.Model.WaitForPresentationAsync();
             window.Show();
             Pump(window);
             var name = view.GetVisualDescendants().OfType<EmoticonTextBlock>()
@@ -226,11 +233,13 @@ public sealed class ContentPinyinFeedTests
 
             settings.ShowUserPinyin = false;
             await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
             Pump(window);
             Assert.Empty(name.Annotations!);
             Assert.NotEmpty(body.Annotations!);
             settings.ShowGiftPinyin = false;
             await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
             Pump(window);
             Assert.Empty(body.Annotations!);
         }
@@ -289,6 +298,7 @@ public sealed class ContentPinyinFeedTests
         try
         {
             await view.Model.SelectRoomAsync(new() { Id = "tab", RoomId = "123" });
+            await view.Model.WaitForPresentationAsync();
             window.Show();
             Pump(window);
             var row = view.GetVisualDescendants().OfType<Button>()
@@ -297,16 +307,19 @@ public sealed class ContentPinyinFeedTests
 
             Assert.True(await runtime.Messages.ApplyTranslationAsync(record.Id, record.Generation, fingerprint, "翻译内容"));
             await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
             Pump(window);
             AssertVerticallyCentered(row);
 
             settings.CompactDanmuWrap = true;
             await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
             Pump(window);
             AssertVerticallyCentered(row);
 
             settings.CompactDanmuDisplay = false;
             await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
             Pump(window);
             AssertVerticallyCentered(row);
         }

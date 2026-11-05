@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -24,7 +25,7 @@ namespace Yohuke.DanmuPanel.Tests.Integration;
 /// <summary>验证加载更早弹幕后，置顶移组的滚动位置与虚拟化行布局。</summary>
 public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
 {
-    /// <summary>加载历史并滚动复用容器后，反复置顶及取消置顶仍保持行顺序、边界与阅读策略。</summary>
+    /// <summary>置顶或取消置顶固定最顶部可见的其他真实消息（包含半行），并保持行顺序、边界与阅读策略。</summary>
     [AvaloniaTheory]
     [InlineData(false, false, false)]
     [InlineData(false, true, false)]
@@ -68,6 +69,7 @@ public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
         try
         {
             await view.Model.SelectRoomAsync(new() { Id = "tab", RoomId = "123" });
+            await view.Model.WaitForPresentationAsync();
             window.Show();
             Pump(window);
             var list = FindList(view, "ScrollingMessages");
@@ -75,7 +77,9 @@ public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
             var focusedContainer = VisibleContainers(list, viewer)[^1];
             Assert.True(focusedContainer.Focus());
             Assert.Same(focusedContainer, KeyboardNavigation.GetTabOnceActiveElement(list));
-            viewer.Offset = default;
+            var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),
+                presenter => ReferenceEquals(presenter.TemplatedParent, viewer));
+            presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(), new(0, -viewer.Offset.Y)));
             Pump(window);
             Assert.DoesNotContain(focusedContainer, list.GetRealizedContainers());
             Assert.True(focusedContainer.IsEffectivelyVisible);
@@ -95,13 +99,19 @@ public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
                 {
                     await view.Model.LoadMoreAsync();
                 }
+                await view.Model.WaitForPresentationAsync();
                 Pump(window);
                 Assert.Equal(200, view.Model.ScrollingItems.Count);
             }
             foreach (var fraction in new[] { 0d, 0.25, 0.5, 0.75 })
             {
-                viewer.Offset = new(0, viewer.ScrollBarMaximum.Y * fraction);
+                presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(),
+                    new(0, viewer.ScrollBarMaximum.Y * fraction - viewer.Offset.Y)));
                 Pump(window);
+                if (fraction > 0)
+                {
+                    Assert.True(viewer.Offset.Y > 0);
+                }
             }
             if (returnToLatest)
             {
@@ -110,6 +120,8 @@ public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
                 await Assert.IsAssignableFrom<IAsyncRelayCommand>(latest.Command).ExecuteAsync(null);
                 Pump(window);
             }
+            await view.Model.WaitForPresentationAsync();
+            Pump(window);
             AssertLayout(list, viewer, "before pin");
             Assert.True(list.GetRealizedContainers().Select(container => container.Bounds.Height).Distinct().Count() > 1);
             for (var pass = 0; pass < 3; pass++)
@@ -118,8 +130,9 @@ public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
                 Assert.True(visible.Length >= 3);
                 var clicked = visible[1];
                 var target = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(clicked));
-                var neighbor = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(visible[0]));
-                var before = visible[0].TranslatePoint(default, viewer)!.Value.Y;
+                var retained = TopVisibleNeighbor(list, viewer, target);
+                var neighbor = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(retained));
+                var before = retained.TranslatePoint(default, viewer)!.Value.Y;
                 await ActivateAsync(clicked, target, true, useMenu, view, window);
                 output.WriteLine($"pin {pass}: offset={viewer.Offset.Y}, maximum={viewer.ScrollBarMaximum.Y}, history={view.Model.IsReadingHistory}");
                 AssertLayout(list, viewer, $"after pin {pass}");
@@ -135,7 +148,9 @@ public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
                 var pinnedList = FindList(view, "PinnedMessages");
                 AssertLayout(pinnedList, FindViewer(pinnedList), $"pinned {pass}");
                 var pinned = Assert.IsAssignableFrom<Control>(pinnedList.ContainerFromItem(target));
-                before = list.ContainerFromItem(neighbor)!.TranslatePoint(default, viewer)!.Value.Y;
+                retained = TopVisibleNeighbor(list, viewer, target);
+                neighbor = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(retained));
+                before = retained.TranslatePoint(default, viewer)!.Value.Y;
                 await ActivateAsync(pinned, target, false, useMenu, view, window);
                 output.WriteLine($"unpin {pass}: offset={viewer.Offset.Y}, maximum={viewer.ScrollBarMaximum.Y}, history={view.Model.IsReadingHistory}");
                 AssertLayout(list, viewer, $"after unpin {pass}");
@@ -180,6 +195,7 @@ public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
         }
         Assert.Equal(pinned, item.Record.IsPinned);
         await view.Model.RefreshAsync();
+        await view.Model.WaitForPresentationAsync();
         Pump(window);
     }
 
@@ -216,6 +232,15 @@ public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
                 container.TranslatePoint(default, viewer) is { } position && position.Y >= 0 &&
                 position.Y + container.Bounds.Height <= viewer.Viewport.Height)
             .OrderBy(container => container.TranslatePoint(default, viewer)!.Value.Y).ToArray();
+    }
+
+    private static Control TopVisibleNeighbor(ListBox list, ScrollViewer viewer, MessageItemViewModel excluded)
+    {
+        return list.GetRealizedContainers().Where(container => container.IsEffectivelyVisible &&
+                list.ItemFromContainer(container) is MessageItemViewModel actual && !ReferenceEquals(actual, excluded) &&
+                container.TranslatePoint(default, viewer) is { } position && position.Y < viewer.Viewport.Height &&
+                position.Y + container.Bounds.Height > 0)
+            .OrderBy(container => container.TranslatePoint(default, viewer)!.Value.Y).First();
     }
 
     private static void AssertLayout(ListBox list, ScrollViewer viewer, string stage)

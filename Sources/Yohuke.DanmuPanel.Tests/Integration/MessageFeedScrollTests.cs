@@ -1,7 +1,9 @@
 using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Input;
@@ -68,8 +70,14 @@ public sealed class MessageFeedScrollTests
                 Assert.True(view.Model.IsReadingHistory);
             }
 
-            viewer.Offset = new(0, viewer.ScrollBarMaximum.Y / 2);
+            var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),
+                presenter => ReferenceEquals(presenter.TemplatedParent, viewer));
+
+            presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(),
+
+                new(0, viewer.ScrollBarMaximum.Y / 2 - viewer.Offset.Y)));
             Pump(window);
+            Assert.True(viewer.Offset.Y > 0 && viewer.Offset.Y < viewer.ScrollBarMaximum.Y);
             Assert.True(view.Model.IsReadingHistory);
             var anchor = Assert.IsAssignableFrom<Control>(viewer.CurrentAnchor);
             var item = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(anchor));

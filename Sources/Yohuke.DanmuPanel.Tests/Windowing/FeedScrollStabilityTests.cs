@@ -28,11 +28,11 @@ public sealed class FeedScrollStabilityTests
 {
     private static readonly IPinyinService pinyin = new PinyinService();
 
-    /// <summary>原生浮点偏移在底部容差附近的误差不解除跟随，实际离开底部仍进入历史阅读。</summary>
+    /// <summary>原生偏移的浮点误差和短暂纠正不会冒充用户导航解除底部跟随。</summary>
     [AvaloniaTheory]
-    [InlineData(1.00006103515625, true)]
-    [InlineData(2, false)]
-    public void NativeOffsetRoundingDoesNotCancelFollowing(double distance, bool follows)
+    [InlineData(1.00006103515625)]
+    [InlineData(2)]
+    public void NativeOffsetCorrectionsDoNotImpersonateUserNavigation(double distance)
     {
         var (window, _, viewer, controller, _) = CreateFeed(startAtLatest: true);
         using (controller)
@@ -41,7 +41,7 @@ public sealed class FeedScrollStabilityTests
             {
                 viewer.Offset = new(0, viewer.ScrollBarMaximum.Y - distance);
 
-                Assert.Equal(follows, controller.IsFollowingLatest);
+                Assert.True(controller.IsFollowingLatest);
             }
             finally
             {
@@ -157,6 +157,7 @@ public sealed class FeedScrollStabilityTests
                 }
                 else
                 {
+                    viewer.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.End });
                     viewer.Offset = new(0, viewer.ScrollBarMaximum.Y);
                 }
                 items.Add(CreateItem("arrived while returning to latest"));
@@ -191,6 +192,8 @@ public sealed class FeedScrollStabilityTests
         {
             try
             {
+                viewer.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Home });
+                Pump(window);
                 viewer.Offset = new(0, 650);
                 Pump(window);
                 if (useButton)
@@ -199,6 +202,7 @@ public sealed class FeedScrollStabilityTests
                 }
                 else
                 {
+                    viewer.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.End });
                     viewer.Offset = new(0, viewer.ScrollBarMaximum.Y);
                 }
                 Assert.True(controller.IsFollowingLatest);
@@ -272,9 +276,9 @@ public sealed class FeedScrollStabilityTests
         }
     }
 
-    /// <summary>容器被批量插入回收时，阅读锚点必须在渲染前恢复，避免出现错位帧。</summary>
+    /// <summary>容器被批量插入回收后，后台纠正与后续自然布局恢复同一消息的阅读坐标。</summary>
     [AvaloniaFact]
-    public void RecycledReadingAnchorIsRestoredBeforeRendering()
+    public async Task RecycledReadingAnchorIsRestoredAfterDeferredLayout()
     {
         var (window, list, viewer, controller, items) = CreateFeed(0);
         using (controller)
@@ -290,8 +294,11 @@ public sealed class FeedScrollStabilityTests
                 {
                     items.Insert(0, CreateItem($"older history {index}"));
                 }
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
-                window.UpdateLayout();
+                for (var frame = 0; frame < 3; frame++)
+                {
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick(1);
+                    await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+                }
 
                 var after = Assert.IsAssignableFrom<Control>(list.ContainerFromItem(item));
                 Assert.InRange(Math.Abs(after.TranslatePoint(default, viewer)!.Value.Y - before), 0, 1);
@@ -530,6 +537,7 @@ public sealed class FeedScrollStabilityTests
                 Pump(window);
                 AssertStable(window, viewer, offset);
                 Assert.False(controller.IsFollowingLatest);
+                viewer.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.End });
                 viewer.ScrollToEnd();
                 Pump(window);
                 items.Add(CreateItem("follow after manually scrolling back to bottom"));
@@ -619,6 +627,8 @@ public sealed class FeedScrollStabilityTests
             Pump(window);
             if (!startAtLatest)
             {
+                viewer.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Home });
+                Pump(window);
                 viewer.Offset = default;
                 Pump(window);
             }

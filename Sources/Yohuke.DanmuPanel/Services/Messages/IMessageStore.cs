@@ -5,8 +5,14 @@ namespace Yohuke.DanmuPanel.Services.Messages;
 /// <summary>消息、阅读状态和译文的持久化边界。</summary>
 public interface IMessageStore : IAsyncDisposable
 {
+    /// <summary>单次消息追加或翻译任务登记允许处理的最大记录数。</summary>
+    public const int MAX_BATCH_COUNT = 64;
+
     /// <summary>提交消息、连击和可选翻译任务，返回已提交的可见变化。</summary>
     Task<MessageAppendResult> AppendAsync(MessageRecord message, MessageReadOptions options,
+        string? translationFingerprint = null, CancellationToken cancellationToken = default);
+    /// <summary>以单个事务顺序提交有界消息批次，返回与输入逐条对应的已提交结果。</summary>
+    Task<IReadOnlyList<MessageAppendResult>> AppendBatchAsync(IReadOnlyList<MessageRecord> messages, MessageReadOptions options,
         string? translationFingerprint = null, CancellationToken cancellationToken = default);
     /// <summary>按置顶、未读优先规则分页读取消息。</summary>
     Task<IReadOnlyList<MessageRecord>> LoadPageAsync(string roomTabId, MessageKind kind, int offset, int limit,
@@ -38,5 +44,8 @@ public interface IMessageStore : IAsyncDisposable
     Task ReevaluateReadOptionsAsync(MessageReadOptions options, CancellationToken cancellationToken = default);
     /// <summary>为可见或手动重试的现存消息建立当前翻译任务。</summary>
     Task<bool> UpsertTranslationJobAsync(string id, long generation, string fingerprint,
+        CancellationToken cancellationToken = default);
+    /// <summary>按输入消息的 ID 和代次校验现存记录，在一个事务中登记翻译任务并返回成功登记的 ID。</summary>
+    Task<IReadOnlySet<string>> UpsertTranslationJobsAsync(IReadOnlyList<MessageRecord> messages, string fingerprint,
         CancellationToken cancellationToken = default);
 }
