@@ -21,13 +21,13 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Avalonia" Version="11.3.12" />
+        <PackageReference Include="Avalonia" Version="11.3.13" />
         <PackageReference Include="Avalonia.Controls.WebView" Version="11.4.0" />
-        <PackageReference Include="Avalonia.Desktop" Version="11.3.12" />
-        <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.3.12" />
-        <PackageReference Include="Avalonia.Controls.ColorPicker" Version="11.3.12" />
-        <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.12" />
-        <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.12" />
+        <PackageReference Include="Avalonia.Desktop" Version="11.3.13" />
+        <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.3.13" />
+        <PackageReference Include="Avalonia.Controls.ColorPicker" Version="11.3.13" />
+        <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.13" />
+        <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.13" />
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
         <PackageReference Include="Dock.Avalonia" Version="11.3.12.1" />
         <PackageReference Include="Dock.Avalonia.Themes.Fluent" Version="11.3.12.1" />
