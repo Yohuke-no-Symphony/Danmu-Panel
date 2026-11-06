@@ -26,6 +26,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     private readonly ListBox list;
     private readonly ListBox pinnedList;
     private DanmuFeedScrollController? scroll;
+    private bool isScrollToTopPending;
     private bool columnWidthsDirty;
     private int columnWidthRevision;
     private int scheduledColumnWidthRevision = -1;
@@ -86,6 +87,11 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
                 markAllRead.Classes.Add("dockChromeButton");
                 markAllRead.Bind(IsEnabledProperty, new Binding(nameof(FeedViewModel.HasUnreadMessages)) { Source = Model });
                 actions.Children.Add(markAllRead);
+                var top = Ui.IconButton("Panel.BackToTop", LucideIconKind.ArrowUpToLine, ScrollToTopAsync, reportError);
+                top.Name = "BackToTopButton";
+                top.Classes.Add("dockChromeButton");
+                top.Bind(IsEnabledProperty, new Binding(nameof(FeedViewModel.HasSelectedRoom)) { Source = Model });
+                actions.Children.Add(top);
             }
             actions.Children.Add(button);
             return actions;
@@ -107,6 +113,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         {
             if (args.PropertyName == nameof(FeedViewModel.SelectedRoom))
             {
+                isScrollToTopPending = false;
                 CancelColumnResizes();
                 CopyPopup?.Hide();
             }
@@ -334,6 +341,11 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             {
                 scroll.BeginViewportUpdate();
             }
+            if (isScrollToTopPending)
+            {
+                isScrollToTopPending = false;
+                scroll.ScrollToTop();
+            }
         }
     }
 
@@ -435,6 +447,10 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     private void AddPanelActions(LocalizedContextMenu menu)
     {
         AddAction(menu, "Panel.MoreHistory", LucideIconKind.History, Model.LoadMoreAsync);
+        if (messageKind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard)
+        {
+            AddAction(menu, "Panel.BackToTop", LucideIconKind.ArrowUpToLine, ScrollToTopAsync);
+        }
         AddAction(menu, "Panel.BackToLatest", LucideIconKind.ArrowDownToLine, ScrollToLatestAsync);
     }
 
@@ -490,15 +506,35 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         }
     }
 
+    private Task ScrollToTopAsync()
+    {
+        if (scroll is not null)
+        {
+            scroll.ScrollToTop();
+        }
+        else
+        {
+            isScrollToTopPending = true;
+            Model.IsReadingHistory = true;
+            if (Model.ScrollingItems.Count > 0)
+            {
+                list.ScrollIntoView(Model.ScrollingItems[0]);
+            }
+        }
+        return Task.CompletedTask;
+    }
+
     private Task ScrollToLatestAsync()
     {
-        if (Model.ScrollingItems.Count > 0)
+        isScrollToTopPending = false;
+        if (scroll is not null)
         {
-            if (scroll is not null)
-            {
-                scroll.ScrollToLatest();
-            }
-            else
+            scroll.ScrollToLatest();
+        }
+        else
+        {
+            Model.IsReadingHistory = false;
+            if (Model.ScrollingItems.Count > 0)
             {
                 list.ScrollIntoView(Model.ScrollingItems[^1]);
             }

@@ -23,6 +23,19 @@ public sealed partial class SqliteMessageStore
     public Task<IReadOnlyList<MessageAppendResult>> AppendBatchAsync(IReadOnlyList<MessageRecord> messages,
         MessageReadOptions options, string? translationFingerprint = null, CancellationToken cancellationToken = default)
     {
+        return AppendBatchCoreAsync(messages, options, translationFingerprint, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<MessageAppendResult>> AppendReceivedBatchAsync(IReadOnlyList<MessageRecord> messages,
+        string? translationFingerprint = null, CancellationToken cancellationToken = default)
+    {
+        return AppendBatchCoreAsync(messages, null, translationFingerprint, cancellationToken);
+    }
+
+    private Task<IReadOnlyList<MessageAppendResult>> AppendBatchCoreAsync(IReadOnlyList<MessageRecord> messages,
+        MessageReadOptions? options, string? translationFingerprint, CancellationToken cancellationToken)
+    {
         ArgumentOutOfRangeException.ThrowIfLessThan(messages.Count, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(messages.Count, IMessageStore.MAX_BATCH_COUNT);
         var snapshot = messages.ToArray();
@@ -35,11 +48,16 @@ public sealed partial class SqliteMessageStore
         return EnqueueAsync<IReadOnlyList<MessageAppendResult>>(connection =>
         {
             using var transaction = connection.BeginTransaction();
+            if (options is not null)
+            {
+                ApplyReadOptions(connection, transaction, options);
+            }
+            var currentOptions = options ?? ReadOptions(connection, transaction);
             var results = new MessageAppendResult[snapshot.Length];
             for (var index = 0; index < snapshot.Length; index++)
             {
                 transaction.Save("append_message");
-                results[index] = Append(connection, transaction, snapshot[index], options, translationFingerprint, out var keepChanges);
+                results[index] = Append(connection, transaction, snapshot[index], currentOptions, translationFingerprint, out var keepChanges);
                 if (!keepChanges)
                 {
                     transaction.Rollback("append_message");
@@ -257,30 +275,40 @@ public sealed partial class SqliteMessageStore
         return EnqueueAsync(connection =>
         {
             using var transaction = connection.BeginTransaction(deferred: true);
-            var previous = ReadOptions(connection, transaction);
-            if (previous == options)
-            {
-                return true;
-            }
-            WriteOptions(connection, transaction, options);
-            if (previous.GiftAutoPinMinimum != options.GiftAutoPinMinimum)
-            {
-                using var command = Command(connection, transaction,
-                    "SELECT payload FROM message_records WHERE kind=$kind AND json_extract(payload,'$.IsRead')=0;",
-                    ("$kind", (int)MessageKind.Gift));
-                foreach (var record in ReadMessages(command))
-                {
-                    var priority = IsPriority(record, options);
-                    if (record.IsPriority == priority)
-                    {
-                        continue;
-                    }
-                    WriteMessage(connection, transaction, record with { IsPriority = priority });
-                }
-            }
+            ApplyReadOptions(connection, transaction, options);
             transaction.Commit();
             return true;
         }, cancellationToken);
+    }
+
+    private void ApplyReadOptions(SqliteConnection connection, SqliteTransaction transaction, MessageReadOptions options)
+    {
+        var previous = ReadOptions(connection, transaction);
+        if (previous == options)
+        {
+            return;
+        }
+        if (previous.GiftAutoPinMinimum != options.GiftAutoPinMinimum)
+        {
+            ReevaluateGiftPriorities(connection, transaction, options);
+        }
+        WriteOptions(connection, transaction, options);
+    }
+
+    private void ReevaluateGiftPriorities(SqliteConnection connection, SqliteTransaction transaction, MessageReadOptions options)
+    {
+        using var command = Command(connection, transaction,
+            "SELECT payload FROM message_records WHERE kind=$kind AND json_extract(payload,'$.IsRead')=0;",
+            ("$kind", (int)MessageKind.Gift));
+        foreach (var record in ReadMessages(command))
+        {
+            var priority = IsPriority(record, options);
+            if (record.IsPriority == priority)
+            {
+                continue;
+            }
+            WriteMessage(connection, transaction, record with { IsPriority = priority });
+        }
     }
 
     private MessageAppendResult Append(SqliteConnection connection, SqliteTransaction transaction, MessageRecord message,
@@ -315,7 +343,6 @@ public sealed partial class SqliteMessageStore
             }
         }
 
-        WriteOptions(connection, transaction, options);
         var existing = ReadMessage(connection, transaction, message.Id);
         if (existing is not null)
         {

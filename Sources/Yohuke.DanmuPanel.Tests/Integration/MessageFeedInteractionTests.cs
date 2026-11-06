@@ -240,6 +240,8 @@ public sealed class MessageFeedInteractionTests
             Assert.IsType<LucideIcon>(action.Icon);
             Assert.Contains(menu.Items.OfType<MenuItem>(), item => Equals(item.Header, Localization.Get("Panel.MoreHistory")));
             Assert.Contains(menu.Items.OfType<MenuItem>(), item => Equals(item.Header, Localization.Get("Panel.BackToLatest")));
+            Assert.Equal(kind != MessageKind.Danmu,
+                menu.Items.OfType<MenuItem>().Any(item => Equals(item.Header, Localization.Get("Panel.BackToTop"))));
             action.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             await WaitUntilAsync(async () =>
             {

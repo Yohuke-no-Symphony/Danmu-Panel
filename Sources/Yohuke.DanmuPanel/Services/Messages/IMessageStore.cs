@@ -11,8 +11,11 @@ public interface IMessageStore : IAsyncDisposable
     /// <summary>提交消息、连击和可选翻译任务，返回已提交的可见变化。</summary>
     Task<MessageAppendResult> AppendAsync(MessageRecord message, MessageReadOptions options,
         string? translationFingerprint = null, CancellationToken cancellationToken = default);
-    /// <summary>以单个事务顺序提交有界消息批次，返回与输入逐条对应的已提交结果。</summary>
+    /// <summary>以单个事务应用全局阅读规则并顺序提交有界消息批次，返回与输入逐条对应的已提交结果。</summary>
     Task<IReadOnlyList<MessageAppendResult>> AppendBatchAsync(IReadOnlyList<MessageRecord> messages, MessageReadOptions options,
+        string? translationFingerprint = null, CancellationToken cancellationToken = default);
+    /// <summary>在提交事务内读取已生效的全局阅读规则，顺序保存接收到的有界消息批次。</summary>
+    Task<IReadOnlyList<MessageAppendResult>> AppendReceivedBatchAsync(IReadOnlyList<MessageRecord> messages,
         string? translationFingerprint = null, CancellationToken cancellationToken = default);
     /// <summary>按置顶、未读优先规则分页读取消息。</summary>
     Task<IReadOnlyList<MessageRecord>> LoadPageAsync(string roomTabId, MessageKind kind, int offset, int limit,

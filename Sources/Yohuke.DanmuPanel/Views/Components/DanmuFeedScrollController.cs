@@ -104,6 +104,40 @@ internal sealed class DanmuFeedScrollController : IDisposable
         }
     }
 
+    /// <summary>回到列表顶部并建立阅读锚点，取消旧的底部跟随和输入定位。</summary>
+    public void ScrollToTop()
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+        if (items is null)
+        {
+            return;
+        }
+        CancelPendingFollow();
+        hasUserScrolledSinceReset = true;
+        userScrollRevision++;
+        canFollowFromUserScroll = false;
+        hasUserScrollInput = false;
+        scrollingPointer = null;
+        readingItem = null;
+        SetFollowingLatest(false);
+        isUpdatingScroll = true;
+        try
+        {
+            if (itemsControl.Items.Count > 0)
+            {
+                itemsControl.ScrollIntoView(itemsControl.Items[0]!);
+                scrollViewer.UpdateLayout();
+            }
+            scrollViewer.Offset = new(scrollViewer.Offset.X, 0);
+            scrollViewer.UpdateLayout();
+        }
+        finally
+        {
+            isUpdatingScroll = false;
+        }
+        CaptureReadingAnchor();
+    }
+
     internal void CompleteInitialLoad()
     {
         ObjectDisposedException.ThrowIf(isDisposed, this);

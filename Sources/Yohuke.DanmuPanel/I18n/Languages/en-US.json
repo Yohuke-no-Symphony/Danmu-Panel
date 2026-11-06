@@ -156,6 +156,7 @@
     "Panel.AddRoom": "Add room",
     "Panel.AddWorkspace": "Add workspace",
     "Panel.BackToLatest": "Back to latest",
+    "Panel.BackToTop": "Back to top",
     "Panel.BrowserLogin": "Browser login",
     "Panel.Cancel": "Cancel",
     "Panel.ClearAllConfirm": "Clear all message history in every workspace and room? Accounts, settings and layouts are kept. This cannot be undone.",

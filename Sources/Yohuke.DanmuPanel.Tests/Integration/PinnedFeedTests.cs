@@ -32,8 +32,8 @@ public sealed class PinnedFeedTests
         await using var runtime = CreateRuntime(directory);
         var options = new MessageReadOptions { GiftAutoPinMinimum = 30 };
         runtime.Configuration.Settings.Reading = options;
-        var target = Message(kind, 0, 30);
-        var normal = Message(kind, 1, 10);
+        var target = Message(kind, 1);
+        var normal = Message(kind, 0, 10);
         await runtime.Messages.AppendAsync(target, options);
         await runtime.Messages.AppendAsync(normal, options);
         if (kind is MessageKind.SuperChat or MessageKind.Guard)
@@ -88,8 +88,8 @@ public sealed class PinnedFeedTests
 
             Assert.Empty(view.Model.PinnedItems);
             Assert.Equal(2, view.Model.ScrollingItems.Count);
-            Assert.Same(targetItem, view.Model.ScrollingItems[0]);
-            Assert.Same(normalItem, view.Model.ScrollingItems[1]);
+            Assert.Same(normalItem, view.Model.ScrollingItems[0]);
+            Assert.Same(targetItem, view.Model.ScrollingItems[1]);
             Assert.False(view.Model.HasPinnedItems);
             if (kind != MessageKind.Danmu)
             {

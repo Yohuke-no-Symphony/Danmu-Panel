@@ -26,7 +26,7 @@ public sealed partial class SqliteMessageStore
             using var transaction = connection.BeginTransaction();
             Execute(connection, transaction, "INSERT OR IGNORE INTO message_rooms(id) VALUES($room);", ("$room", roomTabId));
             var generation = ReadGeneration(connection, transaction, roomTabId);
-            WriteOptions(connection, transaction, options);
+            ApplyReadOptions(connection, transaction, options);
             foreach (var message in snapshot)
             {
                 if (ReadMessage(connection, transaction, message.Id) is not null)

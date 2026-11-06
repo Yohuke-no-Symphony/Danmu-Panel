@@ -153,7 +153,7 @@ public sealed class RoomReceptionSession : IAsyncDisposable
                 var current = settings();
                 var fingerprint = current.Translation.Enabled
                     ? TranslationRequestFactory.GetConfigurationFingerprint(current.Translation) : null;
-                var results = await store.AppendBatchAsync(batch, current.Reading, fingerprint).ConfigureAwait(false);
+                var results = await store.AppendReceivedBatchAsync(batch, fingerprint).ConfigureAwait(false);
                 foreach (var result in results)
                 {
                     if (result.Record is { } committed)

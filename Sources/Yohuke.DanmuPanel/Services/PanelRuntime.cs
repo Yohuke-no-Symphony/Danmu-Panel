@@ -70,9 +70,10 @@ public sealed class PanelRuntime : IAsyncDisposable
         Avatars = new(new AppDirectoryService(configurationStore.DirectoryPath));
     }
 
-    /// <summary>恢复翻译队列。</summary>
+    /// <summary>应用保存的阅读规则并恢复翻译队列。</summary>
     public async Task InitializeAsync()
     {
+        await Messages.ReevaluateReadOptionsAsync(Configuration.Settings.Reading);
         await scheduler.StartAsync(Configuration.Settings.Translation);
         await Task.WhenAll(Configuration.Accounts.Select(account => AccountSessions.ValidateAsync(account)));
     }

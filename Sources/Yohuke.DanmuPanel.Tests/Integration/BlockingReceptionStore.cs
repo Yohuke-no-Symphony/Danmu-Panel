@@ -27,6 +27,15 @@ internal sealed class BlockingReceptionStore(IMessageStore inner) : IMessageStor
         return await inner.AppendBatchAsync(messages, options, translationFingerprint, cancellationToken);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<MessageAppendResult>> AppendReceivedBatchAsync(IReadOnlyList<MessageRecord> messages,
+        string? translationFingerprint = null, CancellationToken cancellationToken = default)
+    {
+        Entered.TrySetResult();
+        await Release.Task;
+        return await inner.AppendReceivedBatchAsync(messages, translationFingerprint, cancellationToken);
+    }
+
     public Task<IReadOnlyList<MessageRecord>> LoadPageAsync(string roomTabId, MessageKind kind, int offset, int limit,
         CancellationToken cancellationToken = default) => inner.LoadPageAsync(roomTabId, kind, offset, limit, cancellationToken);
     public Task<IReadOnlyList<MessageRecord>> LoadRecentAsync(string roomTabId, MessageKind kind, int limit,

@@ -11,6 +11,7 @@ namespace Yohuke.DanmuPanel.Services.Messages;
 public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobStore, ITestMessageStore
 {
     private const int QUEUE_CAPACITY = 512;
+    private const int DATABASE_VERSION = 4;
     private readonly Channel<MessageStoreOperation> operations = Channel.CreateBounded<MessageStoreOperation>(
         new BoundedChannelOptions(QUEUE_CAPACITY) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
     private readonly TaskCompletionSource ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -73,7 +74,7 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
         return await operation.Task.ConfigureAwait(false);
     }
 
-    private static void Initialize(SqliteConnection connection)
+    private void Initialize(SqliteConnection connection)
     {
         connection.CreateFunction<string, string, bool>("is_emoticon_only", (content, emoticons) =>
             TranslationTextExtractor.IsEmoticonOnly(content,
@@ -82,7 +83,7 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
         Execute(connection, null, "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;");
         using var version = Command(connection, null, "PRAGMA user_version;");
         var databaseVersion = Convert.ToInt32(version.ExecuteScalar(), CultureInfo.InvariantCulture);
-        if (databaseVersion > 3)
+        if (databaseVersion > DATABASE_VERSION)
         {
             throw new InvalidDataException("The message database was created by a newer application version.");
         }
@@ -125,10 +126,13 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
         {
             Execute(connection, transaction, "ALTER TABLE message_records ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0;");
         }
-        Execute(connection, transaction, """
-            CREATE INDEX IF NOT EXISTS ix_message_test ON message_records(room_tab_id,is_test);
-            PRAGMA user_version=3;
-            """);
+        Execute(connection, transaction,
+            "CREATE INDEX IF NOT EXISTS ix_message_test ON message_records(room_tab_id,is_test);");
+        if (databaseVersion < DATABASE_VERSION)
+        {
+            ReevaluateGiftPriorities(connection, transaction, ReadOptions(connection, transaction));
+            Execute(connection, transaction, $"PRAGMA user_version={DATABASE_VERSION};");
+        }
         transaction.Commit();
     }
 

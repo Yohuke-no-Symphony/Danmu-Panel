@@ -417,6 +417,75 @@ public sealed class FeedFollowSchedulingTests
         }
     }
 
+    /// <summary>回顶使排队中的回底和首次加载定位失效，并保留正在进行的视口更新配对。</summary>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReturningToTopCancelsPendingFollowAndInitialLoad(bool followNewMessages)
+    {
+        var (window, list, viewer, controller, items) = CreateFeed(followNewMessages);
+        using (controller)
+        {
+            try
+            {
+                controller.ScrollToLatest();
+                controller.BeginViewportUpdate();
+                controller.ScrollToTop();
+                controller.CompleteInitialLoad();
+                controller.EndViewportUpdate();
+                Pump(window);
+
+                Assert.False(controller.IsFollowingLatest);
+                Assert.InRange(viewer.Offset.Y, 0, 1);
+                Assert.NotNull(list.ContainerFromItem(items[0]));
+                items.Add(CreateItem("arrived after returning to top"));
+                controller.NotifyLayoutChanged();
+                Pump(window);
+                Assert.False(controller.IsFollowingLatest);
+                Assert.InRange(viewer.Offset.Y, 0, 1);
+
+                controller.ScrollToLatest();
+                Pump(window);
+                Assert.True(controller.IsFollowingLatest);
+                Assert.InRange(Math.Abs(viewer.ScrollBarMaximum.Y - viewer.Offset.Y), 0, 1);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+    }
+
+    /// <summary>空列表回顶不会保留旧跟随，之后收到首条消息也保持阅读策略。</summary>
+    [AvaloniaFact]
+    public void ReturningToTopOfEmptyFeedDoesNotLeavePendingFollow()
+    {
+        var (window, list, viewer, controller, _) = CreateFeed(followNewMessages: false);
+        using (controller)
+        {
+            try
+            {
+                var items = new ObservableCollection<MessageItemViewModel>();
+                list.ItemsSource = items;
+                controller.Attach(items);
+                controller.ScrollToTop();
+                controller.CompleteInitialLoad();
+                Pump(window);
+                Assert.False(controller.IsFollowingLatest);
+                Assert.Equal(0, viewer.Offset.Y);
+
+                items.Add(CreateItem("first message after returning to top"));
+                Pump(window);
+                Assert.False(controller.IsFollowingLatest);
+                Assert.Equal(0, viewer.Offset.Y);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+    }
+
     private static (Window Window, ListBox List, ScrollViewer Viewer, DanmuFeedScrollController Controller,
         ObservableCollection<MessageItemViewModel> Items) CreateFeed(bool followNewMessages = true)
     {
