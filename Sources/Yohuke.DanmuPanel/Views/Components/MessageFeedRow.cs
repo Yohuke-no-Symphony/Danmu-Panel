@@ -173,7 +173,6 @@ internal sealed class MessageFeedRow : Button
         var isCard = kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard;
         var frame = new Border
         {
-            BorderThickness = new Thickness(isCard ? 2 : 0),
             Child = layout
         };
         if (kind == MessageKind.SuperChat)
@@ -183,6 +182,7 @@ internal sealed class MessageFeedRow : Button
         if (isCard)
         {
             frame.Classes.Add("messageCard");
+            frame.Bind(Border.BorderThicknessProperty, new DynamicResourceExtension("MessageCardBorderThickness"));
         }
         frame.Bind(Border.BorderBrushProperty, new Binding(nameof(MessageItemViewModel.BorderBrush)));
         var overlay = new Canvas

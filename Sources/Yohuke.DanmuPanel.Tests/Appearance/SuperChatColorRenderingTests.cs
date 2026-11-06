@@ -16,10 +16,10 @@ using Yohuke.DanmuPanel.Views;
 
 namespace Yohuke.DanmuPanel.Tests.Appearance;
 
-/// <summary>验证真实 SC 卡片的六档边框与运行中配色更新。</summary>
+/// <summary>验证真实 SC 卡片的金额档位边框与运行中配色更新。</summary>
 public sealed class SuperChatColorRenderingTests
 {
-    /// <summary>普通和紧凑模式均显示六档颜色，已显示卡片可独立覆盖并恢复。</summary>
+    /// <summary>普通和紧凑模式均显示全部金额档位颜色，已显示卡片可独立覆盖并恢复。</summary>
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]
@@ -32,6 +32,7 @@ public sealed class SuperChatColorRenderingTests
         var room = new RoomTabState { Id = "room", RoomId = "123" };
         var expected = new Dictionary<decimal, string>
         {
+            [2] = "#8B9BA8",
             [30] = "#3171D2", [50] = "#427D9E", [100] = "#E2B52B",
             [500] = "#E09443", [1000] = "#E54D4D", [2000] = "#AB1A32"
         };
@@ -54,7 +55,7 @@ public sealed class SuperChatColorRenderingTests
             var cards = view.GetVisualDescendants().OfType<Border>()
                 .Where(border => border.Classes.Contains("scFeedCard"))
                 .ToDictionary(border => Assert.IsType<MessageItemViewModel>(border.DataContext).Record.TotalPrice);
-            Assert.Equal(6, cards.Count);
+            Assert.Equal(expected.Count, cards.Count);
             foreach (var (price, color) in expected)
             {
                 AssertColor(color, cards[price].BorderBrush);
@@ -69,11 +70,15 @@ public sealed class SuperChatColorRenderingTests
                 frame.Save(Path.Combine(screenshotDirectory, compact ? "sc-compact.png" : "sc-normal.png"));
             }
             settings.ColorScheme.Overrides["SuperChatValue100Brush"] = "#AB12CD";
+            settings.ColorScheme.Overrides["SuperChatValueUnder30Brush"] = "#65B87A";
             await view.Model.RefreshAsync();
+            AssertColor("#65B87A", cards[2].BorderBrush);
+            AssertColor(expected[30], cards[30].BorderBrush);
             AssertColor("#AB12CD", cards[100].BorderBrush);
             AssertColor(expected[500], cards[500].BorderBrush);
             settings.ColorScheme.Overrides.Clear();
             await view.Model.RefreshAsync();
+            AssertColor(expected[2], cards[2].BorderBrush);
             AssertColor(expected[100], cards[100].BorderBrush);
         }
         finally

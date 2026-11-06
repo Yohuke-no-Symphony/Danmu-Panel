@@ -42,6 +42,7 @@ public sealed class SettingsShareService
         target.Language = settings.Language;
         target.Theme = settings.Theme;
         target.ColorScheme = settings.ColorScheme;
+        target.MessageBorders = settings.MessageBorders;
         target.UseWindowMenuOnMac = settings.UseWindowMenuOnMac;
         target.CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
         var cacheFingerprints = target.Translation.CacheFingerprints;
@@ -123,6 +124,7 @@ public sealed class SettingsShareService
             throw new InvalidDataException("The appearance or message display settings are invalid.");
         }
         ColorSchemeService.Validate(settings.ColorScheme);
+        MessageBorderSettingsValidator.Validate(settings.MessageBorders);
         DanmuRegexFilter.Validate(settings.DanmuRegexFilter);
         MessageColumnSettingsValidator.Validate(settings.MessageColumns);
         MessageRetentionSettingsValidator.Validate(settings.MessageRetentionCount);

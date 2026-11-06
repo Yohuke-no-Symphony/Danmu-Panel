@@ -17,6 +17,7 @@
             <x:Double x:Key="MessageMedalSlotWidth">66</x:Double>
             <x:Double x:Key="MessageMedalLevelWidth">20</x:Double>
             <x:Double x:Key="MessagePinBadgeSize">14</x:Double>
+            <Thickness x:Key="MessageCardBorderThickness">2</Thickness>
             <FontFamily x:Key="ContentControlThemeFontFamily">PingFang SC, Microsoft YaHei UI, Noto Sans CJK SC, Noto Sans SC, sans-serif</FontFamily>
             <SolidColorBrush x:Key="AppErrorBrush" Color="#EF4444" />
             <SolidColorBrush x:Key="AppUnreadBrush" Color="#EF4444" />

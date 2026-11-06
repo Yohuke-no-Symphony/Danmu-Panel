@@ -1,7 +1,10 @@
 using System.Globalization;
+using System.Text.Json;
 using Avalonia.Media;
+using Yohuke.DanmuPanel.Models.Appearance;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
+using Yohuke.DanmuPanel.Services.Appearance;
 using Yohuke.DanmuPanel.Services.Translation;
 using Yohuke.DanmuPanel.ViewModels;
 using Xunit;
@@ -11,9 +14,15 @@ namespace Yohuke.DanmuPanel.Tests.Appearance;
 /// <summary>验证礼物累计价值色阶与舰长等级配色。</summary>
 public sealed class MessageCardColorTests
 {
-    /// <summary>累计金额的各个边界使用对应 SC 色阶，已读不会改变价值颜色。</summary>
+    /// <summary>累计金额的各个边界使用对应价值色阶，已读不会改变价值颜色。</summary>
     [Theory]
-    [InlineData("0", "#3171D2")]
+    [InlineData("0", "#8B9BA8")]
+    [InlineData("0.99", "#8B9BA8")]
+    [InlineData("1", "#65B87A")]
+    [InlineData("9.99", "#65B87A")]
+    [InlineData("10", "#39B5C8")]
+    [InlineData("29.99", "#39B5C8")]
+    [InlineData("30", "#3171D2")]
     [InlineData("49.99", "#3171D2")]
     [InlineData("50", "#427D9E")]
     [InlineData("99.99", "#427D9E")]
@@ -40,8 +49,14 @@ public sealed class MessageCardColorTests
     public void GiftTierUpdatesAndHonorsColorOverrides()
     {
         var settings = new PanelSettings();
-        var record = new MessageRecord { Kind = MessageKind.Gift, TotalPrice = 30 };
+        var record = new MessageRecord { Kind = MessageKind.Gift, UnitPrice = 0.1m, TotalPrice = 0 };
         var item = new MessageItemViewModel(record, settings, new PinyinService());
+        AssertColor("#8B9BA8", item.BorderBrush);
+        item.Update(record with { TotalPrice = 1 }, settings);
+        AssertColor("#65B87A", item.BorderBrush);
+        item.Update(record with { TotalPrice = 10 }, settings);
+        AssertColor("#39B5C8", item.BorderBrush);
+        item.Update(record with { TotalPrice = 30 }, settings);
         AssertColor("#3171D2", item.BorderBrush);
         settings.ColorScheme.Overrides["GiftValue100Brush"] = "#123456";
         item.Update(record with { TotalPrice = 100 }, settings);
@@ -49,6 +64,53 @@ public sealed class MessageCardColorTests
         settings.ColorScheme.Overrides.Clear();
         item.Update(item.Record, settings);
         AssertColor("#E2B52B", item.BorderBrush);
+    }
+
+    /// <summary>低价连击按累计金额跨档，独立覆盖及恢复均作用于当前档位。</summary>
+    [Theory]
+    [InlineData("0", "GiftValueUnder1Brush", "#8B9BA8")]
+    [InlineData("1", "GiftValue1Brush", "#65B87A")]
+    [InlineData("10", "GiftValue10Brush", "#39B5C8")]
+    [InlineData("30", "GiftValueUnder50Brush", "#3171D2")]
+    public void LowPriceGiftTiersUpdateIndependently(string amount, string key, string expected)
+    {
+        var settings = new PanelSettings();
+        var record = new MessageRecord { Kind = MessageKind.Gift, UnitPrice = 0.1m, TotalPrice = 50 };
+        var item = new MessageItemViewModel(record, settings, new PinyinService());
+        AssertColor("#427D9E", item.BorderBrush);
+        settings.ColorScheme.Overrides[key] = "#AB12CD";
+        item.Update(record, settings);
+        AssertColor("#427D9E", item.BorderBrush);
+        item.Update(record with { TotalPrice = decimal.Parse(amount, CultureInfo.InvariantCulture) }, settings);
+        AssertColor("#AB12CD", item.BorderBrush);
+        settings.ColorScheme.Overrides.Clear();
+        item.Update(item.Record, settings);
+        AssertColor(expected, item.BorderBrush);
+    }
+
+    /// <summary>低价档与原有档位的独立配色可随命名方案保存并恢复。</summary>
+    [Fact]
+    public void GiftPriceTierColorsRoundTripInSavedSchemes()
+    {
+        var keys = new[]
+        {
+            "GiftValueUnder1Brush", "GiftValue1Brush", "GiftValue10Brush", "GiftValueUnder50Brush",
+            "GiftValue50Brush", "GiftValue100Brush", "GiftValue500Brush", "GiftValue1000Brush", "GiftValue2000Brush"
+        };
+        var settings = new ColorSchemeSettings
+        {
+            Overrides = keys.ToDictionary(key => key, _ => "#80123456"),
+            SavedSchemes = [new() { Id = "gift", Name = "Gift", Colors = keys.ToDictionary(key => key, _ => "#654321") }],
+            SelectedSchemeId = "gift"
+        };
+        ColorSchemeService.Validate(settings);
+        var restored = JsonSerializer.Deserialize<ColorSchemeSettings>(JsonSerializer.Serialize(settings))!;
+        ColorSchemeService.Validate(restored);
+        Assert.All(keys, key =>
+        {
+            Assert.Equal("#80123456", restored.Overrides[key]);
+            Assert.Equal("#654321", Assert.Single(restored.SavedSchemes).Colors[key]);
+        });
     }
 
     /// <summary>三级上舰沿用等级颜色及用户覆盖，不受已读和金额影响。</summary>

@@ -18,7 +18,7 @@ namespace Yohuke.DanmuPanel.Tests.Integration;
 /// <summary>通过真实消息视图验证外部排版设置变更后的底部跟随及阅读位置。</summary>
 public sealed class MessageFeedLayoutFollowTests
 {
-    /// <summary>字号、紧凑显示与换行改变行高时，跟随状态仍到底部，历史阅读保留可见消息。</summary>
+    /// <summary>字号、边框、紧凑显示与换行改变行高时，跟随状态仍到底部，历史阅读保留可见消息。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.Danmu, nameof(PanelSettings.MessageTextScale), false)]
     [InlineData(MessageKind.Danmu, nameof(PanelSettings.CompactDanmuDisplay), false)]
@@ -29,6 +29,9 @@ public sealed class MessageFeedLayoutFollowTests
     [InlineData(MessageKind.SuperChat, nameof(PanelSettings.CompactSuperChatWrap), true)]
     [InlineData(MessageKind.Danmu, nameof(PanelSettings.MessageColumns), false)]
     [InlineData(MessageKind.Danmu, nameof(PanelSettings.MessageColumns), true)]
+    [InlineData(MessageKind.SuperChat, nameof(PanelSettings.MessageBorders), true)]
+    [InlineData(MessageKind.Gift, nameof(PanelSettings.MessageBorders), true)]
+    [InlineData(MessageKind.Guard, nameof(PanelSettings.MessageBorders), true)]
     public async Task LayoutSettingsPreserveFollowOrReadingPosition(MessageKind kind, string setting, bool readingHistory)
     {
         using var directory = new MessageStoreTestDirectory();
@@ -80,7 +83,7 @@ public sealed class MessageFeedLayoutFollowTests
             var initialExtent = viewer.Extent.Height;
 
             ApplyLayoutChange(settings, setting);
-            if (setting == nameof(PanelSettings.MessageColumns))
+            if (setting is nameof(PanelSettings.MessageColumns) or nameof(PanelSettings.MessageBorders))
             {
                 runtime.NotifyAppearanceChanged();
             }
@@ -130,6 +133,11 @@ public sealed class MessageFeedLayoutFollowTests
                 break;
             case nameof(PanelSettings.MessageColumns):
                 settings.MessageColumns.Danmu.CompactIdentityRatio = 0.75;
+                break;
+            case nameof(PanelSettings.MessageBorders):
+                settings.MessageBorders.SuperChat = 10;
+                settings.MessageBorders.Gift = 10;
+                settings.MessageBorders.Guard = 10;
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(setting));

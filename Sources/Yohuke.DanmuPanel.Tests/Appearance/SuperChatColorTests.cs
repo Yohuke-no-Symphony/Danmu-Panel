@@ -19,7 +19,9 @@ public sealed class SuperChatColorTests
 {
     /// <summary>无上游配色或旧版固定蓝色的测试消息，均按金额边界显示。</summary>
     [Theory]
-    [InlineData("0", "#3171D2")]
+    [InlineData("0", "#8B9BA8")]
+    [InlineData("2", "#8B9BA8")]
+    [InlineData("29.99", "#8B9BA8")]
     [InlineData("30", "#3171D2")]
     [InlineData("49.99", "#3171D2")]
     [InlineData("50", "#427D9E")]
@@ -66,8 +68,35 @@ public sealed class SuperChatColorTests
         Assert.Equal("#123456", item.Record.BorderColor);
     }
 
+    /// <summary>两元 SC 的覆盖独立于原有蓝色档，恢复后继续遵守统一覆盖和上游配色。</summary>
+    [Fact]
+    public void LowPriceTierOverrideIsIndependentAndPreservesFallbackPriority()
+    {
+        var settings = new PanelSettings();
+        var record = new MessageRecord { Kind = MessageKind.SuperChat, TotalPrice = 2, BorderColor = "#123456" };
+        var item = new MessageItemViewModel(record, settings, new PinyinService());
+        AssertColor("#123456", item.BorderBrush);
+        settings.ColorScheme.Overrides["SuperChatValueUnder50Brush"] = "#654321";
+        item.Update(record, settings);
+        AssertColor("#123456", item.BorderBrush);
+        settings.ColorScheme.Overrides["SuperChatBorderBrush"] = "#AABBCC";
+        settings.ColorScheme.Overrides["SuperChatValueUnder30Brush"] = "#AB12CD";
+        item.Update(record, settings);
+        AssertColor("#AB12CD", item.BorderBrush);
+        item.Update(record with { TotalPrice = 30 }, settings);
+        AssertColor("#654321", item.BorderBrush);
+        settings.ColorScheme.Overrides.Remove("SuperChatValueUnder30Brush");
+        item.Update(record, settings);
+        AssertColor("#AABBCC", item.BorderBrush);
+        settings.ColorScheme.Overrides.Clear();
+        item.Update(record, settings);
+        AssertColor("#123456", item.BorderBrush);
+        Assert.Equal("#123456", item.Record.BorderColor);
+    }
+
     /// <summary>测试消息写入对应档位色，重新加载和显示时不回退到统一蓝色。</summary>
     [Theory]
+    [InlineData(2, "#8B9BA8")]
     [InlineData(30, "#3171D2")]
     [InlineData(50, "#427D9E")]
     [InlineData(100, "#E2B52B")]
@@ -93,12 +122,13 @@ public sealed class SuperChatColorTests
         AssertColor(expected, new MessageItemViewModel(record, settings, new PinyinService()).BorderBrush);
     }
 
-    /// <summary>六个档位均可进入已保存方案，并通过配置校验与序列化恢复。</summary>
+    /// <summary>全部金额档位均可进入已保存方案，并通过配置校验与序列化恢复。</summary>
     [Fact]
     public void PriceTierColorsRoundTripInSavedSchemes()
     {
         var keys = new[]
         {
+            "SuperChatValueUnder30Brush",
             "SuperChatValueUnder50Brush", "SuperChatValue50Brush", "SuperChatValue100Brush",
             "SuperChatValue500Brush", "SuperChatValue1000Brush", "SuperChatValue2000Brush"
         };

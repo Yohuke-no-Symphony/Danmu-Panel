@@ -44,12 +44,16 @@ public static class ColorSettingCatalog
         Define("GuardAdmiralBrush", "Borders", color: GUARD_ADMIRAL_COLOR),
         Define("GuardGovernorBrush", "Borders", color: GUARD_GOVERNOR_COLOR),
         Define("SuperChatBorderBrush", "Borders"),
+        Define("SuperChatValueUnder30Brush", "Borders", color: "#8B9BA8"),
         Define("SuperChatValueUnder50Brush", "Borders", color: "#3171D2"),
         Define("SuperChatValue50Brush", "Borders", color: "#427D9E"),
         Define("SuperChatValue100Brush", "Borders", color: "#E2B52B"),
         Define("SuperChatValue500Brush", "Borders", color: "#E09443"),
         Define("SuperChatValue1000Brush", "Borders", color: "#E54D4D"),
         Define("SuperChatValue2000Brush", "Borders", color: "#AB1A32"),
+        Define("GiftValueUnder1Brush", "Borders", color: "#8B9BA8"),
+        Define("GiftValue1Brush", "Borders", color: "#65B87A"),
+        Define("GiftValue10Brush", "Borders", color: "#39B5C8"),
         Define("GiftValueUnder50Brush", "Borders", color: "#3171D2"),
         Define("GiftValue50Brush", "Borders", color: "#427D9E"),
         Define("GiftValue100Brush", "Borders", color: "#E2B52B"),
@@ -77,7 +81,10 @@ public static class ColorSettingCatalog
             >= 500 => "GiftValue500Brush",
             >= 100 => "GiftValue100Brush",
             >= 50 => "GiftValue50Brush",
-            _ => "GiftValueUnder50Brush"
+            >= 30 => "GiftValueUnder50Brush",
+            >= 10 => "GiftValue10Brush",
+            >= 1 => "GiftValue1Brush",
+            _ => "GiftValueUnder1Brush"
         });
     }
 
@@ -95,7 +102,8 @@ public static class ColorSettingCatalog
             >= 500 => "SuperChatValue500Brush",
             >= 100 => "SuperChatValue100Brush",
             >= 50 => "SuperChatValue50Brush",
-            _ => "SuperChatValueUnder50Brush"
+            >= 30 => "SuperChatValueUnder50Brush",
+            _ => "SuperChatValueUnder30Brush"
         });
     }
 

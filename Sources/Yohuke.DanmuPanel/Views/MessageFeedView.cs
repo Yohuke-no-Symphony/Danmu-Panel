@@ -49,6 +49,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         Model = new(runtime, kind);
         AddHandler(MessageFeedColumnLayout.ResizeRequestedEvent, OnColumnResizeRequested);
         UpdateTextScale();
+        UpdateBorderThickness();
         Model.Failed += reportError;
         list = CreateList(Model.ScrollingRows, kind, "ScrollingMessages");
         pinnedList = CreateList(Model.PinnedItems, kind, "PinnedMessages");
@@ -147,6 +148,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         base.OnAttachedToVisualTree(e);
         runtime.Changed += OnRuntimeChanged;
         runtime.MessageColumnsChanged += OnMessageColumnsChanged;
+        UpdateBorderThickness();
         UpdateColumnRatio();
     }
 
@@ -164,6 +166,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     {
         if (roomId.Length == 0)
         {
+            UpdateBorderThickness();
             CancelColumnResizes();
             UpdateColumnRatio();
         }
@@ -174,6 +177,25 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         if (changedKind == messageKind)
         {
             UpdateColumnRatio();
+        }
+    }
+
+    private void UpdateBorderThickness()
+    {
+        var thickness = new Thickness(runtime.Configuration.Settings.MessageBorders.GetThickness(messageKind));
+        if (Resources.ContainsKey("MessageCardBorderThickness") && thickness.Equals(Resources["MessageCardBorderThickness"]))
+        {
+            return;
+        }
+        scroll?.BeginViewportUpdate();
+        try
+        {
+            Resources["MessageCardBorderThickness"] = thickness;
+            scroll?.NotifyLayoutChanged();
+        }
+        finally
+        {
+            scroll?.EndViewportUpdate();
         }
     }
 

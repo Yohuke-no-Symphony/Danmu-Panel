@@ -38,6 +38,7 @@ public sealed class ConfigurationService
     public async Task SaveAsync(PanelConfiguration configuration)
     {
         ColorSchemeService.Validate(configuration.Settings.ColorScheme);
+        MessageBorderSettingsValidator.Validate(configuration.Settings.MessageBorders);
         DanmuRegexFilter.Validate(configuration.Settings.DanmuRegexFilter);
         MessageColumnSettingsValidator.Validate(configuration.Settings.MessageColumns);
         MessageRetentionSettingsValidator.Validate(configuration.Settings.MessageRetentionCount);
@@ -102,6 +103,7 @@ public sealed class ConfigurationService
             if (value is PanelSettings settings)
             {
                 ColorSchemeService.Validate(settings.ColorScheme);
+                MessageBorderSettingsValidator.Validate(settings.MessageBorders);
                 DanmuRegexFilter.Validate(settings.DanmuRegexFilter);
                 MessageColumnSettingsValidator.Validate(settings.MessageColumns);
                 MessageRetentionSettingsValidator.Validate(settings.MessageRetentionCount);

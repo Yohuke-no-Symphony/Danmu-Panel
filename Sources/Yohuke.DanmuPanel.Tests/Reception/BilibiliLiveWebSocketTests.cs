@@ -194,6 +194,7 @@ public class BilibiliLiveWebSocketTests
     }
 
     [Theory]
+    [InlineData(2, "#8B9BA8")]
     [InlineData(30, "#3171D2")]
     [InlineData(50, "#427D9E")]
     [InlineData(100, "#E2B52B")]

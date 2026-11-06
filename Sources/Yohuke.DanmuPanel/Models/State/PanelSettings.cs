@@ -17,6 +17,9 @@ public sealed class PanelSettings
     public string Theme { get; set; } = "system";
     public ColorSchemeSettings ColorScheme { get; set; } = new();
 
+    /// <summary>SC、礼物与大航海消息各自独立的边框粗细。</summary>
+    public MessageBorderSettings MessageBorders { get; set; } = new();
+
     /// <summary>在 macOS 主窗口内显示菜单；默认使用系统菜单栏。</summary>
     public bool UseWindowMenuOnMac { get; set; }
 

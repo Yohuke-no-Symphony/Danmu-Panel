@@ -10,6 +10,7 @@ using Lucide.Avalonia;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Yohuke.DanmuPanel.I18n;
+using Yohuke.DanmuPanel.Models.Appearance;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Models.Translation;
@@ -50,6 +51,9 @@ public sealed class SettingsView : UserControl
     private readonly CheckBox superChatPinyin;
     private readonly ComboBox pinyinLayout;
     private readonly NumericUpDown messageTextScale;
+    private readonly NumericUpDown superChatBorderThickness;
+    private readonly NumericUpDown giftBorderThickness;
+    private readonly NumericUpDown guardBorderThickness;
     private readonly NumericUpDown messageRetentionCount;
     private readonly CheckBox compactDisplay;
     private readonly CheckBox compactDanmuWrap;
@@ -100,6 +104,9 @@ public sealed class SettingsView : UserControl
         this.accountsView = accountsView;
         var settings = runtime.Configuration.Settings;
         colorSchemeEditor = new(settings, runtime.Colors);
+        superChatBorderThickness = CreateBorderThicknessInput("SuperChatBorderThicknessInput", settings.MessageBorders.SuperChat);
+        giftBorderThickness = CreateBorderThicknessInput("GiftBorderThicknessInput", settings.MessageBorders.Gift);
+        guardBorderThickness = CreateBorderThicknessInput("GuardBorderThicknessInput", settings.MessageBorders.Guard);
         windowMenuOnMac = Check("Settings.Appearance.WindowMenuOnMac", settings.UseWindowMenuOnMac);
         windowMenuOnMac.Name = "UseWindowMenuOnMacCheckBox";
         windowMenuOnMac.IsVisible = supportsNativeMenus;
@@ -386,6 +393,10 @@ public sealed class SettingsView : UserControl
     private bool TryCreateDraft(out PanelSettings draft)
     {
         draft = null!;
+        if (!TryCreateMessageBorders(out var messageBorders))
+        {
+            return false;
+        }
         if (messageRetentionCount.Value is not { } retentionCount || retentionCount != decimal.Truncate(retentionCount) ||
             retentionCount is < 1 or > PanelSettings.MAX_MESSAGE_RETENTION_COUNT)
         {
@@ -434,6 +445,7 @@ public sealed class SettingsView : UserControl
             Language = settings.Language,
             Theme = settings.Theme,
             ColorScheme = ColorSchemeService.Snapshot(settings.ColorScheme),
+            MessageBorders = messageBorders,
             UseWindowMenuOnMac = settings.UseWindowMenuOnMac,
             CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup,
             Translation = new()
@@ -469,6 +481,35 @@ public sealed class SettingsView : UserControl
             DanmuRegexFilter = new() { Enabled = danmuRegexEnabled.IsChecked == true, Patterns = patterns }
         };
         return true;
+    }
+
+    private bool TryCreateMessageBorders(out MessageBorderSettings borders)
+    {
+        borders = null!;
+        if (superChatBorderThickness.Value is not { } superChat || giftBorderThickness.Value is not { } gift ||
+            guardBorderThickness.Value is not { } guard ||
+            superChat < (decimal)MessageBorderSettings.MIN_THICKNESS || superChat > (decimal)MessageBorderSettings.MAX_THICKNESS ||
+            gift < (decimal)MessageBorderSettings.MIN_THICKNESS || gift > (decimal)MessageBorderSettings.MAX_THICKNESS ||
+            guard < (decimal)MessageBorderSettings.MIN_THICKNESS || guard > (decimal)MessageBorderSettings.MAX_THICKNESS)
+        {
+            SetStatus(Localization.Get("Settings.InvalidMessageBorderThickness"));
+            return false;
+        }
+        borders = new() { SuperChat = (double)superChat, Gift = (double)gift, Guard = (double)guard };
+        return true;
+    }
+
+    private static NumericUpDown CreateBorderThicknessInput(string name, double value)
+    {
+        return new()
+        {
+            Name = name,
+            Minimum = (decimal)MessageBorderSettings.MIN_THICKNESS,
+            Maximum = (decimal)MessageBorderSettings.MAX_THICKNESS,
+            Increment = 0.5m,
+            Value = (decimal)value,
+            FormatString = "0.##"
+        };
     }
 
     private bool TryBeginOperation()
@@ -528,6 +569,11 @@ public sealed class SettingsView : UserControl
             }
         };
         return Stack(Card("Settings.Appearance", Row("Settings.Language", languages), Row("Settings.Theme", theme), windowMenuOnMac),
+            Card("Settings.MessageBorders",
+                Help("Settings.MessageBordersHelp"),
+                Row("Settings.SuperChatBorderThickness", superChatBorderThickness),
+                Row("Settings.GiftBorderThickness", giftBorderThickness),
+                Row("Settings.GuardBorderThickness", guardBorderThickness)),
             colorSchemeEditor);
     }
 

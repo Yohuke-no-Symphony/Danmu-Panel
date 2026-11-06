@@ -4,6 +4,7 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
@@ -237,12 +238,13 @@ public sealed class MessageFeedSkeleton : Button
         var isCard = Kind != MessageKind.Danmu;
         var frame = new Border
         {
-            BorderThickness = new Thickness(isCard ? 2 : 0), BorderBrush = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
             Background = Brushes.Transparent, Child = layout
         };
         if (isCard)
         {
             frame.Classes.Add("messageCard");
+            frame.Bind(Border.BorderThicknessProperty, new DynamicResourceExtension("MessageCardBorderThickness"));
         }
         if (Kind == MessageKind.SuperChat)
         {

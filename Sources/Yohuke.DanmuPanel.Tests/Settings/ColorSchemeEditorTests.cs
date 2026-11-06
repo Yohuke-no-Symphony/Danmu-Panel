@@ -21,6 +21,50 @@ namespace Yohuke.DanmuPanel.Tests.Settings;
 /// <summary>验证配色草稿、命名方案快照和全局设置保存。</summary>
 public sealed class ColorSchemeEditorTests
 {
+    /// <summary>低价档均提供独立输入，预览和恢复默认不会改动原有蓝色档。</summary>
+    [AvaloniaFact]
+    public async Task LowPriceTierColorsCanBeEditedAndResetIndependently()
+    {
+        using var directory = new MessageStoreTestDirectory();
+        using var colors = new ColorSchemeService();
+        var settings = new PanelSettings();
+        var editor = new ColorSchemeEditor(settings, colors);
+        var expected = new Dictionary<string, string>
+        {
+            ["SuperChatValueUnder30Brush"] = "#8B9BA8",
+            ["GiftValueUnder1Brush"] = "#8B9BA8",
+            ["GiftValue1Brush"] = "#65B87A",
+            ["GiftValue10Brush"] = "#39B5C8"
+        };
+        var window = new Window { Width = 900, Height = 900, Content = new ScrollViewer { Content = editor } };
+        try
+        {
+            window.Show();
+            foreach (var (key, defaultColor) in expected)
+            {
+                Assert.Equal(Color.Parse(defaultColor), colors.GetDefaultColor(Application.Current!, key));
+                Input(editor, key).Text = "#AB12CD";
+                Pump(window);
+                Assert.Equal("#AB12CD", settings.ColorScheme.Overrides[key]);
+            }
+            Assert.False(settings.ColorScheme.Overrides.ContainsKey("SuperChatValueUnder50Brush"));
+            Assert.False(settings.ColorScheme.Overrides.ContainsKey("GiftValueUnder50Brush"));
+            Assert.True(editor.TryCommit(out var error));
+            Assert.Null(error);
+            var store = new ConfigurationService(directory.Path);
+            await store.SaveAsync(new() { Settings = settings });
+            var restored = store.Load().Settings;
+            Assert.All(expected.Keys, key => Assert.Equal("#AB12CD", restored.ColorScheme.Overrides[key]));
+            Click(editor, "ResetAllColors");
+            Assert.Empty(settings.ColorScheme.Overrides);
+            Assert.All(expected.Keys, key => Assert.True(string.IsNullOrEmpty(Input(editor, key).Text)));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>有效输入即时预览，方案保存独立快照并能够随设置持久化。</summary>
     [AvaloniaFact]
     public async Task SavedSchemeIsIndependentAndRoundTripsWithSettings()
