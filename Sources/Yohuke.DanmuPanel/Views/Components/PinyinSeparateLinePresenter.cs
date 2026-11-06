@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Media;
@@ -13,6 +14,8 @@ internal sealed class PinyinSeparateLinePresenter : StackPanel
     {
         OriginalText = new() { Inlines = original };
         PronunciationText = new() { Inlines = pronunciation };
+        TextBlock.SetBaselineOffset(OriginalText, 0);
+        TextBlock.SetBaselineOffset(PronunciationText, 0);
         Children.Add(PronunciationText);
         Children.Add(OriginalText);
     }
@@ -38,4 +41,11 @@ internal sealed class PinyinSeparateLinePresenter : StackPanel
         PronunciationText.TextAlignment = owner.TextAlignment;
     }
 
+    /// <inheritdoc />
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        var desiredSize = base.MeasureOverride(availableSize);
+        TextBlock.SetBaselineOffset(this, PronunciationText.DesiredSize.Height + OriginalText.TextLayout.Baseline);
+        return desiredSize;
+    }
 }

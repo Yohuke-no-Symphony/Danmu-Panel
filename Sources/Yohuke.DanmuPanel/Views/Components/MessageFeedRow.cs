@@ -129,7 +129,11 @@ internal sealed class MessageFeedRow : Button
         var price = BoundText(nameof(MessageItemViewModel.Price));
         price.Classes.Add("scFeedPrice");
         price.HorizontalAlignment = HorizontalAlignment.Right;
-        var body = new MessageBodyPanel(originalRegion, translationRegion)
+        var body = new MessageBodyPanel(originalRegion, translationRegion,
+            () => contentPending.DesiredSize.Height + (original.IsVisible
+                ? original.Padding.Top + original.TextLayout.Baseline : originalMarquee.TextBaseline),
+            () => pendingTranslation.IsVisible ? pendingTranslation.TextBaseline : translation.IsVisible
+                ? translation.Padding.Top + translation.TextLayout.Baseline : translationMarquee.TextBaseline)
         {
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Stretch

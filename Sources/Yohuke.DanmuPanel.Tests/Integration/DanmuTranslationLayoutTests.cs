@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -228,14 +229,91 @@ public sealed class DanmuTranslationLayoutTests
         }
     }
 
-    /// <summary>拼音增加文字高度后仍按实际宽度同行，并保持两个区域垂直居中。</summary>
+    /// <summary>拼音、占位、译文、字号与显示模式切换后，同行文字始终共享主文字基线。</summary>
+    [AvaloniaTheory]
+    [InlineData(false, false, PinyinLayoutMode.Ruby)]
+    [InlineData(true, false, PinyinLayoutMode.Ruby)]
+    [InlineData(true, true, PinyinLayoutMode.Ruby)]
+    [InlineData(false, false, PinyinLayoutMode.SeparateLine)]
+    [InlineData(true, false, PinyinLayoutMode.SeparateLine)]
+    [InlineData(true, true, PinyinLayoutMode.SeparateLine)]
+    public async Task InlineTranslationAlignsMainTextAcrossPinyinChanges(bool compact, bool wrap, PinyinLayoutMode layout)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var runtime = CreateRuntime(directory, compact, wrap);
+        var settings = runtime.Configuration.Settings;
+        settings.ShowDanmuPinyin = true;
+        settings.PinyinLayout = layout;
+        var message = Message("晚安");
+        var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation);
+        await runtime.Messages.AppendAsync(message, settings.Reading, fingerprint);
+        var view = new MessageFeedView(runtime, MessageKind.Danmu, exception => throw exception);
+        var window = new Window { Width = 640, Height = 130, Content = view };
+        try
+        {
+            await view.Model.SelectRoomAsync(new() { Id = "tab" });
+            await view.Model.WaitForPresentationAsync();
+            window.Show();
+            Pump(window);
+            var row = FindRow(view, message.Id);
+            var item = Assert.Single(view.Model.Items);
+            var body = FindBody(row);
+            Assert.NotEmpty(item.ContentPinyin);
+            Assert.True(item.IsTranslating);
+            AssertInline(body);
+            SavePreview(window, $"baseline-{compact}-{wrap}-{layout}-pending");
+
+            Assert.True(await runtime.Messages.ApplyTranslationAsync(message.Id, message.Generation, fingerprint, "おやすみ"));
+            await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
+            Pump(window);
+            AssertInline(body);
+            SavePreview(window, $"baseline-{compact}-{wrap}-{layout}-translated");
+
+            settings.MessageTextScale = 1.5;
+            await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
+            Pump(window);
+            AssertInline(body);
+
+            settings.ShowDanmuPinyin = false;
+            await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
+            Pump(window);
+            AssertInline(body);
+
+            settings.Translation.DisplayMode = TranslationDisplayMode.TranslationOnly;
+            await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
+            Pump(window);
+            Assert.False(body.Children[0].IsVisible);
+            Assert.Equal(0, body.Children[1].Bounds.Y);
+
+            settings.Translation.DisplayMode = TranslationDisplayMode.Bilingual;
+            settings.ShowDanmuPinyin = true;
+            await view.Model.RefreshAsync();
+            await view.Model.WaitForPresentationAsync();
+            Pump(window);
+            AssertInline(body);
+            Assert.Same(item, Assert.Single(view.Model.Items));
+            Assert.Same(row, FindRow(view, message.Id));
+        }
+        finally
+        {
+            view.Model.Dispose();
+            window.Close();
+        }
+    }
+
+    /// <summary>拼音等待矩形占据上方空间，译文始终对齐原文而非整个等待区域。</summary>
     [AvaloniaTheory]
     [InlineData(PinyinLayoutMode.Ruby)]
     [InlineData(PinyinLayoutMode.SeparateLine)]
-    public async Task PinyinHeightDoesNotPreventShortTranslationFromSharingLine(PinyinLayoutMode layout)
+    public async Task PendingPinyinKeepsTranslationAlignedWithMainText(PinyinLayoutMode layout)
     {
         using var directory = new MessageStoreTestDirectory();
-        await using var runtime = CreateRuntime(directory, true, true);
+        var pinyin = new BlockingPinyinService();
+        await using var runtime = CreateRuntime(directory, true, false, pinyin);
         var settings = runtime.Configuration.Settings;
         settings.ShowDanmuPinyin = true;
         settings.PinyinLayout = layout;
@@ -247,16 +325,28 @@ public sealed class DanmuTranslationLayoutTests
         var window = new Window { Width = 640, Height = 300, Content = view };
         try
         {
-            await view.Model.SelectRoomAsync(new() { Id = "tab" });
-            await view.Model.WaitForPresentationAsync();
             window.Show();
+            await view.Model.SelectRoomAsync(new() { Id = "tab" }).WaitAsync(TimeSpan.FromSeconds(5));
+            await pinyin.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Pump(window);
+            var item = Assert.Single(view.Model.Items);
             var row = FindRow(view, message.Id);
-            Assert.NotEmpty(Assert.Single(view.Model.Items).ContentPinyin);
-            AssertInline(FindBody(row));
+            var body = FindBody(row);
+            var pending = Assert.Single(body.GetVisualDescendants().OfType<PinyinLoadingPlaceholder>());
+            Assert.True(pending.IsEffectivelyVisible);
+            AssertInline(body);
+
+            pinyin.Release.TrySetResult();
+            await view.Model.WaitForPresentationAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            Pump(window);
+            Assert.False(pending.IsEffectivelyVisible);
+            AssertInline(body);
+            Assert.Same(item, Assert.Single(view.Model.Items));
+            Assert.Same(row, FindRow(view, message.Id));
         }
         finally
         {
+            pinyin.Release.TrySetResult();
             view.Model.Dispose();
             window.Close();
         }
@@ -314,9 +404,10 @@ public sealed class DanmuTranslationLayoutTests
         }
     }
 
-    private static PanelRuntime CreateRuntime(MessageStoreTestDirectory directory, bool compact, bool wrap)
+    private static PanelRuntime CreateRuntime(MessageStoreTestDirectory directory, bool compact, bool wrap,
+        IPinyinService? pinyin = null)
     {
-        var runtime = new PanelRuntime(new(directory.Path), new());
+        var runtime = new PanelRuntime(new(directory.Path), new(), pinyin);
         var settings = runtime.Configuration.Settings;
         settings.CompactDanmuDisplay = compact;
         settings.CompactDanmuWrap = wrap;
@@ -348,9 +439,26 @@ public sealed class DanmuTranslationLayoutTests
         Assert.True(original.IsVisible && translation.IsVisible);
         Assert.True(translation.Bounds.X > original.Bounds.Right,
             $"Expected side-by-side content: original={original.Bounds}, translation={translation.Bounds}");
-        Assert.InRange(Math.Abs(original.Bounds.Center.Y - translation.Bounds.Center.Y), 0, 0.5);
-        Assert.InRange(Math.Abs(body.Bounds.Height - Math.Max(original.Bounds.Height, translation.Bounds.Height)), 0, 0.5);
+        Assert.InRange(Math.Abs(MainTextBaseline(original, body) - MainTextBaseline(translation, body)), 0, 1);
+        Assert.InRange(Math.Abs(body.Bounds.Height - Math.Max(original.Bounds.Bottom, translation.Bounds.Bottom)), 0, 0.5);
         Assert.InRange(translation.Bounds.Right, 0, body.Bounds.Width + 0.5);
+    }
+
+    private static double MainTextBaseline(Control region, Control relativeTo)
+    {
+        var pending = region.GetVisualDescendants().OfType<ShimmerTextBlock>()
+            .SingleOrDefault(control => control.IsEffectivelyVisible);
+        if (pending is not null)
+        {
+            return pending.TranslatePoint(default, relativeTo)!.Value.Y + pending.TextBaseline;
+        }
+
+        var text = region.GetVisualDescendants().OfType<TextBlock>().Single(control =>
+            control.IsEffectivelyVisible && (control is EmoticonTextBlock || control.Classes.Contains("translatedText")));
+        var ruby = text.GetVisualDescendants().OfType<PinyinRubySyllable>().FirstOrDefault();
+        var separateLine = text.GetVisualDescendants().OfType<PinyinSeparateLinePresenter>().FirstOrDefault();
+        var mainText = ruby?.OriginalText ?? separateLine?.OriginalText ?? text;
+        return mainText.TranslatePoint(default, relativeTo)!.Value.Y + mainText.Padding.Top + mainText.TextLayout.Baseline;
     }
 
     private static void AssertStacked(Panel body)

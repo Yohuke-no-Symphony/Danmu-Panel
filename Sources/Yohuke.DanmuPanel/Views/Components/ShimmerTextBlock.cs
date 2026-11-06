@@ -18,6 +18,7 @@ public sealed class ShimmerTextBlock : TemplatedControl
     private bool isInViewport;
 
     internal bool IsShimmering { get; private set; }
+    internal double TextBaseline => textBlock.Padding.Top + textBlock.TextLayout.Baseline;
 
     public static readonly StyledProperty<string?> TextProperty = TextBlock.TextProperty.AddOwner<ShimmerTextBlock>();
 

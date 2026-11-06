@@ -7,8 +7,13 @@ internal sealed class MessageBodyPanel : Panel
 {
     private readonly Control original;
     private readonly Control translation;
+    private readonly Func<double> getOriginalBaseline;
+    private readonly Func<double> getTranslationBaseline;
     private bool isInline;
     private double originalWidth;
+    private double originalBaseline;
+    private double translationBaseline;
+    private double inlineBaseline;
 
     public static readonly StyledProperty<bool> AllowInlineProperty =
         AvaloniaProperty.Register<MessageBodyPanel, bool>(nameof(AllowInline));
@@ -44,10 +49,13 @@ internal sealed class MessageBodyPanel : Panel
         AffectsMeasure<MessageBodyPanel>(AllowInlineProperty, HorizontalSpacingProperty, VerticalSpacingProperty);
     }
 
-    internal MessageBodyPanel(Control original, Control translation)
+    internal MessageBodyPanel(Control original, Control translation, Func<double> getOriginalBaseline,
+        Func<double> getTranslationBaseline)
     {
         this.original = original;
         this.translation = translation;
+        this.getOriginalBaseline = getOriginalBaseline;
+        this.getTranslationBaseline = getTranslationBaseline;
         Children.Add(original);
         Children.Add(translation);
     }
@@ -67,7 +75,12 @@ internal sealed class MessageBodyPanel : Panel
                 if (width <= availableSize.Width)
                 {
                     isInline = true;
-                    return new(width, Math.Max(original.DesiredSize.Height, translation.DesiredSize.Height));
+                    originalBaseline = getOriginalBaseline();
+                    translationBaseline = getTranslationBaseline();
+                    inlineBaseline = Math.Max(originalBaseline, translationBaseline);
+                    var belowBaseline = Math.Max(original.DesiredSize.Height - originalBaseline,
+                        translation.DesiredSize.Height - translationBaseline);
+                    return new(width, inlineBaseline + belowBaseline);
                 }
             }
         }
@@ -84,10 +97,10 @@ internal sealed class MessageBodyPanel : Panel
     {
         if (isInline)
         {
-            original.Arrange(new(0, (finalSize.Height - original.DesiredSize.Height) / 2,
+            original.Arrange(new(0, inlineBaseline - originalBaseline,
                 originalWidth, original.DesiredSize.Height));
             var translationX = originalWidth + HorizontalSpacing;
-            translation.Arrange(new(translationX, (finalSize.Height - translation.DesiredSize.Height) / 2,
+            translation.Arrange(new(translationX, inlineBaseline - translationBaseline,
                 Math.Max(0, finalSize.Width - translationX), translation.DesiredSize.Height));
         }
         else

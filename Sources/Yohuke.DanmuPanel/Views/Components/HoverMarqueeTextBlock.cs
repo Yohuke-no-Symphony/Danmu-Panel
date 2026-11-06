@@ -34,6 +34,8 @@ public sealed class HoverMarqueeTextBlock : UserControl
         Interval = TIMER_INTERVAL
     };
 
+    internal double TextBaseline => textBlock.Padding.Top + textBlock.TextLayout.Baseline;
+
     /// <summary>
     /// 显示文本。
     /// </summary>
