@@ -1,4 +1,3 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
@@ -11,7 +10,7 @@ namespace Yohuke.DanmuPanel.Views.Components;
 
 internal sealed class MessageColumnSplitter : Thumb
 {
-    private IPointer? pointer;
+    internal event EventHandler<PointerPressedEventArgs>? ResizePressed;
 
     /// <inheritdoc />
     protected override Type StyleKeyOverride => typeof(Thumb);
@@ -30,11 +29,6 @@ internal sealed class MessageColumnSplitter : Thumb
         });
     }
 
-    internal void ReleasePointer()
-    {
-        pointer?.Capture(null);
-    }
-
     /// <inheritdoc />
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -43,37 +37,8 @@ internal sealed class MessageColumnSplitter : Thumb
         {
             return;
         }
-        pointer = e.Pointer;
-        base.OnPointerPressed(e);
-        pointer.Capture(this);
-    }
-
-    /// <inheritdoc />
-    protected override void OnPointerMoved(PointerEventArgs e)
-    {
-        base.OnPointerMoved(e);
-        e.Handled = true;
-    }
-
-    /// <inheritdoc />
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    {
-        base.OnPointerReleased(e);
-        e.Handled = true;
-        ReleasePointer();
-    }
-
-    /// <inheritdoc />
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    {
-        pointer = null;
-        base.OnPointerCaptureLost(e);
-    }
-
-    /// <inheritdoc />
-    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
-    {
-        ReleasePointer();
-        base.OnDetachedFromVisualTree(e);
+        e.PreventGestureRecognition();
+        Focus();
+        ResizePressed?.Invoke(this, e);
     }
 }

@@ -18,7 +18,6 @@ internal sealed class MessageFeedRow : Button
     private static IMultiValueConverter InlineTranslationConverter { get; } =
         new FuncMultiValueConverter<string, bool>(texts => texts.All(text => text is not null && text.IndexOfAny(['\r', '\n']) < 0));
     private readonly bool canCopy;
-    private readonly MessageFeedColumnLayout? columnLayout;
     private bool isCopyHoldEligible;
     private bool suppressClick;
     private Point copyPressPosition;
@@ -144,7 +143,10 @@ internal sealed class MessageFeedRow : Button
             () => contentPending.DesiredSize.Height + (original.IsVisible
                 ? original.Padding.Top + original.TextLayout.Baseline : originalMarquee.TextBaseline),
             () => pendingTranslation.IsVisible ? pendingTranslation.TextBaseline : translation.IsVisible
-                ? translation.Padding.Top + translation.TextLayout.Baseline : translationMarquee.TextBaseline)
+                ? translation.Padding.Top + translation.TextLayout.Baseline : translationMarquee.TextBaseline,
+            () => (original.IsVisible ? original.IsSingleTextLine : originalMarquee.IsSingleTextLine) &&
+                (pendingTranslation.IsVisible ? pendingTranslation.IsSingleTextLine : translation.IsVisible
+                    ? EmoticonTextBlock.HasSingleTextLine(translation) : translationMarquee.IsSingleTextLine))
         {
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Stretch
@@ -163,7 +165,6 @@ internal sealed class MessageFeedRow : Button
         }
         body.Classes.Add("messageBody");
         var layout = MessageFeedLayout.CreateGrid(kind);
-        columnLayout = layout as MessageFeedColumnLayout;
         if (kind == MessageKind.SuperChat)
         {
             var header = MessageFeedLayout.CreateHeaderGrid();
@@ -308,7 +309,6 @@ internal sealed class MessageFeedRow : Button
     /// <inheritdoc />
     protected override void OnDataContextChanged(EventArgs e)
     {
-        columnLayout?.CancelResize();
         CancelCopyInteraction();
         base.OnDataContextChanged(e);
     }

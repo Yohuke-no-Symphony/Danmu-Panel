@@ -19,6 +19,7 @@ public sealed class ShimmerTextBlock : TemplatedControl
 
     internal bool IsShimmering { get; private set; }
     internal double TextBaseline => textBlock.Padding.Top + textBlock.TextLayout.Baseline;
+    internal bool IsSingleTextLine => EmoticonTextBlock.HasSingleTextLine(textBlock);
 
     public static readonly StyledProperty<string?> TextProperty = TextBlock.TextProperty.AddOwner<ShimmerTextBlock>();
 

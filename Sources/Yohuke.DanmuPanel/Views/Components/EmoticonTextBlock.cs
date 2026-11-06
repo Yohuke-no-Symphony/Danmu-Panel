@@ -34,6 +34,8 @@ public sealed class EmoticonTextBlock : TextBlock
 
     internal int HighlightedSourceStart { get; private set; } = -1;
     internal bool HasAnnotations => rubySyllables.Count > 0 || pronunciationRuns.Count > 0;
+    internal bool IsSingleTextLine => HasSingleTextLine(this) && (separateLine is null ||
+        HasSingleTextLine(separateLine.OriginalText) && HasSingleTextLine(separateLine.PronunciationText));
     internal event Action? AnnotationLayoutChanged;
 
     /// <summary>
@@ -134,6 +136,12 @@ public sealed class EmoticonTextBlock : TextBlock
 
     /// <inheritdoc/>
     protected override Type StyleKeyOverride => typeof(TextBlock);
+
+    internal static bool HasSingleTextLine(TextBlock text)
+    {
+        var lines = text.TextLayout.TextLines;
+        return lines.Count <= 1 && (lines.Count == 0 || !lines[0].HasCollapsed);
+    }
 
     /// <summary>修正 Avalonia 11.3.12 对 EmbeddedControlRun 使用严格大于等于比较而误判等宽溢出的边界。</summary>
     /// <remarks>只将原生排版约束增加一个浮点表示值，使恰好等宽的内联对象可放入该行，保留控件真实尺寸及单次测量。</remarks>

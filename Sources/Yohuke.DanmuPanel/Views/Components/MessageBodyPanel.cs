@@ -9,6 +9,7 @@ internal sealed class MessageBodyPanel : Panel
     private readonly Control translation;
     private readonly Func<double> getOriginalBaseline;
     private readonly Func<double> getTranslationBaseline;
+    private readonly Func<bool> canShareLine;
     private bool isInline;
     private double originalWidth;
     private double originalBaseline;
@@ -50,12 +51,13 @@ internal sealed class MessageBodyPanel : Panel
     }
 
     internal MessageBodyPanel(Control original, Control translation, Func<double> getOriginalBaseline,
-        Func<double> getTranslationBaseline)
+        Func<double> getTranslationBaseline, Func<bool> canShareLine)
     {
         this.original = original;
         this.translation = translation;
         this.getOriginalBaseline = getOriginalBaseline;
         this.getTranslationBaseline = getTranslationBaseline;
+        this.canShareLine = canShareLine;
         Children.Add(original);
         Children.Add(translation);
     }
@@ -63,31 +65,26 @@ internal sealed class MessageBodyPanel : Panel
     /// <inheritdoc />
     protected override Size MeasureOverride(Size availableSize)
     {
-        isInline = false;
-        if (AllowInline && original.IsVisible && translation.IsVisible)
-        {
-            original.Measure(Size.Infinity);
-            originalWidth = original.DesiredSize.Width;
-            if (originalWidth + HorizontalSpacing <= availableSize.Width)
-            {
-                translation.Measure(Size.Infinity);
-                var width = originalWidth + HorizontalSpacing + translation.DesiredSize.Width;
-                if (width <= availableSize.Width)
-                {
-                    isInline = true;
-                    originalBaseline = getOriginalBaseline();
-                    translationBaseline = getTranslationBaseline();
-                    inlineBaseline = Math.Max(originalBaseline, translationBaseline);
-                    var belowBaseline = Math.Max(original.DesiredSize.Height - originalBaseline,
-                        translation.DesiredSize.Height - translationBaseline);
-                    return new(width, inlineBaseline + belowBaseline);
-                }
-            }
-        }
-
         var constraint = new Size(availableSize.Width, double.PositiveInfinity);
         original.Measure(constraint);
         translation.Measure(constraint);
+        isInline = false;
+        if (AllowInline && original.IsVisible && translation.IsVisible)
+        {
+            originalWidth = original.DesiredSize.Width;
+            var width = originalWidth + HorizontalSpacing + translation.DesiredSize.Width;
+            if (width <= availableSize.Width && canShareLine())
+            {
+                isInline = true;
+                originalBaseline = getOriginalBaseline();
+                translationBaseline = getTranslationBaseline();
+                inlineBaseline = Math.Max(originalBaseline, translationBaseline);
+                var belowBaseline = Math.Max(original.DesiredSize.Height - originalBaseline,
+                    translation.DesiredSize.Height - translationBaseline);
+                return new(width, inlineBaseline + belowBaseline);
+            }
+        }
+
         return new(Math.Max(original.DesiredSize.Width, translation.DesiredSize.Width),
             original.DesiredSize.Height + translation.DesiredSize.Height + GetVerticalSpacing());
     }

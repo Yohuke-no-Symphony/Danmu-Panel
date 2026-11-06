@@ -25,6 +25,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     private readonly MessageKind messageKind;
     private readonly ListBox list;
     private readonly ListBox pinnedList;
+    private readonly MessageColumnResizeController columnResize;
     private DanmuFeedScrollController? scroll;
     private bool isScrollToTopPending;
     private bool columnWidthsDirty;
@@ -47,6 +48,9 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         this.reportError = reportError;
         messageKind = kind;
         Model = new(runtime, kind);
+        columnResize = new(this, (ratio, completed) =>
+            OnColumnResizeRequested(this, new(ratio, completed)));
+        AddHandler(MessageFeedColumnLayout.ResizeStartedEvent, OnColumnResizeStarted);
         AddHandler(MessageFeedColumnLayout.ResizeRequestedEvent, OnColumnResizeRequested);
         UpdateTextScale();
         UpdateBorderThickness();
@@ -250,12 +254,15 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         runtime.NotifyMessageColumnsChanged(messageKind);
     }
 
+    private void OnColumnResizeStarted(object? sender, MessageColumnResizeStartedEventArgs args)
+    {
+        args.Handled = true;
+        columnResize.Begin(args);
+    }
+
     private void CancelColumnResizes()
     {
-        foreach (var layout in this.GetVisualDescendants().OfType<MessageFeedColumnLayout>())
-        {
-            layout.CancelResize();
-        }
+        columnResize.Cancel();
     }
 
     private void ScheduleColumnWidthSave()
