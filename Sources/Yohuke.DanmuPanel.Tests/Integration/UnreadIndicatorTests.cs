@@ -44,7 +44,7 @@ public sealed class UnreadIndicatorTests
             var row = FindRow(view, message.Id);
             var pin = Assert.Single(row.GetVisualDescendants().OfType<TextBlock>(), control => control.Classes.Contains("messagePinBadge"));
             var identity = Assert.Single(row.GetVisualDescendants().OfType<DockPanel>(), control => control.Classes.Contains("danmuFeedIdentity"));
-            var body = Assert.Single(row.GetVisualDescendants().OfType<StackPanel>(), control => control.Classes.Contains("messageBody"));
+            var body = Assert.Single(row.GetVisualDescendants().OfType<Panel>(), control => control.Classes.Contains("messageBody"));
             Assert.False(pin.IsVisible);
             var rowSize = row.Bounds.Size;
             var identityBounds = identity.Children.Select(child => child.Bounds).ToArray();
@@ -111,7 +111,7 @@ public sealed class UnreadIndicatorTests
             Assert.Equal(new CornerRadius(7), card.CornerRadius);
             var dot = Assert.Single(row.GetVisualDescendants().OfType<Border>(), control => control.Classes.Contains("messageUnreadDot"));
             var identity = Assert.Single(row.GetVisualDescendants().OfType<DockPanel>(), control => control.Classes.Contains("danmuFeedIdentity"));
-            var body = Assert.Single(row.GetVisualDescendants().OfType<StackPanel>(), control => control.Classes.Contains("messageBody"));
+            var body = Assert.Single(row.GetVisualDescendants().OfType<Panel>(), control => control.Classes.Contains("messageBody"));
             Assert.True(dot.IsEffectivelyVisible);
             Assert.False(dot.IsHitTestVisible);
             Assert.Equal(Color.Parse("#EF4444"), Assert.IsAssignableFrom<ISolidColorBrush>(dot.Background).Color);

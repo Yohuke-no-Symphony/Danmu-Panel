@@ -140,7 +140,7 @@ public sealed class TranslationPlaceholderTests
             Pump(window);
             var item = Assert.Single(view.Model.Items);
             var row = FindRow(view, message.Id);
-            var body = row.GetVisualDescendants().OfType<StackPanel>().Single(panel => panel.Classes.Contains("messageBody"));
+            var body = row.GetVisualDescendants().OfType<Panel>().Single(panel => panel.Classes.Contains("messageBody"));
             var pendingHeight = body.Bounds.Height;
             Assert.True(item.IsTranslating);
 
@@ -160,12 +160,19 @@ public sealed class TranslationPlaceholderTests
                 control.Classes.Contains("originalText") && control.IsEffectivelyVisible);
             Assert.DoesNotContain(row.GetVisualDescendants().OfType<Control>(), control =>
                 control.Classes.Contains("translatedText") && control.IsEffectivelyVisible);
-            Assert.True(body.Bounds.Height < pendingHeight);
+            if (kind == MessageKind.Danmu)
+            {
+                Assert.InRange(body.Bounds.Height, 0, pendingHeight);
+            }
+            else
+            {
+                Assert.True(body.Bounds.Height < pendingHeight);
+            }
             Assert.InRange(Math.Abs(body.Bounds.Height - body.Children[0].Bounds.Height), 0, 0.5);
             Assert.Equal(VerticalAlignment.Center, body.VerticalAlignment);
             if (kind == MessageKind.Danmu)
             {
-                var layout = Assert.IsType<Grid>(body.Parent);
+                var layout = Assert.IsAssignableFrom<Grid>(body.Parent);
                 Assert.InRange(Math.Abs(body.Bounds.Center.Y - layout.Bounds.Height / 2), 0, 0.5);
             }
         }

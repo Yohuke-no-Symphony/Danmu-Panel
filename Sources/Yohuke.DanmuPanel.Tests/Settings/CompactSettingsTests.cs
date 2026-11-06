@@ -14,13 +14,18 @@ namespace Yohuke.DanmuPanel.Tests.Settings;
 /// <summary>验证紧凑偏好的默认值、持久化与设置草稿。</summary>
 public sealed class CompactSettingsTests
 {
-    /// <summary>旧配置未包含紧凑字段时采用新的阅读默认值。</summary>
-    [Fact]
-    public void ExistingConfigurationWithoutCompactFieldsUsesTheReadingDefaults()
+    /// <summary>首次启动和未包含紧凑字段的旧配置都默认使用紧凑显示。</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NewAndLegacyConfigurationsUseTheReadingDefaults(bool hasConfiguration)
     {
         using var directory = new MessageStoreTestDirectory();
         var store = new ConfigurationService(directory.Path);
-        File.WriteAllText(Path.Combine(directory.Path, "settings.json"), "{\"Language\":\"ja-JP\"}");
+        if (hasConfiguration)
+        {
+            File.WriteAllText(Path.Combine(directory.Path, "settings.json"), "{\"Language\":\"ja-JP\"}");
+        }
 
         var restored = store.Load().Settings;
 
@@ -28,7 +33,7 @@ public sealed class CompactSettingsTests
         Assert.False(restored.CompactDanmuWrap);
         Assert.True(restored.CompactSuperChatWrap);
         Assert.True(restored.AutoScrollLongMessages);
-        Assert.Equal("ja-JP", restored.Language);
+        Assert.Equal(hasConfiguration ? "ja-JP" : "system", restored.Language);
     }
 
     /// <summary>关闭紧凑显示后仍保存两组独立换行偏好。</summary>

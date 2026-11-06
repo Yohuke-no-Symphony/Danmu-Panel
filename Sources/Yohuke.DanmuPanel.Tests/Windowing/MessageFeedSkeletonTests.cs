@@ -67,7 +67,7 @@ public sealed class MessageFeedSkeletonTests
             Assert.Equal(realLayout.ColumnDefinitions[0].Width, skeletonLayout.ColumnDefinitions[0].Width);
             Assert.Equal(realLayout.ColumnDefinitions[1].Width, skeletonLayout.ColumnDefinitions[1].Width);
             Assert.Equal(realLayout.ColumnSpacing, skeletonLayout.ColumnSpacing);
-            var realBody = Assert.Single(real.GetVisualDescendants().OfType<StackPanel>(), control => control.Classes.Contains("messageBody"));
+            var realBody = Assert.Single(real.GetVisualDescendants().OfType<Panel>(), control => control.Classes.Contains("messageBody"));
             var skeletonBody = Assert.Single(placeholder.GetVisualDescendants().OfType<StackPanel>(), control => control.Classes.Contains("messageBody"));
             Assert.InRange(Math.Abs(realBody.TranslatePoint(default, list)!.Value.X -
                 skeletonBody.TranslatePoint(default, list)!.Value.X), 0, 1);

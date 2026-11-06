@@ -18,17 +18,23 @@ namespace Yohuke.DanmuPanel.Tests.Settings;
 /// <summary>验证正则屏蔽设置的兼容性、保存草稿和文件迁移。</summary>
 public sealed class DanmuRegexSettingsTests
 {
-    /// <summary>无新字段的旧配置自动得到一次启用的同传规则。</summary>
-    [Fact]
-    public void LegacyConfigurationGetsDefaultRule()
+    /// <summary>首次启动和缺失开关字段的旧配置保留同传规则，但默认不启用屏蔽。</summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("{\"Language\":\"ja-JP\"}")]
+    [InlineData("{\"DanmuRegexFilter\":{}}")]
+    public void NewAndLegacyConfigurationsKeepDefaultRuleDisabled(string? json)
     {
         using var directory = new MessageStoreTestDirectory();
         var store = new ConfigurationService(directory.Path);
-        File.WriteAllText(Path.Combine(directory.Path, "settings.json"), "{\"Language\":\"ja-JP\"}");
+        if (json is not null)
+        {
+            File.WriteAllText(Path.Combine(directory.Path, "settings.json"), json);
+        }
 
         var settings = store.Load().Settings.DanmuRegexFilter;
 
-        Assert.True(settings.Enabled);
+        Assert.False(settings.Enabled);
         Assert.Equal(@"^(.*?)【(.*\*?)】$", Assert.Single(settings.Patterns));
     }
 
@@ -37,6 +43,7 @@ public sealed class DanmuRegexSettingsTests
     [InlineData(true, false)]
     [InlineData(false, false)]
     [InlineData(true, true)]
+    [InlineData(false, true)]
     public async Task SettingsSurviveReloadWithoutReinsertingDefault(bool enabled, bool empty)
     {
         using var directory = new MessageStoreTestDirectory();
@@ -77,6 +84,7 @@ public sealed class DanmuRegexSettingsTests
                 .Single(value => value.Name == "DanmuRegexFilterEnabledCheckBox");
             var input = view.GetVisualDescendants().OfType<TextBox>()
                 .Single(value => value.Name == "DanmuRegexPatternsInput");
+            Assert.True(check.IsEffectivelyVisible);
             Assert.Equal(initiallyEnabled, check.IsChecked);
             Assert.Equal(@"^(.*?)【(.*\*?)】$", input.Text);
 

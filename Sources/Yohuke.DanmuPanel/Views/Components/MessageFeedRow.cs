@@ -14,6 +14,8 @@ namespace Yohuke.DanmuPanel.Views.Components;
 
 internal sealed class MessageFeedRow : Button
 {
+    private static IMultiValueConverter InlineTranslationConverter { get; } =
+        new FuncMultiValueConverter<string, bool>(texts => texts.All(text => text is not null && text.IndexOfAny(['\r', '\n']) < 0));
     private readonly bool canCopy;
     private readonly MessageFeedColumnLayout? columnLayout;
     private bool isCopyHoldEligible;
@@ -127,12 +129,23 @@ internal sealed class MessageFeedRow : Button
         var price = BoundText(nameof(MessageItemViewModel.Price));
         price.Classes.Add("scFeedPrice");
         price.HorizontalAlignment = HorizontalAlignment.Right;
-        var body = new StackPanel
+        var body = new MessageBodyPanel(originalRegion, translationRegion)
         {
             VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Children = { originalRegion, translationRegion }
+            HorizontalAlignment = HorizontalAlignment.Stretch
         };
+        if (kind == MessageKind.Danmu)
+        {
+            body.Bind(MessageBodyPanel.AllowInlineProperty, new MultiBinding
+            {
+                Converter = InlineTranslationConverter,
+                Bindings =
+                {
+                    new Binding(nameof(MessageItemViewModel.Detail)),
+                    new Binding(nameof(MessageItemViewModel.Translation))
+                }
+            });
+        }
         body.Classes.Add("messageBody");
         var layout = MessageFeedLayout.CreateGrid(kind);
         columnLayout = layout as MessageFeedColumnLayout;

@@ -228,7 +228,7 @@ public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
 
     private static Point MessageBodyPoint(MessageFeedRow row, Window window)
     {
-        var body = Assert.Single(row.GetVisualDescendants().OfType<StackPanel>(), control => control.Classes.Contains("messageBody"));
+        var body = Assert.Single(row.GetVisualDescendants().OfType<Panel>(), control => control.Classes.Contains("messageBody"));
         return body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), window)!.Value;
     }
 

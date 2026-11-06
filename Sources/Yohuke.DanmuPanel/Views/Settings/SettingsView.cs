@@ -203,7 +203,7 @@ public sealed class SettingsView : UserControl
                         WithHint(autoScrollLongMessages, "Settings.AutoScrollLongMessagesHelp")
                     }
                 }),
-            Card("Settings.DanmuRegexFilter",
+            Card("Settings.DanmuRegexFilter", danmuRegexEnabled,
                 Row("Settings.DanmuRegexPatterns", danmuRegexPatterns)),
             Card("Settings.Reading", Row("Settings.GiftMinimum", giftMinimum), Row("Settings.ComboPolicy", giftResetPolicy)),
             Card("Settings.Pinyin",

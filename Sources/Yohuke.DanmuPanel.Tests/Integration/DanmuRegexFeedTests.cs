@@ -12,7 +12,7 @@ namespace Yohuke.DanmuPanel.Tests.Integration;
 /// <summary>验证正则屏蔽的消息类型边界、分页和恢复行为。</summary>
 public sealed class DanmuRegexFeedTests
 {
-    /// <summary>普通弹幕隐藏后仍保留原记录及置顶，其他消息类型和未读不受影响。</summary>
+    /// <summary>默认不隐藏消息，开启屏蔽后仍保留原记录及置顶，其他消息类型和未读不受影响。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.Danmu)]
     [InlineData(MessageKind.SuperChat)]
@@ -32,6 +32,16 @@ public sealed class DanmuRegexFeedTests
         }
         using var model = new FeedViewModel(runtime, kind);
         await model.SelectRoomAsync(new() { Id = "tab", RoomId = "123" });
+
+        Assert.Equal(2, model.Items.Count);
+        if (kind == MessageKind.Danmu)
+        {
+            Assert.Equal(translation.Id, Assert.Single(model.PinnedItems).Record.Id);
+        }
+
+        runtime.Configuration.Settings.DanmuRegexFilter.Enabled = true;
+        await runtime.ApplySettingsAsync();
+        await model.RefreshAsync();
 
         Assert.Equal(kind == MessageKind.Danmu ? 1 : 2, model.Items.Count);
         Assert.NotNull(await runtime.Messages.GetByIdAsync(translation.Id));
@@ -70,7 +80,10 @@ public sealed class DanmuRegexFeedTests
     public async Task HiddenMessagesDoNotConsumePageSlotsOrHistoryBoundary()
     {
         using var directory = new MessageStoreTestDirectory();
-        await using var runtime = new PanelRuntime(new(directory.Path), new());
+        await using var runtime = new PanelRuntime(new(directory.Path), new()
+        {
+            Settings = new() { DanmuRegexFilter = new() { Enabled = true } }
+        });
         for (var index = 0; index < 120; index++)
         {
             await runtime.Messages.AppendAsync(Message($"文字{index}", index), new());
@@ -117,7 +130,7 @@ public sealed class DanmuRegexFeedTests
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = new PanelRuntime(new(directory.Path), new PanelConfiguration
         {
-            Settings = new() { HideEmoticonDanmu = true }
+            Settings = new() { HideEmoticonDanmu = true, DanmuRegexFilter = new() { Enabled = true } }
         });
         var emoticon = Message("😀", 0);
         var translation = Message("【同传】", 1);
@@ -152,7 +165,7 @@ public sealed class DanmuRegexFeedTests
     {
         using var directory = new MessageStoreTestDirectory();
         await using var store = new SqliteMessageStore(directory.DatabasePath);
-        var filter = new DanmuRegexFilter(new() { Patterns = ["^(a+)+$", "^广告"] });
+        var filter = new DanmuRegexFilter(new() { Enabled = true, Patterns = ["^(a+)+$", "^广告"] });
         await store.AppendAsync(Message(new string('a', 100_000) + "!", 0), new());
         await store.AppendAsync(Message(new string('a', 100_001) + "!", 1), new());
         await store.AppendAsync(Message("广告内容", 2), new());

@@ -21,7 +21,7 @@ public sealed class DanmuRegexFilterTests
     [InlineData("普通弹幕", false)]
     public void DefaultRuleMatchesOnlyTranslationFormat(string content, bool blocked)
     {
-        var filter = new DanmuRegexFilter(new());
+        var filter = new DanmuRegexFilter(new() { Enabled = true });
 
         Assert.Equal(blocked, filter.IsBlocked(content));
     }
@@ -45,13 +45,13 @@ public sealed class DanmuRegexFilterTests
     [Fact]
     public void SnapshotOwnsItsRulesAndEmptyListBlocksNothing()
     {
-        var settings = new DanmuRegexFilterSettings { Patterns = ["^广告"] };
+        var settings = new DanmuRegexFilterSettings { Enabled = true, Patterns = ["^广告"] };
         var filter = new DanmuRegexFilter(settings);
         settings.Patterns.Clear();
         settings.Enabled = false;
 
         Assert.True(filter.IsBlocked("广告内容"));
-        Assert.False(new DanmuRegexFilter(new() { Patterns = [] }).IsBlocked("【内容】"));
+        Assert.False(new DanmuRegexFilter(new() { Enabled = true, Patterns = [] }).IsBlocked("【内容】"));
     }
 
     /// <summary>无效规则在创建匹配器前拒绝，关闭状态同样不能保存损坏规则。</summary>
@@ -72,8 +72,8 @@ public sealed class DanmuRegexFilterTests
     public void TimedOutPatternDoesNotPreventOtherRulesFromMatching()
     {
         var content = new string('a', 100_000) + "!";
-        var filter = new DanmuRegexFilter(new() { Patterns = ["^(a+)+$"] });
-        var combined = new DanmuRegexFilter(new() { Patterns = ["^(a+)+$", "!$"] });
+        var filter = new DanmuRegexFilter(new() { Enabled = true, Patterns = ["^(a+)+$"] });
+        var combined = new DanmuRegexFilter(new() { Enabled = true, Patterns = ["^(a+)+$", "!$"] });
 
         Assert.False(filter.IsBlocked(content));
         Assert.True(combined.IsBlocked(content));
@@ -83,7 +83,7 @@ public sealed class DanmuRegexFilterTests
     [Fact]
     public void TimedOutPatternIsSuspendedForTheSettingsSnapshot()
     {
-        var settings = new DanmuRegexFilterSettings { Patterns = ["^(a+)+$", "^广告"] };
+        var settings = new DanmuRegexFilterSettings { Enabled = true, Patterns = ["^(a+)+$", "^广告"] };
         var filter = new DanmuRegexFilter(settings);
         var timedOut = new List<int>();
         filter.PatternTimedOut += timedOut.Add;
@@ -104,6 +104,6 @@ public sealed class DanmuRegexFilterTests
     {
         Assert.False(DanmuRegexFilter.IsValidPattern(pattern));
         Assert.Throws<InvalidDataException>(() => new DanmuRegexFilter(new() { Patterns = [pattern] }));
-        Assert.True(new DanmuRegexFilter(new() { Patterns = [@"^a\nb$"] }).IsBlocked("a\nb"));
+        Assert.True(new DanmuRegexFilter(new() { Enabled = true, Patterns = [@"^a\nb$"] }).IsBlocked("a\nb"));
     }
 }

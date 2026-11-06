@@ -359,7 +359,7 @@ public sealed class MessageFeedCompactTests
 
     private static void AssertBodyAlignment(Button row)
     {
-        var body = row.GetVisualDescendants().OfType<StackPanel>().Single(panel => panel.Classes.Contains("messageBody"));
+        var body = row.GetVisualDescendants().OfType<Panel>().Single(panel => panel.Classes.Contains("messageBody"));
         Assert.Equal(VerticalAlignment.Center, body.VerticalAlignment);
         foreach (var content in VisibleBodyContents(row))
         {
