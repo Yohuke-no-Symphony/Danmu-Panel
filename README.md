@@ -43,6 +43,10 @@ Run tests for the module you change, for example the shell window:
 dotnet test Sources/Yohuke.DanmuPanel.Tests/Yohuke.DanmuPanel.Tests.csproj --filter FullyQualifiedName~Windowing.ShellWindowTests
 ```
 
+## Credits
+
+The character in the icon was illustrated by @hshjbbnd. The character is [椎名菜羽](https://space.bilibili.com/623441612).
+
 ## License
 
 Based on Danmu Neo and licensed under [GPL-3.0](LICENSE). Third-party components retain their respective licenses.

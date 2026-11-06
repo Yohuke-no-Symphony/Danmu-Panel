@@ -43,6 +43,10 @@ dotnet run --project Sources/Yohuke.DanmuPanel/Yohuke.DanmuPanel.csproj
 dotnet test Sources/Yohuke.DanmuPanel.Tests/Yohuke.DanmuPanel.Tests.csproj --filter FullyQualifiedName~Windowing.ShellWindowTests
 ```
 
+## 鸣谢
+
+图标上的角色由 @hshjbbnd 绘制，形象来源为[椎名菜羽](https://space.bilibili.com/623441612)。
+
 ## 许可
 
 基于 Danmu Neo，采用 [GPL-3.0](LICENSE) 许可。第三方组件保留各自许可。

@@ -43,6 +43,10 @@ dotnet run --project Sources/Yohuke.DanmuPanel/Yohuke.DanmuPanel.csproj
 dotnet test Sources/Yohuke.DanmuPanel.Tests/Yohuke.DanmuPanel.Tests.csproj --filter FullyQualifiedName~Windowing.ShellWindowTests
 ```
 
+## クレジット
+
+アイコンのキャラクターイラストは @hshjbbnd が描いたものです。キャラクターは[椎名菜羽](https://space.bilibili.com/623441612)です。
+
 ## ライセンス
 
 Danmu Neo をベースとし、[GPL-3.0](LICENSE) で公開しています。サードパーティ製コンポーネントにはそれぞれのライセンスが適用されます。
