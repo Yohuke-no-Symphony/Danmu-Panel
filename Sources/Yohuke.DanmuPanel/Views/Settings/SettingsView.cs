@@ -442,6 +442,7 @@ public sealed class SettingsView : UserControl
             ShowSuperChatPinyin = superChatPinyin.IsChecked == true,
             PinyinLayout = (PinyinLayoutMode)pinyinLayout.SelectedIndex,
             MessageTextScale = (double)(messageTextScale.Value ?? 100) / 100,
+            MessageColumns = settings.MessageColumns,
             CompactDanmuDisplay = compactDisplay.IsChecked == true,
             CompactDanmuWrap = compactDanmuWrap.IsChecked == true,
             CompactSuperChatWrap = compactSuperChatWrap.IsChecked == true,

@@ -3,6 +3,7 @@
   "LanguageID": "en-US",
   "Strings": {
     "Panel.CopyText": "Select and copy…",
+    "Panel.ResizeColumns": "Drag to resize the user and message columns (arrow keys to adjust)",
     "Panel.CopyOriginal": "Original",
     "Panel.CopyTranslation": "Translation",
     "Panel.CopySelection": "Copy selection",

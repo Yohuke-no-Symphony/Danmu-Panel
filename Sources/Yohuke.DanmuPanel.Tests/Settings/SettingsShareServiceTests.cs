@@ -112,6 +112,10 @@ public sealed class SettingsShareServiceTests
         Assert.NotSame(source.Translation.Glossary, target.Translation.Glossary);
         Assert.NotSame(source.Translation.Glossary[0], target.Translation.Glossary[0]);
         Assert.NotSame(source.Reading, target.Reading);
+        Assert.NotSame(source.MessageColumns, target.MessageColumns);
+        Assert.NotSame(source.MessageColumns.Danmu, target.MessageColumns.Danmu);
+        Assert.NotSame(source.MessageColumns.Gift, target.MessageColumns.Gift);
+        Assert.NotSame(source.MessageColumns.Guard, target.MessageColumns.Guard);
         Assert.NotSame(source.DanmuRegexFilter, target.DanmuRegexFilter);
         Assert.NotSame(source.DanmuRegexFilter.Patterns, target.DanmuRegexFilter.Patterns);
         var applied = JsonSerializer.Serialize(target);
@@ -124,6 +128,9 @@ public sealed class SettingsShareServiceTests
         source.Translation.Glossary.Clear();
         source.DanmuRegexFilter.Enabled = true;
         source.DanmuRegexFilter.Patterns.Clear();
+        source.MessageColumns.Danmu.RegularIdentityRatio = 0.7;
+        source.MessageColumns.Gift.CompactIdentityRatio = 0.2;
+        source.MessageColumns.Guard.RegularIdentityRatio = 0.5;
 
         Assert.Equal(applied, JsonSerializer.Serialize(target));
     }
@@ -133,6 +140,7 @@ public sealed class SettingsShareServiceTests
     [InlineData("appearance")]
     [InlineData("colors")]
     [InlineData("reading")]
+    [InlineData("messageColumns")]
     [InlineData("danmuRegexFilter")]
     [InlineData("translation")]
     public void ApplyToRejectsInvalidSourceBeforeChangingTarget(string invalidSection)
@@ -148,6 +156,9 @@ public sealed class SettingsShareServiceTests
                 break;
             case "reading":
                 source.Reading = new() { GiftAutoPinMinimum = -1 };
+                break;
+            case "messageColumns":
+                source.MessageColumns.Gift.CompactIdentityRatio = double.NaN;
                 break;
             case "danmuRegexFilter":
                 source.DanmuRegexFilter.Patterns = ["["];
@@ -285,6 +296,16 @@ public sealed class SettingsShareServiceTests
     [InlineData("\"Reading\":{\"GiftReadResetPolicy\":3}")]
     [InlineData("\"Reading\":{\"GiftAutoPinMinimum\":-0.01}")]
     [InlineData("\"Reading\":{\"GiftAutoPinMinimum\":1000000001}")]
+    [InlineData("\"MessageColumns\":null")]
+    [InlineData("\"MessageColumns\":{\"Danmu\":null}")]
+    [InlineData("\"MessageColumns\":{\"Gift\":null}")]
+    [InlineData("\"MessageColumns\":{\"Guard\":null}")]
+    [InlineData("\"MessageColumns\":{\"Danmu\":{\"RegularIdentityRatio\":0}}")]
+    [InlineData("\"MessageColumns\":{\"Danmu\":{\"CompactIdentityRatio\":1}}")]
+    [InlineData("\"MessageColumns\":{\"Gift\":{\"RegularIdentityRatio\":-0.1}}")]
+    [InlineData("\"MessageColumns\":{\"Gift\":{\"CompactIdentityRatio\":1.1}}")]
+    [InlineData("\"MessageColumns\":{\"Guard\":{\"RegularIdentityRatio\":0}}")]
+    [InlineData("\"MessageColumns\":{\"Guard\":{\"CompactIdentityRatio\":1}}")]
     [InlineData("\"PinyinLayout\":2")]
     [InlineData("\"MessageTextScale\":0.49")]
     [InlineData("\"MessageTextScale\":2.01")]
@@ -403,6 +424,12 @@ public sealed class SettingsShareServiceTests
             ShowSuperChatPinyin = true,
             PinyinLayout = PinyinLayoutMode.SeparateLine,
             MessageTextScale = 1.5,
+            MessageColumns = new()
+            {
+                Danmu = new() { RegularIdentityRatio = 0.31, CompactIdentityRatio = 0.27 },
+                Gift = new() { RegularIdentityRatio = 0.42, CompactIdentityRatio = 0.36 },
+                Guard = new() { RegularIdentityRatio = 0.63, CompactIdentityRatio = 0.51 }
+            },
             CompactDanmuDisplay = false,
             CompactDanmuWrap = true,
             CompactSuperChatWrap = false,

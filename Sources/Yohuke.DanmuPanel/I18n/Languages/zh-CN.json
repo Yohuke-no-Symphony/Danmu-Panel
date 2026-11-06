@@ -3,6 +3,7 @@
   "LanguageID": "zh-CN",
   "Strings": {
     "Panel.CopyText": "选择并复制…",
+    "Panel.ResizeColumns": "拖动调整用户信息与正文列宽（方向键微调）",
     "Panel.CopyOriginal": "原文",
     "Panel.CopyTranslation": "译文",
     "Panel.CopySelection": "复制选中内容",

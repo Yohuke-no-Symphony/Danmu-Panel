@@ -34,6 +34,9 @@ public sealed class PanelRuntime : IAsyncDisposable
     internal MessagePresentationService Presentations { get; }
     public event Action<string>? Changed;
 
+    /// <summary>通知同类消息面板同步列宽，不刷新消息数据或翻译任务。</summary>
+    public event Action<MessageKind>? MessageColumnsChanged;
+
     /// <summary>通知消息或译文变化；类型为空时重读该房间的所有消息面板。</summary>
     public event Action<string, MessageKind?>? MessagesChanged;
 
@@ -125,6 +128,12 @@ public sealed class PanelRuntime : IAsyncDisposable
     public void NotifyAppearanceChanged()
     {
         Changed?.Invoke("");
+    }
+
+    /// <summary>在消息列宽调整后同步各宿主的显示比例。</summary>
+    public void NotifyMessageColumnsChanged(MessageKind kind)
+    {
+        MessageColumnsChanged?.Invoke(kind);
     }
 
     /// <summary>在监听停止并排空后清空记录，完成后恢复原监听。</summary>

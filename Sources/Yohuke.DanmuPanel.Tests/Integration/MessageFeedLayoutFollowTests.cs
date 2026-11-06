@@ -27,6 +27,8 @@ public sealed class MessageFeedLayoutFollowTests
     [InlineData(MessageKind.Danmu, nameof(PanelSettings.CompactDanmuDisplay), true)]
     [InlineData(MessageKind.Danmu, nameof(PanelSettings.CompactDanmuWrap), true)]
     [InlineData(MessageKind.SuperChat, nameof(PanelSettings.CompactSuperChatWrap), true)]
+    [InlineData(MessageKind.Danmu, nameof(PanelSettings.MessageColumns), false)]
+    [InlineData(MessageKind.Danmu, nameof(PanelSettings.MessageColumns), true)]
     public async Task LayoutSettingsPreserveFollowOrReadingPosition(MessageKind kind, string setting, bool readingHistory)
     {
         using var directory = new MessageStoreTestDirectory();
@@ -34,7 +36,7 @@ public sealed class MessageFeedLayoutFollowTests
         var settings = runtime.Configuration.Settings;
         settings.Translation.Enabled = false;
         settings.CompactDanmuDisplay = true;
-        settings.CompactDanmuWrap = false;
+        settings.CompactDanmuWrap = setting == nameof(PanelSettings.MessageColumns);
         settings.CompactSuperChatWrap = false;
         settings.AutoScrollLongMessages = false;
         var time = DateTimeOffset.FromUnixTimeSeconds(1800000000);
@@ -78,6 +80,10 @@ public sealed class MessageFeedLayoutFollowTests
             var initialExtent = viewer.Extent.Height;
 
             ApplyLayoutChange(settings, setting);
+            if (setting == nameof(PanelSettings.MessageColumns))
+            {
+                runtime.NotifyAppearanceChanged();
+            }
             await view.Model.RefreshAsync();
             Pump(window);
 
@@ -121,6 +127,9 @@ public sealed class MessageFeedLayoutFollowTests
                 break;
             case nameof(PanelSettings.CompactSuperChatWrap):
                 settings.CompactSuperChatWrap = true;
+                break;
+            case nameof(PanelSettings.MessageColumns):
+                settings.MessageColumns.Danmu.CompactIdentityRatio = 0.75;
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(setting));

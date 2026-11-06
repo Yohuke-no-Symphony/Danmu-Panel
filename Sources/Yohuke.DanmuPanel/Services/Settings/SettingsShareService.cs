@@ -54,6 +54,7 @@ public sealed class SettingsShareService
         target.ShowSuperChatPinyin = settings.ShowSuperChatPinyin;
         target.PinyinLayout = settings.PinyinLayout;
         target.MessageTextScale = settings.MessageTextScale;
+        target.MessageColumns = settings.MessageColumns;
         target.CompactDanmuDisplay = settings.CompactDanmuDisplay;
         target.CompactDanmuWrap = settings.CompactDanmuWrap;
         target.CompactSuperChatWrap = settings.CompactSuperChatWrap;
@@ -122,6 +123,7 @@ public sealed class SettingsShareService
         }
         ColorSchemeService.Validate(settings.ColorScheme);
         DanmuRegexFilter.Validate(settings.DanmuRegexFilter);
+        MessageColumnSettingsValidator.Validate(settings.MessageColumns);
         var reading = settings.Reading;
         if (reading is null || reading.GiftAutoPinMinimum is < 0 or > 1000000000 || !Enum.IsDefined(reading.GiftReadResetPolicy))
         {

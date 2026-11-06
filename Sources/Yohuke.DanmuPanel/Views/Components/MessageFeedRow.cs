@@ -15,6 +15,7 @@ namespace Yohuke.DanmuPanel.Views.Components;
 internal sealed class MessageFeedRow : Button
 {
     private readonly bool canCopy;
+    private readonly MessageFeedColumnLayout? columnLayout;
     private bool isCopyHoldEligible;
     private bool suppressClick;
     private Point copyPressPosition;
@@ -36,6 +37,7 @@ internal sealed class MessageFeedRow : Button
         time.Classes.Add("danmuFeedMeta");
         DockPanel.SetDock(time, Avalonia.Controls.Dock.Right);
         identity.Children.Add(time);
+        Grid? medalSlot = null;
         if (kind == MessageKind.Danmu)
         {
             var medal = BoundText(nameof(MessageItemViewModel.MedalName));
@@ -60,9 +62,8 @@ internal sealed class MessageFeedRow : Button
             {
                 Converter = BoolConverters.Not
             });
-            var medalSlot = new Grid { Children = { medalFrame, noMedalFrame } };
+            medalSlot = new() { Children = { medalFrame, noMedalFrame } };
             medalSlot.Classes.Add("danmuMedalSlot");
-            identity.Children.Add(medalSlot);
         }
         var name = new EmoticonTextBlock();
         name.Bind(EmoticonTextBlock.ContentTextProperty, new Binding(nameof(MessageItemViewModel.Name)));
@@ -134,6 +135,7 @@ internal sealed class MessageFeedRow : Button
         };
         body.Classes.Add("messageBody");
         var layout = MessageFeedLayout.CreateGrid(kind);
+        columnLayout = layout as MessageFeedColumnLayout;
         if (kind == MessageKind.SuperChat)
         {
             var header = MessageFeedLayout.CreateHeaderGrid();
@@ -146,8 +148,13 @@ internal sealed class MessageFeedRow : Button
         }
         else
         {
+            if (medalSlot is not null)
+            {
+                layout.Children.Add(medalSlot);
+            }
+            Grid.SetColumn(identity, 1);
             layout.Children.Add(identity);
-            Grid.SetColumn(body, 1);
+            Grid.SetColumn(body, 3);
             layout.Children.Add(body);
         }
         var isCard = kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard;
@@ -273,6 +280,7 @@ internal sealed class MessageFeedRow : Button
     /// <inheritdoc />
     protected override void OnDataContextChanged(EventArgs e)
     {
+        columnLayout?.CancelResize();
         CancelCopyInteraction();
         base.OnDataContextChanged(e);
     }

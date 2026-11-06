@@ -183,7 +183,7 @@ public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
         }
         else
         {
-            var point = row.TranslatePoint(new Point(row.Bounds.Width / 2, row.Bounds.Height / 2), window)!.Value;
+            var point = MessageBodyPoint(row, window);
             window.MouseMove(point);
             window.MouseDown(point, MouseButton.Left);
             window.MouseUp(point, MouseButton.Left);
@@ -204,9 +204,9 @@ public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
         var menu = Assert.IsAssignableFrom<ContextMenu>(owner.ContextMenu);
         try
         {
-            if (owner is MessageFeedRow)
+            if (owner is MessageFeedRow row)
             {
-                var point = owner.TranslatePoint(new Point(owner.Bounds.Width / 2, owner.Bounds.Height / 2), window)!.Value;
+                var point = MessageBodyPoint(row, window);
                 window.MouseMove(point);
                 window.MouseDown(point, MouseButton.Right);
                 window.MouseUp(point, MouseButton.Right);
@@ -224,6 +224,12 @@ public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
         {
             menu.Close();
         }
+    }
+
+    private static Point MessageBodyPoint(MessageFeedRow row, Window window)
+    {
+        var body = Assert.Single(row.GetVisualDescendants().OfType<StackPanel>(), control => control.Classes.Contains("messageBody"));
+        return body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), window)!.Value;
     }
 
     private static Control[] VisibleContainers(ListBox list, ScrollViewer viewer)

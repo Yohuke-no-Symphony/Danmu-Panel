@@ -5,20 +5,16 @@ namespace Yohuke.DanmuPanel.Views.Components;
 
 internal static class MessageFeedLayout
 {
-    internal static Grid CreateGrid(MessageKind kind)
+    internal static Grid CreateGrid(MessageKind kind, bool canResize = true)
     {
-        var grid = new Grid();
         if (kind == MessageKind.SuperChat)
         {
+            var grid = new Grid();
             grid.RowDefinitions = new("Auto,Auto");
             grid.Classes.Add("scFeedLayout");
+            return grid;
         }
-        else
-        {
-            grid.ColumnDefinitions = new(kind == MessageKind.Guard ? "3*,2*" : "2*,3*");
-            grid.Classes.Add("danmuFeedLayout");
-        }
-        return grid;
+        return new MessageFeedColumnLayout(kind, canResize);
     }
 
     internal static Grid CreateHeaderGrid()

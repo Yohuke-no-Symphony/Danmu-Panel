@@ -183,14 +183,14 @@ public sealed class MessageFeedSkeleton : Button
         var time = CreateTextSlot("00:00:00", "danmuFeedMeta");
         DockPanel.SetDock(time, Avalonia.Controls.Dock.Right);
         identity.Children.Add(time);
+        Grid? medalSlot = null;
         if (Kind == MessageKind.Danmu)
         {
             var medalText = CreateTextSlot("　", "danmuMedalText");
             var medal = new Border { Child = medalText, Opacity = 0 };
             medal.Classes.Add("danmuMedalBadge");
-            var medalSlot = new Grid { Children = { medal } };
+            medalSlot = new() { Children = { medal } };
             medalSlot.Classes.Add("danmuMedalSlot");
-            identity.Children.Add(medalSlot);
             slots.Add((medal, 1, 1, HorizontalAlignment.Left));
         }
         var name = CreateTextSlot("　", "danmuFeedUser");
@@ -211,7 +211,7 @@ public sealed class MessageFeedSkeleton : Button
             Children = { new Grid { Children = { original, compact } } }
         };
         body.Classes.Add("messageBody");
-        var layout = MessageFeedLayout.CreateGrid(Kind);
+        var layout = MessageFeedLayout.CreateGrid(Kind, canResize: false);
         if (Kind == MessageKind.SuperChat)
         {
             var header = MessageFeedLayout.CreateHeaderGrid();
@@ -225,8 +225,13 @@ public sealed class MessageFeedSkeleton : Button
         }
         else
         {
+            if (medalSlot is not null)
+            {
+                layout.Children.Add(medalSlot);
+            }
+            Grid.SetColumn(identity, 1);
             layout.Children.Add(identity);
-            Grid.SetColumn(body, 1);
+            Grid.SetColumn(body, 3);
         }
         layout.Children.Add(body);
         var isCard = Kind != MessageKind.Danmu;

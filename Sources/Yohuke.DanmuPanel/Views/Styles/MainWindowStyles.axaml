@@ -1025,6 +1025,22 @@
         <Setter Property="RowSpacing" Value="1" />
     </Style>
 
+    <Style Selector="Thumb.messageColumnSplitter, Border.messageColumnSplitterSpace">
+        <Setter Property="Width" Value="10" />
+    </Style>
+
+    <Style Selector="Thumb.messageColumnSplitter">
+        <Setter Property="Background" Value="{DynamicResource AppSplitterBrush}" />
+    </Style>
+
+    <Style Selector="Thumb.messageColumnSplitter:pointerover, Thumb.messageColumnSplitter:pressed, Thumb.messageColumnSplitter:focus-visible">
+        <Setter Property="Background" Value="{DynamicResource AppPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="Grid.compactDanmu Thumb.messageColumnSplitter, Grid.compactDanmu Border.messageColumnSplitterSpace">
+        <Setter Property="Width" Value="6" />
+    </Style>
+
     <Style Selector="Grid.compactDanmu Button.danmuFeedButton">
         <Setter Property="Padding" Value="4,2" />
         <Setter Property="Margin" Value="0" />

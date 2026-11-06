@@ -22,9 +22,14 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
 {
     private readonly PanelRuntime runtime;
     private readonly Action<Exception> reportError;
+    private readonly MessageKind messageKind;
     private readonly ListBox list;
     private readonly ListBox pinnedList;
     private DanmuFeedScrollController? scroll;
+    private bool columnWidthsDirty;
+    private int columnWidthRevision;
+    private int scheduledColumnWidthRevision = -1;
+    internal Task PendingColumnWidthSave { get; private set; } = Task.CompletedTask;
     internal MessageCopyPopup? CopyPopup { get; private set; }
     public FeedViewModel Model { get; }
 
@@ -39,7 +44,9 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     {
         this.runtime = runtime;
         this.reportError = reportError;
+        messageKind = kind;
         Model = new(runtime, kind);
+        AddHandler(MessageFeedColumnLayout.ResizeRequestedEvent, OnColumnResizeRequested);
         UpdateTextScale();
         Model.Failed += reportError;
         list = CreateList(Model.ScrollingRows, kind, "ScrollingMessages");
@@ -100,6 +107,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         {
             if (args.PropertyName == nameof(FeedViewModel.SelectedRoom))
             {
+                CancelColumnResizes();
                 CopyPopup?.Hide();
             }
             else if (args.PropertyName == nameof(FeedViewModel.HasScrollingItems))
@@ -111,13 +119,143 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
                 UpdateTextScale();
                 scroll?.NotifyLayoutChanged();
             }
-            else if (args.PropertyName is nameof(FeedViewModel.IsCompactDisplay) or
-                     nameof(FeedViewModel.IsCompactMessageWrap) or nameof(FeedViewModel.IsCompactSuperChatWrap))
+            else if (args.PropertyName == nameof(FeedViewModel.IsCompactDisplay))
+            {
+                CancelColumnResizes();
+                UpdateColumnRatio();
+                scroll?.NotifyLayoutChanged();
+            }
+            else if (args.PropertyName is nameof(FeedViewModel.IsCompactMessageWrap) or nameof(FeedViewModel.IsCompactSuperChatWrap))
             {
                 scroll?.NotifyLayoutChanged();
             }
         };
         Content = surface;
+        UpdateColumnRatio();
+    }
+
+    /// <inheritdoc />
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        runtime.Changed += OnRuntimeChanged;
+        runtime.MessageColumnsChanged += OnMessageColumnsChanged;
+        UpdateColumnRatio();
+    }
+
+    /// <inheritdoc />
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        CancelColumnResizes();
+        ScheduleColumnWidthSave();
+        runtime.Changed -= OnRuntimeChanged;
+        runtime.MessageColumnsChanged -= OnMessageColumnsChanged;
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    private void OnRuntimeChanged(string roomId)
+    {
+        if (roomId.Length == 0)
+        {
+            CancelColumnResizes();
+            UpdateColumnRatio();
+        }
+    }
+
+    private void OnMessageColumnsChanged(MessageKind changedKind)
+    {
+        if (changedKind == messageKind)
+        {
+            UpdateColumnRatio();
+        }
+    }
+
+    private void UpdateColumnRatio()
+    {
+        if (messageKind == MessageKind.SuperChat)
+        {
+            return;
+        }
+        var widths = runtime.Configuration.Settings.MessageColumns.GetWidths(messageKind);
+        var ratio = Model.IsCompactDisplay ? widths.CompactIdentityRatio : widths.RegularIdentityRatio;
+        if (GetValue(MessageFeedColumnLayout.IdentityRatioProperty) is { } current && current.Equals(ratio))
+        {
+            return;
+        }
+        scroll?.BeginViewportUpdate();
+        try
+        {
+            SetValue(MessageFeedColumnLayout.IdentityRatioProperty, ratio);
+            scroll?.NotifyLayoutChanged();
+        }
+        finally
+        {
+            scroll?.EndViewportUpdate();
+        }
+    }
+
+    private void OnColumnResizeRequested(object? sender, MessageColumnResizeEventArgs args)
+    {
+        args.Handled = true;
+        if (args.IsCompleted)
+        {
+            ScheduleColumnWidthSave();
+            return;
+        }
+        var widths = runtime.Configuration.Settings.MessageColumns.GetWidths(messageKind);
+        var previous = Model.IsCompactDisplay ? widths.CompactIdentityRatio : widths.RegularIdentityRatio;
+        if (previous.Equals(args.Ratio))
+        {
+            return;
+        }
+        if (Model.IsCompactDisplay)
+        {
+            widths.CompactIdentityRatio = args.Ratio;
+        }
+        else
+        {
+            widths.RegularIdentityRatio = args.Ratio;
+        }
+        columnWidthsDirty = true;
+        columnWidthRevision++;
+        runtime.NotifyMessageColumnsChanged(messageKind);
+    }
+
+    private void CancelColumnResizes()
+    {
+        foreach (var layout in this.GetVisualDescendants().OfType<MessageFeedColumnLayout>())
+        {
+            layout.CancelResize();
+        }
+    }
+
+    private void ScheduleColumnWidthSave()
+    {
+        if (!columnWidthsDirty || scheduledColumnWidthRevision == columnWidthRevision)
+        {
+            return;
+        }
+        var revision = columnWidthRevision;
+        scheduledColumnWidthRevision = revision;
+        PendingColumnWidthSave = RunAsync(async () =>
+        {
+            try
+            {
+                await runtime.ConfigurationStore.SaveAsync(runtime.Configuration);
+            }
+            catch
+            {
+                if (scheduledColumnWidthRevision == revision)
+                {
+                    scheduledColumnWidthRevision = -1;
+                }
+                throw;
+            }
+            if (columnWidthRevision == revision)
+            {
+                columnWidthsDirty = false;
+            }
+        });
     }
 
     private void UpdateTextScale()

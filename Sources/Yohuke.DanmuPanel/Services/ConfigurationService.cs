@@ -39,6 +39,7 @@ public sealed class ConfigurationService
     {
         ColorSchemeService.Validate(configuration.Settings.ColorScheme);
         DanmuRegexFilter.Validate(configuration.Settings.DanmuRegexFilter);
+        MessageColumnSettingsValidator.Validate(configuration.Settings.MessageColumns);
         var snapshots = new Dictionary<string, string>
         {
             ["settings.json"] = JsonSerializer.Serialize(configuration.Settings, JSON_OPTIONS),
@@ -101,6 +102,7 @@ public sealed class ConfigurationService
             {
                 ColorSchemeService.Validate(settings.ColorScheme);
                 DanmuRegexFilter.Validate(settings.DanmuRegexFilter);
+                MessageColumnSettingsValidator.Validate(settings.MessageColumns);
             }
             return true;
         }

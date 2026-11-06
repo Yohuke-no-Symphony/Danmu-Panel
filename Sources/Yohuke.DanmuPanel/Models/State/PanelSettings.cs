@@ -34,6 +34,9 @@ public sealed class PanelSettings
     /// <summary>弹幕、SC、礼物及舰长面板共用的文字缩放比例，默认 1。</summary>
     public double MessageTextScale { get; set; } = 1;
 
+    /// <summary>宽松与紧凑布局分别记忆消息分栏比例，粉丝牌保持固定宽度。</summary>
+    public MessageColumnSettings MessageColumns { get; set; } = new();
+
     /// <summary>为四类消息启用 Neo 紧凑显示，旧配置默认启用。</summary>
     public bool CompactDanmuDisplay { get; set; } = true;
 
