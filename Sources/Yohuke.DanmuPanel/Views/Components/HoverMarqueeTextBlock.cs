@@ -29,6 +29,7 @@ public sealed class HoverMarqueeTextBlock : UserControl
     private bool initialized;
     private bool isAttached;
     private bool isInViewport;
+    private Point? hoverPoint;
     private readonly DispatcherTimer timer = new()
     {
         Interval = TIMER_INTERVAL
@@ -137,7 +138,18 @@ public sealed class HoverMarqueeTextBlock : UserControl
         timer.Tick += Timer_OnTick;
         PointerEntered += Control_OnPointerEntered;
         PointerExited += Control_OnPointerExited;
-        PointerMoved += (_, args) => textBlock.UpdateHighlight(args.GetPosition(textBlock));
+        PointerMoved += (_, args) =>
+        {
+            hoverPoint = args.GetPosition(this);
+            textBlock.UpdateHighlight(args.GetPosition(textBlock));
+            UpdateEmoticonHover();
+        };
+        PointerPressed += (_, _) =>
+        {
+            hoverPoint = null;
+            textBlock.ClearEmoticonHover();
+        };
+        textBlock.EmoticonHoverChanged += UpdateScrolling;
         textBlock.AnnotationLayoutChanged += () =>
         {
             if (initialized)
@@ -159,6 +171,8 @@ public sealed class HoverMarqueeTextBlock : UserControl
         {
             isAttached = false;
             isInViewport = false;
+            hoverPoint = null;
+            textBlock.ClearEmoticonHover();
             foreach (var ancestor in visibilityAncestors)
             {
                 ancestor.PropertyChanged -= Ancestor_OnPropertyChanged;
@@ -243,8 +257,8 @@ public sealed class HoverMarqueeTextBlock : UserControl
     }
 
     private bool IsAnimationAvailable => isAttached && isInViewport && IsEffectivelyVisible;
-    private bool IsPausedForAnnotation => textBlock.HasAnnotations && IsPointerOver;
-    private bool CanAnimate => IsAnimationAvailable && (AutoScroll || IsPointerOver) && !IsPausedForAnnotation;
+    private bool IsPausedForHover => (textBlock.HasAnnotations || textBlock.HasHoveredEmoticon) && IsPointerOver;
+    private bool CanAnimate => IsAnimationAvailable && (AutoScroll || IsPointerOver) && !IsPausedForHover;
 
     /// <inheritdoc/>
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -259,6 +273,8 @@ public sealed class HoverMarqueeTextBlock : UserControl
             change.Property == AutoScrollProperty || change.Property == DataContextProperty ||
             change.Property == AnnotationsProperty || change.Property == PinyinLayoutProperty)
         {
+            hoverPoint = null;
+            textBlock.ClearEmoticonHover();
             StopScrolling();
             UpdateScrolling();
         }
@@ -270,7 +286,9 @@ public sealed class HoverMarqueeTextBlock : UserControl
 
     private void Control_OnPointerEntered(object? sender, PointerEventArgs e)
     {
-        if (textBlock.HasAnnotations)
+        hoverPoint = e.GetPosition(this);
+        UpdateEmoticonHover();
+        if (textBlock.HasAnnotations || textBlock.HasHoveredEmoticon)
         {
             UpdateScrolling();
             return;
@@ -285,6 +303,8 @@ public sealed class HoverMarqueeTextBlock : UserControl
 
     private void Control_OnPointerExited(object? sender, PointerEventArgs e)
     {
+        hoverPoint = null;
+        textBlock.ClearEmoticonHover();
         textBlock.ClearHighlight();
         if (textBlock.HasAnnotations)
         {
@@ -300,6 +320,8 @@ public sealed class HoverMarqueeTextBlock : UserControl
     /// <inheritdoc />
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
+        hoverPoint = null;
+        textBlock.ClearEmoticonHover();
         var horizontal = e.Delta.X != 0 ? e.Delta.X :
             e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? e.Delta.Y : 0;
         if (textBlock.HasAnnotations && horizontal != 0)
@@ -308,6 +330,8 @@ public sealed class HoverMarqueeTextBlock : UserControl
             controller.Seek(controller.Offset - horizontal * FontSize * 3);
             ApplyOffset();
             textBlock.UpdateHighlight(e.GetPosition(textBlock));
+            hoverPoint = e.GetPosition(this);
+            UpdateEmoticonHover();
             e.Handled = true;
         }
         base.OnPointerWheelChanged(e);
@@ -325,6 +349,7 @@ public sealed class HoverMarqueeTextBlock : UserControl
         UpdateViewport();
         controller.Advance(elapsed, AutoScroll);
         ApplyOffset();
+        UpdateEmoticonHover();
 
         if (!controller.CanScroll || !AutoScroll && controller.IsComplete)
         {
@@ -362,7 +387,7 @@ public sealed class HoverMarqueeTextBlock : UserControl
 
         if (!CanAnimate)
         {
-            if (textBlock.HasAnnotations)
+            if (textBlock.HasAnnotations || textBlock.HasHoveredEmoticon)
             {
                 PauseScrolling();
             }
@@ -394,6 +419,19 @@ public sealed class HoverMarqueeTextBlock : UserControl
     private void UpdateViewport()
     {
         controller.UpdateViewport(scrollViewer.Extent.Width, scrollViewer.Viewport.Width);
+    }
+
+    private void UpdateEmoticonHover()
+    {
+        if (hoverPoint is { } point && new Rect(Bounds.Size).Contains(point) &&
+            this.TranslatePoint(point, textBlock) is { } local)
+        {
+            textBlock.UpdateEmoticonHover(local, this);
+        }
+        else
+        {
+            textBlock.ClearEmoticonHover();
+        }
     }
 
     private void ApplyOffset()

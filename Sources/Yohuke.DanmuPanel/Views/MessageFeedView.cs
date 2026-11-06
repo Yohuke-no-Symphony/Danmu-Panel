@@ -297,6 +297,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     private void UpdateTextScale()
     {
         var scale = Model.MessageTextScale;
+        SetValue(EmoticonTextBlock.EmoticonHeightProperty, EmoticonTextBlock.DEFAULT_EMOTICON_HEIGHT * scale);
         Resources["MessageFontSizeBody"] = 13 * scale;
         Resources["MessageFontSizeCompact"] = 12 * scale;
         Resources["MessageFontSizeMetadata"] = 11 * scale;

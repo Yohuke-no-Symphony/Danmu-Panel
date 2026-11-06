@@ -97,6 +97,7 @@ public sealed class MessageCopyInteractionTests
             window.Show();
             Pump(window);
             var point = Center(row, window);
+            window.MouseMove(point);
             window.MouseDown(point, MouseButton.Left);
             await WaitForHoldAsync(window);
             Assert.Equal(1, requests);

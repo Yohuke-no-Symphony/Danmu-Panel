@@ -20,9 +20,11 @@ namespace Yohuke.DanmuPanel.Views.Components;
 /// </summary>
 public sealed class EmoticonTextBlock : TextBlock
 {
-    private const double EMOTICON_HEIGHT = 20;
+    internal const double DEFAULT_EMOTICON_HEIGHT = 28;
     private const int MAX_CACHED_RUBY_INLINES = 64;
     private readonly Dictionary<string, Bitmap> images = new(StringComparer.Ordinal);
+    private readonly Dictionary<Image, DanmuEmoticon> emoticonImages = [];
+    private EmoticonImagePreview? imagePreview;
     private readonly List<PinyinRubySyllable> rubySyllables = [];
     private readonly Queue<InlineUIContainer> rubyInlineCache = [];
     private readonly List<TextBlock> indivisibleTextElements = [];
@@ -41,7 +43,21 @@ public sealed class EmoticonTextBlock : TextBlock
     internal bool IsSingleTextLine => HasSingleTextLine(this) && (separateLine is null ||
         HasSingleTextLine(separateLine.OriginalText) && HasSingleTextLine(separateLine.PronunciationText));
     internal event Action? AnnotationLayoutChanged;
+    internal bool HasHoveredEmoticon => imagePreview?.HasTarget == true;
     internal int CachedRubyInlineCount => rubyInlineCache.Count;
+    internal event Action? EmoticonHoverChanged;
+
+    /// <summary>内联表情的显示高度，独立于宽松和紧凑文字字号，并继承消息缩放。</summary>
+    public static readonly AttachedProperty<double> EmoticonHeightProperty =
+        AvaloniaProperty.RegisterAttached<EmoticonTextBlock, Control, double>(nameof(EmoticonHeight),
+            DEFAULT_EMOTICON_HEIGHT, inherits: true, validate: value => double.IsFinite(value) && value > 0);
+
+    /// <summary>内联表情的显示高度。</summary>
+    public double EmoticonHeight
+    {
+        get => GetValue(EmoticonHeightProperty);
+        set => SetValue(EmoticonHeightProperty, value);
+    }
 
     /// <summary>
     /// 包含原始表情文本的弹幕正文。
@@ -175,7 +191,8 @@ public sealed class EmoticonTextBlock : TextBlock
         base.OnPropertyChanged(change);
 
         if (change.Property == ContentTextProperty || change.Property == EmoticonsProperty ||
-            change.Property == AnnotationsProperty || change.Property == PinyinLayoutProperty)
+            change.Property == AnnotationsProperty || change.Property == PinyinLayoutProperty ||
+            change.Property == EmoticonHeightProperty)
         {
             RebuildContent();
         }
@@ -207,6 +224,7 @@ public sealed class EmoticonTextBlock : TextBlock
         else if (change.Property == DataContextProperty)
         {
             ClearHighlight();
+            ClearEmoticonHover();
         }
     }
 
@@ -215,6 +233,7 @@ public sealed class EmoticonTextBlock : TextBlock
     {
         base.OnPointerMoved(e);
         UpdateHighlight(e.GetPosition(this));
+        UpdateEmoticonHover(e.GetPosition(this));
     }
 
     /// <inheritdoc />
@@ -222,6 +241,45 @@ public sealed class EmoticonTextBlock : TextBlock
     {
         base.OnPointerExited(e);
         ClearHighlight();
+        ClearEmoticonHover();
+    }
+
+    /// <inheritdoc />
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        ClearEmoticonHover();
+        base.OnPointerPressed(e);
+    }
+
+    /// <inheritdoc />
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+    {
+        ClearEmoticonHover();
+        base.OnPointerWheelChanged(e);
+    }
+
+    internal void UpdateEmoticonHover(Point point, Control? tooltipHost = null)
+    {
+        foreach (var (image, emoticon) in emoticonImages)
+        {
+            if (image.IsEffectivelyVisible && this.TranslatePoint(point, image) is { } local &&
+                new Rect(image.Bounds.Size).Contains(local))
+            {
+                if (imagePreview is null)
+                {
+                    imagePreview = new();
+                    imagePreview.TargetChanged += () => EmoticonHoverChanged?.Invoke();
+                }
+                imagePreview.UpdateTarget(image, emoticon, tooltipHost ?? this);
+                return;
+            }
+        }
+        ClearEmoticonHover();
+    }
+
+    internal void ClearEmoticonHover()
+    {
+        imagePreview?.Clear();
     }
 
     /// <inheritdoc/>
@@ -497,11 +555,12 @@ public sealed class EmoticonTextBlock : TextBlock
         var image = new Image
         {
             Source = bitmap,
-            Height = EMOTICON_HEIGHT,
-            Width = EMOTICON_HEIGHT * bitmap.PixelSize.Width / bitmap.PixelSize.Height,
+            Height = EmoticonHeight,
+            Width = EmoticonHeight * bitmap.PixelSize.Width / bitmap.PixelSize.Height,
             Stretch = Stretch.Uniform
         };
         AutomationProperties.SetName(image, segment.Text);
+        emoticonImages.Add(image, segment.Emoticon);
         return new InlineUIContainer(image)
         {
             BaselineAlignment = alignToTextBaseline ? BaselineAlignment.Baseline : BaselineAlignment.Center
@@ -624,7 +683,8 @@ public sealed class EmoticonTextBlock : TextBlock
         try
         {
             using var stream = File.OpenRead(path);
-            image = Bitmap.DecodeToHeight(stream, (int)(EMOTICON_HEIGHT * 2), BitmapInterpolationMode.HighQuality);
+            var scale = TopLevel.GetTopLevel(this)!.RenderScaling;
+            image = Bitmap.DecodeToHeight(stream, (int)Math.Ceiling(EmoticonHeight * scale));
             images.Add(path, image);
             return image;
         }
@@ -638,6 +698,8 @@ public sealed class EmoticonTextBlock : TextBlock
 
     private void ReleaseContent()
     {
+        ClearEmoticonHover();
+        emoticonImages.Clear();
         HighlightedSourceStart = -1;
         rubySyllables.Clear();
         indivisibleTextElements.Clear();
