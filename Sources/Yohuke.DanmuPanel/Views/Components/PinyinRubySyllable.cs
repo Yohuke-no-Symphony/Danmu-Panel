@@ -8,7 +8,7 @@ namespace Yohuke.DanmuPanel.Views.Components;
 
 internal sealed class PinyinRubySyllable : StackPanel
 {
-    internal PinyinAnnotation Annotation { get; }
+    internal PinyinAnnotation Annotation { get; private set; }
     internal TextBlock OriginalText { get; }
     internal TextBlock PronunciationText { get; }
 
@@ -45,6 +45,13 @@ internal sealed class PinyinRubySyllable : StackPanel
         PronunciationText.FontSize = owner.PinyinFontSize;
         PronunciationText.FontWeight = FontWeight.Normal;
         PronunciationText.Foreground = pronunciationForeground;
+    }
+
+    internal void UpdateAnnotation(PinyinAnnotation annotation)
+    {
+        Annotation = annotation;
+        OriginalText.Text = annotation.Text;
+        PronunciationText.Text = annotation.Pinyin;
     }
 
     /// <inheritdoc />

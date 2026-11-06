@@ -21,8 +21,10 @@ namespace Yohuke.DanmuPanel.Views.Components;
 public sealed class EmoticonTextBlock : TextBlock
 {
     private const double EMOTICON_HEIGHT = 20;
+    private const int MAX_CACHED_RUBY_INLINES = 64;
     private readonly Dictionary<string, Bitmap> images = new(StringComparer.Ordinal);
     private readonly List<PinyinRubySyllable> rubySyllables = [];
+    private readonly Queue<InlineUIContainer> rubyInlineCache = [];
     private readonly List<TextBlock> indivisibleTextElements = [];
     private readonly List<RenderedMessageTextSpan> renderedSpans = [];
     private readonly Dictionary<int, Run> pronunciationRuns = [];
@@ -31,12 +33,15 @@ public sealed class EmoticonTextBlock : TextBlock
     private bool isAttached;
     private bool isContentDeferred;
     private bool isVisibilityTracking;
+    private bool isDataContextUpdating;
+    private bool isContentUpdatePending;
 
     internal int HighlightedSourceStart { get; private set; } = -1;
     internal bool HasAnnotations => rubySyllables.Count > 0 || pronunciationRuns.Count > 0;
     internal bool IsSingleTextLine => HasSingleTextLine(this) && (separateLine is null ||
         HasSingleTextLine(separateLine.OriginalText) && HasSingleTextLine(separateLine.PronunciationText));
     internal event Action? AnnotationLayoutChanged;
+    internal int CachedRubyInlineCount => rubyInlineCache.Count;
 
     /// <summary>
     /// 包含原始表情文本的弹幕正文。
@@ -236,6 +241,24 @@ public sealed class EmoticonTextBlock : TextBlock
         ReleaseContent();
     }
 
+    /// <inheritdoc />
+    protected override void OnDataContextBeginUpdate()
+    {
+        isDataContextUpdating = true;
+        base.OnDataContextBeginUpdate();
+    }
+
+    /// <inheritdoc />
+    protected override void OnDataContextEndUpdate()
+    {
+        base.OnDataContextEndUpdate();
+        isDataContextUpdating = false;
+        if (isContentUpdatePending)
+        {
+            RebuildContent();
+        }
+    }
+
     internal void UpdateHighlight(Point point)
     {
         var sourceStart = -1;
@@ -321,6 +344,12 @@ public sealed class EmoticonTextBlock : TextBlock
 
     private void RebuildContent()
     {
+        if (isDataContextUpdating)
+        {
+            isContentUpdatePending = true;
+            return;
+        }
+        isContentUpdatePending = false;
         ReleaseContent();
         var content = ContentText ?? "";
         var hasRichContent = Annotations?.Any(annotation => annotation.HasPinyin) == true ||
@@ -376,9 +405,12 @@ public sealed class EmoticonTextBlock : TextBlock
                         Inlines.Add(CreateUnannotatedInline(annotation.Text));
                         continue;
                     }
-                    var syllable = new PinyinRubySyllable(annotation);
+                    var inline = rubyInlineCache.TryDequeue(out var cached)
+                        ? cached : new InlineUIContainer(new PinyinRubySyllable(annotation));
+                    var syllable = (PinyinRubySyllable)inline.Child;
+                    syllable.UpdateAnnotation(annotation);
                     rubySyllables.Add(syllable);
-                    Inlines.Add(new InlineUIContainer(syllable));
+                    Inlines.Add(inline);
                 }
             }
         }
@@ -612,6 +644,17 @@ public sealed class EmoticonTextBlock : TextBlock
         renderedSpans.Clear();
         pronunciationRuns.Clear();
         separateLine = null;
+        if (Inlines is not null)
+        {
+            foreach (var inline in Inlines)
+            {
+                if (inline is InlineUIContainer { Child: PinyinRubySyllable } rubyInline &&
+                    rubyInlineCache.Count < MAX_CACHED_RUBY_INLINES)
+                {
+                    rubyInlineCache.Enqueue(rubyInline);
+                }
+            }
+        }
         Inlines?.Clear();
 
         foreach (var image in images.Values)

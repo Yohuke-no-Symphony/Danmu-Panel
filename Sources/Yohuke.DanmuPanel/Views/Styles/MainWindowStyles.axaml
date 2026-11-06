@@ -848,7 +848,7 @@
         <Setter Property="Background" Value="{DynamicResource AppCardBrush}" />
     </Style>
 
-    <Style Selector="ListBox.danmuFeedList ListBoxItem:nth-child(2n) Button.danmuFeedButton">
+    <Style Selector="ListBox.danmuFeedList Button.danmuFeedButton:alternate">
         <Setter Property="Background" Value="{DynamicResource AppDanmuAlternateRowBrush}" />
     </Style>
 

@@ -39,10 +39,10 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     private double messageTextScale = 1;
     private MessageDisplaySettings? displaySettings;
     private readonly HashSet<string> translationRequested = new();
-    public ObservableCollection<MessageItemViewModel> Items { get; } = [];
-    public ObservableCollection<MessageItemViewModel> PinnedItems { get; } = [];
-    public ObservableCollection<MessageItemViewModel> ScrollingItems { get; } = [];
-    public ObservableCollection<FeedRowViewModel> ScrollingRows { get; } = [];
+    public ObservableCollection<MessageItemViewModel> Items { get; } = new FeedCollection<MessageItemViewModel>();
+    public ObservableCollection<MessageItemViewModel> PinnedItems { get; } = new FeedCollection<MessageItemViewModel>();
+    public ObservableCollection<MessageItemViewModel> ScrollingItems { get; } = new FeedCollection<MessageItemViewModel>();
+    public ObservableCollection<FeedRowViewModel> ScrollingRows { get; } = new FeedCollection<FeedRowViewModel>();
     public bool HasPinnedItems => hasPinnedItems;
     public bool HasScrollingItems => hasScrollingItems;
     public int UnreadCount
@@ -240,6 +240,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
             var existingItems = Items.ToDictionary(item => item.Record.Id);
             var translationCandidates = new List<MessageRecord>();
             var uiBudget = new FeedUiWorkBudget();
+            var expectedItems = new MessageItemViewModel[records.Count];
             var expected = records.Select(record => record.Id).ToHashSet();
             for (var index = Items.Count - 1; index >= 0; index--)
             {
@@ -252,7 +253,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
             for (var index = 0; index < records.Count; index++)
             {
                 var record = records[index];
-                var changed = false;
+                var changed = true;
                 var translationPending = record.TranslationFingerprint == displaySettings.TranslationFingerprint &&
                     snapshot.PendingTranslationIds.Contains(record.Id);
                 if (displaySettings.TranslationEnabled && record.Kind is MessageKind.Danmu or MessageKind.SuperChat)
@@ -266,19 +267,14 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
                 if (!existingItems.TryGetValue(record.Id, out var existing))
                 {
                     var item = MessageItemViewModel.CreateDeferred(record, displaySettings, runtime.Pinyin, translationPending);
+                    expectedItems[index] = item;
                     Items.Insert(index, item);
-                    changed = true;
                     _ = LoadEmoticonsAsync(item, cancellationToken);
                 }
                 else
                 {
-                    if (!ReferenceEquals(Items[index], existing))
-                    {
-                        var oldIndex = Items.IndexOf(existing);
-                        Items.Move(oldIndex, index);
-                        changed = true;
-                    }
-                    changed |= !ReferenceEquals(existing.Record, record) ||
+                    expectedItems[index] = existing;
+                    changed = !ReferenceEquals(existing.Record, record) ||
                         !ReferenceEquals(existing.PresentationSettings, displaySettings) || existing.TranslationPending != translationPending;
                     existing.Apply(record, displaySettings, translationPending);
                 }
@@ -291,8 +287,11 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
                     }
                 }
             }
-            await SynchronizeRegionAsync(PinnedItems, Items.Where(item => kind == MessageKind.Danmu && item.Record.IsPinned).ToArray(), cancellationToken);
-            await SynchronizeRegionAsync(ScrollingItems, Items.Where(item => kind != MessageKind.Danmu || !item.Record.IsPinned).ToArray(), cancellationToken);
+            await FeedCollectionSynchronizer.SynchronizeAsync(Items, expectedItems, cancellationToken);
+            await FeedCollectionSynchronizer.SynchronizeAsync(PinnedItems,
+                expectedItems.Where(item => kind == MessageKind.Danmu && item.Record.IsPinned).ToArray(), cancellationToken);
+            await FeedCollectionSynchronizer.SynchronizeAsync(ScrollingItems,
+                expectedItems.Where(item => kind != MessageKind.Danmu || !item.Record.IsPinned).ToArray(), cancellationToken);
             await SynchronizeScrollingRowsAsync(cancellationToken);
             if (loadMore)
             {
@@ -353,40 +352,6 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     {
         ViewportUpdateDepth--;
         ViewportUpdateCompleted?.Invoke();
-    }
-
-    private static async Task SynchronizeRegionAsync(ObservableCollection<MessageItemViewModel> target,
-        IReadOnlyList<MessageItemViewModel> expected, CancellationToken cancellationToken)
-    {
-        var retained = expected.ToHashSet();
-        var uiBudget = new FeedUiWorkBudget();
-        for (var index = target.Count - 1; index >= 0; index--)
-        {
-            if (!retained.Contains(target[index]))
-            {
-                target.RemoveAt(index);
-                await uiBudget.YieldIfNeededAsync(cancellationToken);
-            }
-        }
-        for (var index = 0; index < expected.Count; index++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var item = expected[index];
-            if (index < target.Count && ReferenceEquals(target[index], item))
-            {
-                continue;
-            }
-            var previousIndex = target.IndexOf(item);
-            if (previousIndex < 0)
-            {
-                target.Insert(index, item);
-            }
-            else if (previousIndex != index)
-            {
-                target.Move(previousIndex, index);
-            }
-            await uiBudget.YieldIfNeededAsync(cancellationToken);
-        }
     }
 
     private void NotifyRegions()

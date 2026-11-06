@@ -467,15 +467,17 @@ public sealed class AsyncHistoryLoadingTests
         var window = new Window { Width = 600, Height = 360, Content = view };
         var appliedMessages = 0;
         var inputHandled = false;
+        var inputScheduled = false;
         NotifyCollectionChangedEventHandler onChanged = (_, args) =>
         {
-            if (!userScrolls || inputHandled || args.NewItems is null)
+            if (!userScrolls || inputScheduled || args.NewItems is null)
             {
                 return;
             }
             appliedMessages += args.NewItems.OfType<MessageItemViewModel>().Count();
-            if (appliedMessages == 20)
+            if (appliedMessages >= 20)
             {
+                inputScheduled = true;
                 Dispatcher.UIThread.Post(() =>
                 {
                     var viewer = FindViewer(view);

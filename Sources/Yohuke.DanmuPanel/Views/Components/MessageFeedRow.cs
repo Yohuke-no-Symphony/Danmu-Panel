@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
 using Avalonia.Data;
 using Avalonia.Data.Converters;
 using Avalonia.Input;
@@ -13,6 +14,7 @@ using Yohuke.DanmuPanel.ViewModels;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
+[PseudoClasses(":alternate")]
 internal sealed class MessageFeedRow : Button
 {
     private static IMultiValueConverter InlineTranslationConverter { get; } =
@@ -27,6 +29,11 @@ internal sealed class MessageFeedRow : Button
 
     /// <inheritdoc/>
     protected override Type StyleKeyOverride => typeof(Button);
+
+    internal void UpdateAlternatingBackground(int index)
+    {
+        PseudoClasses.Set(":alternate", (index & 1) != 0);
+    }
 
     internal MessageFeedRow(MessageKind kind, IUserAvatarService? avatars = null)
     {

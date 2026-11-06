@@ -6,11 +6,13 @@ namespace Yohuke.DanmuPanel.Views.Components;
 internal sealed class MessageFeedListBoxItem : ListBoxItem
 {
     internal MessageFeedRow Row { get; }
+    internal MessageFeedRowHost Host { get; }
 
     internal MessageFeedListBoxItem(MessageFeedRow row)
     {
         Row = row;
-        Content = row;
+        Host = new(row);
+        Content = Host;
     }
 
     /// <inheritdoc/>

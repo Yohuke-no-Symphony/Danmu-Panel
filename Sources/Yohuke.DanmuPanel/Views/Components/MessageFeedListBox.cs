@@ -1,4 +1,9 @@
+using System.Collections.Specialized;
+using Avalonia;
+using Avalonia.Collections;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Data;
 using Yohuke.DanmuPanel.ViewModels;
 using Yohuke.DanmuPanel.Models.Messages;
 
@@ -6,6 +11,10 @@ namespace Yohuke.DanmuPanel.Views.Components;
 
 internal sealed class MessageFeedListBox(Func<MessageFeedRow> createRow, MessageKind kind = MessageKind.Danmu) : ListBox
 {
+    private readonly HashSet<MessageFeedListBoxItem> slots = [];
+    private INotifyCollectionChanged? observedSource;
+    private IDisposable? sourceSubscription;
+
     /// <inheritdoc/>
     protected override Type StyleKeyOverride => typeof(ListBox);
 
@@ -21,9 +30,15 @@ internal sealed class MessageFeedListBox(Func<MessageFeedRow> createRow, Message
     /// <inheritdoc/>
     protected override Control CreateContainerForItemOverride(object? item, int index, object? recycleKey)
     {
-        return item is MessageLoadingPlaceholderViewModel
-            ? new MessageLoadingListBoxItem(kind)
-            : new MessageFeedListBoxItem(createRow());
+        if (item is MessageLoadingPlaceholderViewModel)
+        {
+            return new MessageLoadingListBoxItem(kind);
+        }
+        var row = createRow();
+        LogicalChildren.Add(row);
+        var container = new MessageFeedListBoxItem(row);
+        RegisterSlot(container);
+        return container;
     }
 
     /// <inheritdoc/>
@@ -32,7 +47,9 @@ internal sealed class MessageFeedListBox(Func<MessageFeedRow> createRow, Message
         base.PrepareContainerForItemOverride(container, item, index);
         if (container is MessageFeedListBoxItem messageContainer)
         {
-            messageContainer.Content = messageContainer.Row;
+            RegisterSlot(messageContainer);
+            messageContainer.Row.UpdateAlternatingBackground(index);
+            messageContainer.Content = messageContainer.Host;
         }
         else if (container is MessageLoadingListBoxItem placeholderContainer)
         {
@@ -48,6 +65,86 @@ internal sealed class MessageFeedListBox(Func<MessageFeedRow> createRow, Message
             messageContainer.Row.ContextMenu?.Close();
         }
         base.ClearContainerForItemOverride(container);
-        container.ClearValue(DataContextProperty);
+        container.DataContext = null;
+    }
+
+    /// <inheritdoc />
+    protected override void ContainerIndexChangedOverride(Control container, int oldIndex, int newIndex)
+    {
+        base.ContainerIndexChangedOverride(container, oldIndex, newIndex);
+        if (container is MessageFeedListBoxItem messageContainer)
+        {
+            messageContainer.Row.UpdateAlternatingBackground(newIndex);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        ClearSlots();
+        base.OnApplyTemplate(e);
+    }
+
+    /// <inheritdoc />
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        if (change.Property == ItemsSourceProperty)
+        {
+            ObserveSource(null);
+            ClearSlots();
+        }
+        else if (change.Property == ItemsPanelProperty || change.Property == TemplateProperty)
+        {
+            ClearSlots();
+        }
+        base.OnPropertyChanged(change);
+        if (change.Property == ItemsSourceProperty)
+        {
+            ObserveSource(ItemsSource as INotifyCollectionChanged);
+        }
+    }
+
+    private void ObserveSource(INotifyCollectionChanged? source)
+    {
+        if (ReferenceEquals(observedSource, source))
+        {
+            return;
+        }
+        sourceSubscription?.Dispose();
+        observedSource = source;
+        sourceSubscription = source?.WeakSubscribe(OnSourceChanged);
+    }
+
+    private void OnSourceChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action == NotifyCollectionChangedAction.Reset || ItemCount == 0)
+        {
+            ClearSlots();
+        }
+    }
+
+    private void RegisterSlot(MessageFeedListBoxItem container)
+    {
+        if (!slots.Add(container))
+        {
+            return;
+        }
+        if (!LogicalChildren.Contains(container.Row))
+        {
+            LogicalChildren.Add(container.Row);
+        }
+        container.Row.Bind(DataContextProperty, new Binding(nameof(DataContext)) { Source = container });
+    }
+
+    private void ClearSlots()
+    {
+        var released = slots.ToArray();
+        slots.Clear();
+        foreach (var container in released)
+        {
+            container.Row.ContextMenu?.Close();
+            container.Row.ClearValue(DataContextProperty);
+            LogicalChildren.Remove(container.Row);
+        }
     }
 }

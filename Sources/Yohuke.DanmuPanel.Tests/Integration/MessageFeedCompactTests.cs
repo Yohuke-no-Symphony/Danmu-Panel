@@ -303,6 +303,12 @@ public sealed class MessageFeedCompactTests
             Assert.Equal(dark.Normal, BackgroundColor(FindRow(view, initial[2].Record.Id)));
             Assert.Equal(dark.Normal, BackgroundColor(FindRow(view, initial[0].Record.Id)));
             Assert.Equal(dark.Alternate, BackgroundColor(FindRow(view, initial[1].Record.Id)));
+            await runtime.Messages.TogglePinAsync(initial[2].Record.Id);
+            await view.Model.RefreshAsync();
+            Pump(window);
+            Assert.Empty(view.Model.PinnedItems);
+            Assert.Equal(initial, view.Model.ScrollingItems);
+            Assert.Equal(dark, AssertAlternating(view, view.Model.ScrollingItems));
             Assert.Empty(errors);
         }
         finally

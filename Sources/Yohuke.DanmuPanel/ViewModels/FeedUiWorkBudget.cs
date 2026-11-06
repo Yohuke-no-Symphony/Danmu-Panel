@@ -7,7 +7,6 @@ internal sealed class FeedUiWorkBudget
 {
     private const int MAX_UPDATES = 20;
     private const int MAX_WORK_MILLISECONDS = 4;
-    private const int FRAME_MILLISECONDS = 16;
     private long startedAt = Stopwatch.GetTimestamp();
     private int updates;
 
@@ -18,16 +17,14 @@ internal sealed class FeedUiWorkBudget
         {
             return Task.CompletedTask;
         }
-        return WaitForFrameAsync(cancellationToken);
+        return YieldToDispatcherAsync(cancellationToken);
     }
 
-    private async Task WaitForFrameAsync(CancellationToken cancellationToken)
+    private async Task YieldToDispatcherAsync(CancellationToken cancellationToken)
     {
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var timer = DispatcherTimer.RunOnce(() => completion.TrySetResult(),
-            TimeSpan.FromMilliseconds(FRAME_MILLISECONDS), DispatcherPriority.Background);
-        using var registration = cancellationToken.Register(() => completion.TrySetCanceled(cancellationToken));
-        await completion.Task;
+        await Dispatcher.UIThread.InvokeAsync(static () =>
+        {
+        }, DispatcherPriority.Background);
         cancellationToken.ThrowIfCancellationRequested();
         updates %= MAX_UPDATES;
         startedAt = Stopwatch.GetTimestamp();
