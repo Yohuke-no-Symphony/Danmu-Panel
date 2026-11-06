@@ -7,6 +7,12 @@ namespace Yohuke.DanmuPanel.Models.State;
 /// <summary>阅读台的全局设置。</summary>
 public sealed class PanelSettings
 {
+    /// <summary>消息列表默认加载的普通记录数量。</summary>
+    public const int DEFAULT_MESSAGE_RETENTION_COUNT = 300;
+
+    /// <summary>消息列表允许配置的最大普通记录数量。</summary>
+    public const int MAX_MESSAGE_RETENTION_COUNT = 10000;
+
     public string Language { get; set; } = "system";
     public string Theme { get; set; } = "system";
     public ColorSchemeSettings ColorScheme { get; set; } = new();
@@ -36,6 +42,9 @@ public sealed class PanelSettings
 
     /// <summary>宽松与紧凑布局分别记忆消息分栏比例，粉丝牌保持固定宽度。</summary>
     public MessageColumnSettings MessageColumns { get; set; } = new();
+
+    /// <summary>四类消息面板共用的常规窗口容量，置顶与未读优先消息额外显示。</summary>
+    public int MessageRetentionCount { get; set; } = DEFAULT_MESSAGE_RETENTION_COUNT;
 
     /// <summary>为四类消息启用 Neo 紧凑显示，旧配置默认启用。</summary>
     public bool CompactDanmuDisplay { get; set; } = true;

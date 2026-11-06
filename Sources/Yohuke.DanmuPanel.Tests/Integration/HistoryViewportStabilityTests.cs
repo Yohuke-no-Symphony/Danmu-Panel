@@ -43,6 +43,7 @@ public sealed class HistoryViewportStabilityTests(ITestOutputHelper output)
     {
         using var directory = new MessageStoreTestDirectory();
         var configuration = new PanelConfiguration();
+        configuration.Settings.MessageRetentionCount = 100;
         var settings = configuration.Settings;
         settings.Translation.Enabled = false;
         settings.ShowUserPinyin = true;

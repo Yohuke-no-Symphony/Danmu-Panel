@@ -790,7 +790,7 @@ public sealed class AsyncHistoryLoadingTests
 
     private static PanelConfiguration Configuration()
     {
-        return new() { Settings = new() { ShowUserPinyin = true, ShowDanmuPinyin = true } };
+        return new() { Settings = new() { ShowUserPinyin = true, ShowDanmuPinyin = true, MessageRetentionCount = 100 } };
     }
 
     private static RoomTabState Room()

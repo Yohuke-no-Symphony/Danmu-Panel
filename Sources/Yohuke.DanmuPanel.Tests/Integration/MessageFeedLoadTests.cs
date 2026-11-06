@@ -30,7 +30,7 @@ public sealed class MessageFeedLoadTests(ITestOutputHelper output)
         var room = new RoomTabState { Id = "tab", RoomId = "123" };
         await runtime.TestMessages.AddAsync(room, new()
         {
-            Kind = MessageKind.Danmu, UserName = "viewer", Content = "before the burst", Count = 100
+            Kind = MessageKind.Danmu, UserName = "viewer", Content = "before the burst", Count = 300
         });
         var errors = new List<Exception>();
         var view = new MessageFeedView(runtime, MessageKind.Danmu, errors.Add);
@@ -81,7 +81,7 @@ public sealed class MessageFeedLoadTests(ITestOutputHelper output)
             await view.Model.RefreshAsync();
             Pump(window);
 
-            Assert.Equal(100, view.Model.ScrollingItems.Count);
+            Assert.Equal(300, view.Model.ScrollingItems.Count);
             Assert.Empty(errors);
             output.WriteLine($"Pin/unpin completed with {submitted} concurrent messages in {elapsed.ElapsedMilliseconds} ms.");
         }

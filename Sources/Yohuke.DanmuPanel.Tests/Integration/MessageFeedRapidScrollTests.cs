@@ -27,6 +27,7 @@ public sealed class MessageFeedRapidScrollTests
     {
         using var directory = new MessageStoreTestDirectory();
         var configuration = new PanelConfiguration();
+        configuration.Settings.MessageRetentionCount = 100;
         configuration.Settings.Translation.Enabled = false;
         configuration.Settings.CompactDanmuWrap = true;
         await using var runtime = new PanelRuntime(new ConfigurationService(directory.Path), configuration);

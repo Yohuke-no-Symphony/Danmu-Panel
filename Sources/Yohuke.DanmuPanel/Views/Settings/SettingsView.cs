@@ -50,6 +50,7 @@ public sealed class SettingsView : UserControl
     private readonly CheckBox superChatPinyin;
     private readonly ComboBox pinyinLayout;
     private readonly NumericUpDown messageTextScale;
+    private readonly NumericUpDown messageRetentionCount;
     private readonly CheckBox compactDisplay;
     private readonly CheckBox compactDanmuWrap;
     private readonly CheckBox compactSuperChatWrap;
@@ -137,6 +138,15 @@ public sealed class SettingsView : UserControl
             Value = (decimal)settings.MessageTextScale * 100,
             FormatString = "0"
         };
+        messageRetentionCount = new()
+        {
+            Name = "MessageRetentionCountInput",
+            Minimum = 1,
+            Maximum = PanelSettings.MAX_MESSAGE_RETENTION_COUNT,
+            Increment = 1,
+            Value = settings.MessageRetentionCount,
+            FormatString = "0"
+        };
         compactDisplay = Check("Settings.CompactDisplay", settings.CompactDanmuDisplay);
         compactDisplay.Name = "CompactDanmuDisplayCheckBox";
         compactDanmuWrap = Check("Settings.CompactMessageWrap", settings.CompactDanmuWrap);
@@ -192,6 +202,7 @@ public sealed class SettingsView : UserControl
         AddSection("Settings.Appearance", "Settings.AppearanceDescription", BuildAppearance());
         AddSection("Settings.Reading", "Settings.ReadingDescription", Stack(
             Card("Settings.MessageDisplay",
+                WithHint(Row("Settings.MessageRetentionCount", messageRetentionCount), "Settings.MessageRetentionCountHelp"),
                 WithHint(Row("Settings.MessageTextScale", messageTextScale), "Settings.MessageTextScaleHelp"),
                 WithHint(hideEmoticonDanmu, "Settings.HideEmoticonDanmuHelp"), compactDisplay,
                 new StackPanel
@@ -375,6 +386,12 @@ public sealed class SettingsView : UserControl
     private bool TryCreateDraft(out PanelSettings draft)
     {
         draft = null!;
+        if (messageRetentionCount.Value is not { } retentionCount || retentionCount != decimal.Truncate(retentionCount) ||
+            retentionCount is < 1 or > PanelSettings.MAX_MESSAGE_RETENTION_COUNT)
+        {
+            SetStatus(Localization.Format("Settings.InvalidMessageRetentionCount", PanelSettings.MAX_MESSAGE_RETENTION_COUNT));
+            return false;
+        }
         var regexLines = (danmuRegexPatterns.Text ?? "").Split(["\r\n", "\n", "\r"], StringSplitOptions.None);
         var patterns = new List<string>();
         for (var index = 0; index < regexLines.Length; index++)
@@ -443,6 +460,7 @@ public sealed class SettingsView : UserControl
             PinyinLayout = (PinyinLayoutMode)pinyinLayout.SelectedIndex,
             MessageTextScale = (double)(messageTextScale.Value ?? 100) / 100,
             MessageColumns = settings.MessageColumns,
+            MessageRetentionCount = (int)retentionCount,
             CompactDanmuDisplay = compactDisplay.IsChecked == true,
             CompactDanmuWrap = compactDanmuWrap.IsChecked == true,
             CompactSuperChatWrap = compactSuperChatWrap.IsChecked == true,

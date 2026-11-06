@@ -82,7 +82,7 @@ public sealed class DanmuRegexFeedTests
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = new PanelRuntime(new(directory.Path), new()
         {
-            Settings = new() { DanmuRegexFilter = new() { Enabled = true } }
+            Settings = new() { DanmuRegexFilter = new() { Enabled = true }, MessageRetentionCount = 100 }
         });
         for (var index = 0; index < 120; index++)
         {

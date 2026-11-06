@@ -381,7 +381,10 @@ public sealed class PinnedFeedTests
 
     private static PanelRuntime CreateRuntime(MessageStoreTestDirectory directory)
     {
-        return new(new ConfigurationService(directory.Path), new PanelConfiguration());
+        return new(new ConfigurationService(directory.Path), new PanelConfiguration
+        {
+            Settings = new() { MessageRetentionCount = 100 }
+        });
     }
 
     private static RoomTabState Room()

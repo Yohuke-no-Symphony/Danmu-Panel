@@ -141,6 +141,7 @@ public sealed class SettingsShareServiceTests
     [InlineData("colors")]
     [InlineData("reading")]
     [InlineData("messageColumns")]
+    [InlineData("messageRetention")]
     [InlineData("danmuRegexFilter")]
     [InlineData("translation")]
     public void ApplyToRejectsInvalidSourceBeforeChangingTarget(string invalidSection)
@@ -159,6 +160,9 @@ public sealed class SettingsShareServiceTests
                 break;
             case "messageColumns":
                 source.MessageColumns.Gift.CompactIdentityRatio = double.NaN;
+                break;
+            case "messageRetention":
+                source.MessageRetentionCount = 0;
                 break;
             case "danmuRegexFilter":
                 source.DanmuRegexFilter.Patterns = ["["];
@@ -310,6 +314,12 @@ public sealed class SettingsShareServiceTests
     [InlineData("\"MessageTextScale\":0.49")]
     [InlineData("\"MessageTextScale\":2.01")]
     [InlineData("\"MessageTextScale\":\"1\"")]
+    [InlineData("\"MessageRetentionCount\":0")]
+    [InlineData("\"MessageRetentionCount\":-1")]
+    [InlineData("\"MessageRetentionCount\":10001")]
+    [InlineData("\"MessageRetentionCount\":1.5")]
+    [InlineData("\"MessageRetentionCount\":null")]
+    [InlineData("\"MessageRetentionCount\":\"300\"")]
     [InlineData("\"ShowDanmuPinyin\":\"true\"")]
     public async Task InvalidSettingsAreRejected(string property)
     {
@@ -424,6 +434,7 @@ public sealed class SettingsShareServiceTests
             ShowSuperChatPinyin = true,
             PinyinLayout = PinyinLayoutMode.SeparateLine,
             MessageTextScale = 1.5,
+            MessageRetentionCount = 475,
             MessageColumns = new()
             {
                 Danmu = new() { RegularIdentityRatio = 0.31, CompactIdentityRatio = 0.27 },

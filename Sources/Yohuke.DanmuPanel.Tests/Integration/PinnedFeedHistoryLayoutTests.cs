@@ -41,6 +41,7 @@ public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
         using var directory = new MessageStoreTestDirectory();
         var configuration = new PanelConfiguration();
         var settings = configuration.Settings;
+        settings.MessageRetentionCount = 100;
         settings.Translation.Enabled = false;
         settings.ShowUserPinyin = true;
         settings.ShowDanmuPinyin = true;

@@ -11,7 +11,7 @@ namespace Yohuke.DanmuPanel.ViewModels;
 /// <summary>分页加载并原位刷新消息列表。</summary>
 public sealed partial class FeedViewModel : ObservableObject, IDisposable
 {
-    private const int PAGE_SIZE = 100;
+    private const int HISTORY_PAGE_SIZE = 100;
     private const int LOADING_HINT_DELAY_MILLISECONDS = 150;
     private readonly PanelRuntime runtime;
     private readonly MessageKind kind;
@@ -19,7 +19,8 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     private readonly DispatcherTimer refreshTimer;
     private CancellationTokenSource lifetime = new();
     private RoomTabState? room;
-    private int limit = PAGE_SIZE;
+    private int retentionCount;
+    private int limit;
     private int revision;
     private int unreadCount;
     private int refreshRequested;
@@ -81,6 +82,8 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     {
         this.runtime = runtime;
         this.kind = kind;
+        retentionCount = runtime.Configuration.Settings.MessageRetentionCount;
+        limit = retentionCount;
         UpdateLayoutOptions();
         refreshTimer = new() { Interval = TimeSpan.FromMilliseconds(150) };
         refreshTimer.Tick += OnRefreshTimer;
@@ -104,7 +107,8 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         IsLoadingHistory = false;
         historyLoadTask = null;
         hasLoadedRoom = false;
-        limit = PAGE_SIZE;
+        retentionCount = runtime.Configuration.Settings.MessageRetentionCount;
+        limit = retentionCount;
         translationRequested.Clear();
         lifetime.Cancel();
         lifetime.Dispose();
@@ -129,8 +133,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         {
             return historyLoadTask;
         }
-        var requestedLimit = Math.Max(limit, ScrollingItems.Count(item => !item.Record.IsPriority)) + PAGE_SIZE;
-        historyLoadTask = RefreshCoreAsync(requestedLimit);
+        historyLoadTask = RefreshCoreAsync(loadMore: true);
         return historyLoadTask;
     }
 
@@ -164,10 +167,10 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     /// <summary>将最新数据库投影应用到已有行。</summary>
     public Task RefreshAsync()
     {
-        return RefreshCoreAsync(null);
+        return RefreshCoreAsync(loadMore: false);
     }
 
-    private async Task RefreshCoreAsync(int? requestedLimit)
+    private async Task RefreshCoreAsync(bool loadMore)
     {
         if (disposed)
         {
@@ -181,7 +184,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
             return;
         }
         var cancellationToken = lifetime.Token;
-        var loading = requestedLimit.HasValue || !hasLoadedRoom ? ++loadingRevision : 0;
+        var loading = loadMore || !hasLoadedRoom ? ++loadingRevision : 0;
         if (loading != 0)
         {
             IsLoadingHistory = true;
@@ -209,7 +212,16 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
                     }
                 }, TimeSpan.FromMilliseconds(LOADING_HINT_DELAY_MILLISECONDS), DispatcherPriority.Background);
             }
-            var snapshot = await runtime.Messages.LoadFeedAsync(current.Id, kind, requestedLimit ?? limit,
+            var configuredRetentionCount = runtime.Configuration.Settings.MessageRetentionCount;
+            if (retentionCount != configuredRetentionCount)
+            {
+                retentionCount = configuredRetentionCount;
+                limit = retentionCount;
+            }
+            var requestedLimit = loadMore
+                ? Math.Max(limit, ScrollingItems.Count(item => !item.Record.IsPriority)) + HISTORY_PAGE_SIZE
+                : limit;
+            var snapshot = await runtime.Messages.LoadFeedAsync(current.Id, kind, requestedLimit,
                 IsReadingHistory ? ScrollingItems.FirstOrDefault(item => !item.Record.IsPriority)?.Record.Id : null,
                 cancellationToken, hideEmoticonDanmu: runtime.Configuration.Settings.HideEmoticonDanmu,
                 danmuRegexFilter: runtime.DanmuFilter);
@@ -279,9 +291,9 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
             await SynchronizeRegionAsync(PinnedItems, Items.Where(item => kind == MessageKind.Danmu && item.Record.IsPinned).ToArray(), cancellationToken);
             await SynchronizeRegionAsync(ScrollingItems, Items.Where(item => kind != MessageKind.Danmu || !item.Record.IsPinned).ToArray(), cancellationToken);
             await SynchronizeScrollingRowsAsync(cancellationToken);
-            if (requestedLimit.HasValue)
+            if (loadMore)
             {
-                limit = requestedLimit.Value;
+                limit = requestedLimit;
             }
             UnreadCount = snapshot.UnreadCount;
             NotifyRegions();

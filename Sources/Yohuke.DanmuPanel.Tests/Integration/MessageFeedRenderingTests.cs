@@ -166,7 +166,10 @@ public sealed class MessageFeedRenderingTests(ITestOutputHelper output)
     public async Task SingleAppendsRetainVisibleRowsWithoutRedundantBringIntoView()
     {
         using var directory = new MessageStoreTestDirectory();
-        await using var runtime = new PanelRuntime(new ConfigurationService(directory.Path), new());
+        await using var runtime = new PanelRuntime(new ConfigurationService(directory.Path), new()
+        {
+            Settings = new() { MessageRetentionCount = 100 }
+        });
         var room = new RoomTabState { Id = "tab", RoomId = "123" };
         await runtime.TestMessages.AddAsync(room, new()
         {

@@ -72,7 +72,7 @@ public sealed class EmoticonDanmuFeedTests
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = new PanelRuntime(new(directory.Path), new PanelConfiguration
         {
-            Settings = new() { HideEmoticonDanmu = true }
+            Settings = new() { HideEmoticonDanmu = true, MessageRetentionCount = 100 }
         });
         for (var index = 0; index < 120; index++)
         {
