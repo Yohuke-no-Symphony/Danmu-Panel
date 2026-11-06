@@ -27,8 +27,8 @@ public sealed class MarkAllReadTests
             await store.AppendAsync(Message(kind) with { RoomTabId = "other" }, options);
             await store.AppendAsync(Message(otherKind), options);
             var snapshot = await store.LoadFeedAsync("tab", kind, 100, null);
-            Assert.Equal(105, snapshot.UnreadCount);
-            Assert.Equal(kind == MessageKind.Gift ? 100 : 105, snapshot.Records.Count);
+            Assert.Equal(kind == MessageKind.Gift ? 0 : 105, snapshot.UnreadCount);
+            Assert.Equal(kind == MessageKind.Gift ? 0 : 105, snapshot.Records.Count);
 
             Assert.Equal(105, await store.MarkAllReadAsync("tab", kind));
             Assert.Equal(0, await store.MarkAllReadAsync("tab", kind));
@@ -49,7 +49,12 @@ public sealed class MarkAllReadTests
             Assert.Equal(record.TotalPrice, record.ReadTotalPrice);
         });
         await reopened.AppendAsync(Message(kind), options);
-        Assert.Equal(1, (await reopened.LoadFeedAsync("tab", kind, 100, null)).UnreadCount);
+        Assert.Equal(kind == MessageKind.Gift ? 0 : 1, (await reopened.LoadFeedAsync("tab", kind, 100, null)).UnreadCount);
+        if (kind == MessageKind.Gift)
+        {
+            await reopened.AppendAsync(Message(kind) with { UnitPrice = 50, TotalPrice = 50 }, options);
+            Assert.Equal(1, (await reopened.LoadFeedAsync("tab", kind, 100, null)).UnreadCount);
+        }
     }
 
     /// <summary>批量确认后新增连击数量，三种阅读策略仍按已确认的数量和价值决定是否恢复未读。</summary>

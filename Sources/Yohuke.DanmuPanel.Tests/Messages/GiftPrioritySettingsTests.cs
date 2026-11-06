@@ -50,7 +50,8 @@ public sealed class GiftPrioritySettingsTests
             Assert.False(updated.IsRead);
             Assert.False(updated.HasBeenRead);
             Assert.Equal(original.TotalPrice, updated.TotalPrice);
-            Assert.Equal(1, (await store.LoadFeedAsync(original.RoomTabId, MessageKind.Gift, 100, null)).UnreadCount);
+            Assert.Equal(expectedPriority ? 1 : 0,
+                (await store.LoadFeedAsync(original.RoomTabId, MessageKind.Gift, 100, null)).UnreadCount);
         }
         var confirmed = (await store.GetByIdAsync(read.Id))!;
         Assert.True(confirmed.IsRead);

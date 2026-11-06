@@ -43,13 +43,14 @@ public sealed class GiftPriorityInitializationTests
         await runtime.InitializeAsync();
 
         var snapshot = await runtime.Messages.LoadFeedAsync("tab", MessageKind.Gift, 100, null);
-        var restored = Assert.Single(snapshot.Records, record => record.Id == unread.Id);
+        Assert.Equal(expectedPriority ? 2 : 0, snapshot.Records.Count);
+        var restored = (await runtime.Messages.GetByIdAsync(unread.Id))!;
         Assert.Equal(expectedPriority, restored.IsPriority);
         Assert.False(restored.IsRead);
         Assert.False(restored.HasBeenRead);
         Assert.Equal(unread.TotalPrice, restored.TotalPrice);
-        Assert.Equal(1, snapshot.UnreadCount);
-        var confirmed = Assert.Single(snapshot.Records, record => record.Id == read.Id);
+        Assert.Equal(expectedPriority ? 1 : 0, snapshot.UnreadCount);
+        var confirmed = (await runtime.Messages.GetByIdAsync(read.Id))!;
         Assert.True(confirmed.IsRead);
         Assert.True(confirmed.HasBeenRead);
         Assert.False(confirmed.IsPriority);

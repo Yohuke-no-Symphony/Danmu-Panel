@@ -306,7 +306,7 @@
     "Settings.English": "English",
     "Settings.ExtraPrompt": "追加のシステムプロンプト",
     "Settings.FollowSystem": "システムに従う",
-    "Settings.GiftMinimum": "ギフト優先表示の最低額（元）",
+    "Settings.GiftMinimum": "ギフト表示の最低額（元）",
     "Settings.GiftPinyin": "中国語ギフト名に声調付きピンインを表示",
     "Settings.Glossary": "用語集",
     "Settings.HistoryHelp": "メッセージ、翻訳、固定・既読状態は継続的に保存されます。履歴の消去では選択した範囲の記録を削除し、アカウント・設定・レイアウトは保持します。",

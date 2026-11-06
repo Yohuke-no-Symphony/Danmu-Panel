@@ -33,10 +33,10 @@ public sealed class PinnedFeedTests
         var options = new MessageReadOptions { GiftAutoPinMinimum = 30 };
         runtime.Configuration.Settings.Reading = options;
         var target = Message(kind, 1);
-        var normal = Message(kind, 0, 10);
+        var normal = Message(kind, 0, kind == MessageKind.Gift ? 30 : 10);
         await runtime.Messages.AppendAsync(target, options);
         await runtime.Messages.AppendAsync(normal, options);
-        if (kind is MessageKind.SuperChat or MessageKind.Guard)
+        if (kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard)
         {
             await runtime.Messages.MarkReadAsync(normal.Id, normal.Quantity, normal.TotalPrice);
         }
@@ -76,7 +76,7 @@ public sealed class PinnedFeedTests
             Assert.True(targetItem.Record.IsPriority);
             if (kind == MessageKind.Gift)
             {
-                Assert.False(normalItem.Record.IsRead);
+                Assert.True(normalItem.Record.IsRead);
                 Assert.False(normalItem.Record.IsPriority);
             }
 

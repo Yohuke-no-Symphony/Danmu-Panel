@@ -305,7 +305,7 @@
     "Settings.English": "English",
     "Settings.ExtraPrompt": "追加 System Prompt",
     "Settings.FollowSystem": "跟随系统",
-    "Settings.GiftMinimum": "礼物置顶门槛（元）",
+    "Settings.GiftMinimum": "礼物显示门槛（元）",
     "Settings.GiftPinyin": "为中文礼物名标注带声调拼音",
     "Settings.Glossary": "术语库",
     "Settings.HistoryHelp": "消息、译文、置顶和已读状态会持续保存。手动清空将删除所选范围的记录，保留账号、设置和布局。",

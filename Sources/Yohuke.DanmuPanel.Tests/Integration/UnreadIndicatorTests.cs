@@ -149,11 +149,17 @@ public sealed class UnreadIndicatorTests
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = CreateRuntime(directory);
         var options = new MessageReadOptions { GiftAutoPinMinimum = 50 };
+        runtime.Configuration.Settings.Reading = options;
         for (var index = 0; index < 105; index++)
         {
-            await runtime.Messages.AppendAsync(Message(kind) with { Quantity = 3 }, options);
+            await runtime.Messages.AppendAsync(Message(kind) with { Quantity = 3, UnitPrice = 50, TotalPrice = 150 }, options);
         }
-        await runtime.Messages.AppendAsync(Message(kind) with { RoomTabId = "second" }, options);
+        await runtime.Messages.AppendAsync(Message(kind) with { RoomTabId = "second", UnitPrice = 50, TotalPrice = 50 }, options);
+        var hiddenGift = Message(MessageKind.Gift) with { UnitPrice = 1, TotalPrice = 1 };
+        if (kind == MessageKind.Gift)
+        {
+            await runtime.Messages.AppendAsync(hiddenGift, options);
+        }
         var errors = new List<Exception>();
         var view = new MessageFeedView(runtime, kind, errors.Add);
         var panels = WorkbenchPanelIds.All.ToDictionary(id => id, id => (Control)new TextBlock { Text = id });
@@ -200,6 +206,28 @@ public sealed class UnreadIndicatorTests
             Pump(floating);
             AssertBadge(floatingBadge, "104");
             var markAllRead = Assert.Single(floating.GetVisualDescendants().OfType<Button>(), button => button.Name == "MarkAllReadButton");
+            if (kind == MessageKind.Gift)
+            {
+                runtime.Configuration.Settings.Reading = options with { GiftAutoPinMinimum = 200 };
+                await runtime.ApplySettingsAsync();
+                await view.Model.RefreshAsync();
+                Pump(floating);
+                Assert.False(floatingBadge.IsVisible);
+                Assert.False(markAllRead.IsEffectivelyEnabled);
+
+                runtime.Configuration.Settings.Reading = options with { GiftAutoPinMinimum = 1 };
+                await runtime.ApplySettingsAsync();
+                await view.Model.RefreshAsync();
+                Pump(floating);
+                AssertBadge(floatingBadge, "105");
+
+                runtime.Configuration.Settings.Reading = options;
+                await runtime.ApplySettingsAsync();
+                await view.Model.RefreshAsync();
+                Pump(floating);
+                AssertBadge(floatingBadge, "104");
+                Assert.False((await runtime.Messages.GetByIdAsync(hiddenGift.Id))!.IsRead);
+            }
             Assert.True(markAllRead.IsEffectivelyEnabled);
             await Assert.IsAssignableFrom<IAsyncRelayCommand>(markAllRead.Command).ExecuteAsync(null);
             Pump(floating);
@@ -207,7 +235,7 @@ public sealed class UnreadIndicatorTests
             Assert.False(markAllRead.IsEffectivelyEnabled);
             Assert.All(await runtime.Messages.LoadPageAsync("tab", kind, 0, 200), record => Assert.True(record.IsRead));
 
-            await runtime.Messages.AppendAsync(Message(kind), options);
+            await runtime.Messages.AppendAsync(Message(kind) with { UnitPrice = 50, TotalPrice = 50 }, options);
             await view.Model.RefreshAsync();
             Pump(floating);
             AssertBadge(floatingBadge, "1");

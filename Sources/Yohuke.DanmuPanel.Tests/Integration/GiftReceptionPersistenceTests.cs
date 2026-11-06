@@ -70,15 +70,18 @@ public sealed class GiftReceptionPersistenceTests
 
         var feed = await store.LoadFeedAsync("tab", MessageKind.Gift, 20, null);
 
-        Assert.Equal(2, feed.Records.Count);
+        Assert.Equal(1, feed.UnreadCount);
         var paid = Assert.Single(feed.Records, record => record.GiftCoinType == "gold");
-        var free = Assert.Single(feed.Records, record => record.GiftCoinType == "silver");
+        Assert.Single(feed.Records);
+        var free = Assert.Single(await store.LoadPageAsync("tab", MessageKind.Gift, 0, 20), record => record.GiftCoinType == "silver");
         Assert.Equal(0.1m, paid.TotalPrice);
         Assert.True(paid.IsPriority);
         Assert.Equal(0m, free.TotalPrice);
         Assert.Equal(0m, free.UnitPrice);
         Assert.False(free.IsPriority);
         Assert.Equal(1, free.Quantity);
+        await store.ReevaluateReadOptionsAsync(options with { GiftAutoPinMinimum = 0 });
+        Assert.Equal(2, (await store.LoadFeedAsync("tab", MessageKind.Gift, 20, null)).Records.Count);
     }
 
     /// <summary>单条礼物解析错误仅报告失败通知，监听会话仍能将后续整批礼物排空入库。</summary>

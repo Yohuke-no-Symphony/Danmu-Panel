@@ -17,7 +17,7 @@ public interface IMessageStore : IAsyncDisposable
     /// <summary>在提交事务内读取已生效的全局阅读规则，顺序保存接收到的有界消息批次。</summary>
     Task<IReadOnlyList<MessageAppendResult>> AppendReceivedBatchAsync(IReadOnlyList<MessageRecord> messages,
         string? translationFingerprint = null, CancellationToken cancellationToken = default);
-    /// <summary>按置顶、未读优先规则分页读取消息。</summary>
+    /// <summary>按置顶、未读优先规则分页读取持久记录，包含被列表显示规则隐藏的消息。</summary>
     Task<IReadOnlyList<MessageRecord>> LoadPageAsync(string roomTabId, MessageKind kind, int offset, int limit,
         CancellationToken cancellationToken = default);
     /// <summary>按原始时间读取近期记录，供跨会话补拉去重。</summary>

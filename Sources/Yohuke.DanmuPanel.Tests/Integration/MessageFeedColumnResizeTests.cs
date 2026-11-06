@@ -534,7 +534,9 @@ public sealed class MessageFeedColumnResizeTests
         {
             RoomTabId = "column-room", RoomId = "123", Kind = kind,
             UserName = "viewer", Content = $"message {index}", GiftName = "礼物", GuardLevel = 3,
-            MedalName = "粉丝牌", MedalLevel = 20, TotalPrice = 30,
+            MedalName = "粉丝牌", MedalLevel = 20,
+            UnitPrice = kind == MessageKind.Gift ? 1000 : 0,
+            TotalPrice = kind == MessageKind.Gift ? 1000 : 30,
             Time = DateTimeOffset.FromUnixTimeSeconds(1800000000 + index)
         };
     }

@@ -12,9 +12,9 @@ namespace Yohuke.DanmuPanel.Tests.Integration;
 /// <summary>验证礼物门槛应用到可见列表，优先排序与消息阅读状态保持独立。</summary>
 public sealed class GiftPriorityFeedTests
 {
-    /// <summary>保存门槛后自动重排已有行，达到门槛的未读礼物优先于更早的不达标礼物。</summary>
+    /// <summary>保存门槛后自动隐藏或恢复已有礼物，保留仍可见的行和阅读确认。</summary>
     [AvaloniaFact]
-    public async Task SavedThresholdAutomaticallyReordersVisibleGifts()
+    public async Task SavedThresholdAutomaticallyHidesAndRestoresVisibleGifts()
     {
         using var directory = new MessageStoreTestDirectory();
         var configuration = new PanelConfiguration();
@@ -31,32 +31,35 @@ public sealed class GiftPriorityFeedTests
         model.Failed += errors.Add;
         await model.SelectRoomAsync(new() { Id = "tab", RoomId = "123" });
         var targetItem = model.Items.Single(item => item.Record.Id == target.Id);
-        var smallerItem = model.Items.Single(item => item.Record.Id == smaller.Id);
-        Assert.Equal(new[] { "target", "smaller", "read" }, model.ScrollingItems.Select(item => item.Record.Id));
+        var readItem = model.Items.Single(item => item.Record.Id == read.Id);
+        Assert.Equal(new[] { "target", "read" }, model.ScrollingItems.Select(item => item.Record.Id));
+        Assert.Equal(1, model.UnreadCount);
 
         configuration.Settings.Reading = new() { GiftAutoPinMinimum = 200 };
         await runtime.ApplySettingsAsync();
-        await WaitUntilAsync(() => !targetItem.Record.IsPriority);
+        await WaitUntilAsync(() => model.Items.Count == 1 && model.UnreadCount == 0);
 
-        Assert.Equal(new[] { "smaller", "target", "read" }, model.ScrollingItems.Select(item => item.Record.Id));
-        Assert.True(targetItem.ShowUnreadDot);
-        Assert.True(smallerItem.ShowUnreadDot);
-        Assert.Equal(2, model.UnreadCount);
+        Assert.Same(readItem, Assert.Single(model.ScrollingItems));
+        Assert.False((await runtime.Messages.GetByIdAsync(target.Id))!.IsRead);
+        Assert.False((await runtime.Messages.GetByIdAsync(smaller.Id))!.IsRead);
 
         configuration.Settings.Reading = new() { GiftAutoPinMinimum = 50 };
         await runtime.ApplySettingsAsync();
-        await WaitUntilAsync(() => smallerItem.Record.IsPriority);
+        await WaitUntilAsync(() => model.Items.Count == 3 && model.UnreadCount == 2);
+        targetItem = model.Items.Single(item => item.Record.Id == target.Id);
         Assert.True(targetItem.Record.IsPriority);
+        Assert.Equal(new[] { "smaller", "target", "read" }, model.ScrollingItems.Select(item => item.Record.Id));
 
         configuration.Settings.Reading = new() { GiftAutoPinMinimum = 150 };
         await runtime.ApplySettingsAsync();
-        await WaitUntilAsync(() => !smallerItem.Record.IsPriority);
+        await WaitUntilAsync(() => model.Items.Count == 2 && model.UnreadCount == 1);
 
-        Assert.Equal(new[] { "target", "smaller", "read" }, model.ScrollingItems.Select(item => item.Record.Id));
+        Assert.Equal(new[] { "target", "read" }, model.ScrollingItems.Select(item => item.Record.Id));
         Assert.Same(targetItem, model.ScrollingItems[0]);
-        Assert.Same(smallerItem, model.ScrollingItems[1]);
+        Assert.Same(readItem, model.ScrollingItems[1]);
         Assert.True(targetItem.Record.IsPriority);
-        Assert.Equal(2, model.UnreadCount);
+        Assert.True(targetItem.ShowUnreadDot);
+        Assert.Equal(1, model.UnreadCount);
         Assert.Empty(model.PinnedItems);
         var confirmed = model.Items.Single(item => item.Record.Id == read.Id);
         Assert.True(confirmed.Record.IsRead);
@@ -64,9 +67,9 @@ public sealed class GiftPriorityFeedTests
         Assert.Empty(errors);
     }
 
-    /// <summary>同一礼物连击累计到门槛时复用原行，并进入列表头的未读优先组。</summary>
+    /// <summary>隐藏的礼物连击累计到门槛时沿用原记录，并首次出现在未读优先组。</summary>
     [AvaloniaFact]
-    public async Task ComboReachingThresholdMovesExistingRowAheadOfOlderGift()
+    public async Task HiddenComboAppearsWhenItsCumulativeValueReachesThreshold()
     {
         using var directory = new MessageStoreTestDirectory();
         var configuration = new PanelConfiguration();
@@ -78,9 +81,9 @@ public sealed class GiftPriorityFeedTests
         await runtime.Messages.AppendBatchAsync([smaller, combo], configuration.Settings.Reading);
         using var model = new FeedViewModel(runtime, MessageKind.Gift);
         await model.SelectRoomAsync(new() { Id = "tab", RoomId = "123" });
-        var comboItem = model.ScrollingItems[1];
-        Assert.Equal(combo.Id, comboItem.Record.Id);
-        Assert.False(comboItem.Record.IsPriority);
+        Assert.Empty(model.Items);
+        Assert.Equal(0, model.UnreadCount);
+        Assert.Equal(4m, (await runtime.Messages.GetByIdAsync(combo.Id))!.TotalPrice);
 
         await runtime.Messages.AppendAsync(combo with
         {
@@ -88,14 +91,15 @@ public sealed class GiftPriorityFeedTests
         }, configuration.Settings.Reading);
         await model.RefreshAsync();
 
-        Assert.Same(comboItem, model.ScrollingItems[0]);
-        Assert.Equal(smaller.Id, model.ScrollingItems[1].Record.Id);
+        var comboItem = Assert.Single(model.ScrollingItems);
+        Assert.Equal(combo.Id, comboItem.Record.Id);
         Assert.Equal(2, comboItem.Record.Quantity);
         Assert.Equal(8m, comboItem.Record.TotalPrice);
         Assert.True(comboItem.Record.IsPriority);
         Assert.True(comboItem.ShowUnreadDot);
-        Assert.Equal(2, model.UnreadCount);
+        Assert.Equal(1, model.UnreadCount);
         Assert.Empty(model.PinnedItems);
+        Assert.False((await runtime.Messages.GetByIdAsync(smaller.Id))!.IsRead);
     }
 
     private static MessageRecord Gift(string id, int sequence, decimal price)

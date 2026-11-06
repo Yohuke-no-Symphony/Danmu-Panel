@@ -42,13 +42,14 @@ public sealed class GiftPriorityMigrationTests
         await using (var upgraded = new SqliteMessageStore(directory.DatabasePath))
         {
             var snapshot = await upgraded.LoadFeedAsync("tab", MessageKind.Gift, 100, null);
-            var unread = Assert.Single(snapshot.Records, record => record.Id == "unread");
+            Assert.Equal(expectedPriority ? 2 : 0, snapshot.Records.Count);
+            var unread = (await upgraded.GetByIdAsync("unread"))!;
             Assert.Equal(expectedPriority, unread.IsPriority);
             Assert.False(unread.IsRead);
             Assert.False(unread.HasBeenRead);
             Assert.Equal(150m, unread.TotalPrice);
-            Assert.Equal(1, snapshot.UnreadCount);
-            var read = Assert.Single(snapshot.Records, record => record.Id == "read");
+            Assert.Equal(expectedPriority ? 1 : 0, snapshot.UnreadCount);
+            var read = (await upgraded.GetByIdAsync("read"))!;
             Assert.True(read.IsRead);
             Assert.True(read.HasBeenRead);
             Assert.False(read.IsPriority);

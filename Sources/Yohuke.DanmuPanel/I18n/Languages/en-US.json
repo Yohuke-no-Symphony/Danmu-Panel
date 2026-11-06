@@ -306,7 +306,7 @@
     "Settings.English": "English",
     "Settings.ExtraPrompt": "Additional system prompt",
     "Settings.FollowSystem": "System",
-    "Settings.GiftMinimum": "Gift pin threshold (CNY)",
+    "Settings.GiftMinimum": "Gift display threshold (CNY)",
     "Settings.GiftPinyin": "Show tonal Pinyin for Chinese gift names",
     "Settings.Glossary": "Glossary",
     "Settings.HistoryHelp": "Messages, translations, pins and read states are saved continuously. Clearing history removes records in the chosen scope while keeping accounts, settings and layouts.",

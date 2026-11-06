@@ -55,9 +55,11 @@ public sealed class GiftPriorityReceptionTests
 
         Assert.False(session.HasFailed);
         var snapshot = await store.LoadFeedAsync("tab", MessageKind.Gift, 100, null);
-        Assert.Equal(2, snapshot.Records.Count);
-        Assert.Equal(2, snapshot.UnreadCount);
-        Assert.All(snapshot.Records, record =>
+        Assert.Equal(expectedPriority ? 2 : 0, snapshot.Records.Count);
+        Assert.Equal(expectedPriority ? 2 : 0, snapshot.UnreadCount);
+        var records = await store.LoadPageAsync("tab", MessageKind.Gift, 0, 100);
+        Assert.Equal(2, records.Count);
+        Assert.All(records, record =>
         {
             Assert.Equal(expectedPriority, record.IsPriority);
             Assert.False(record.IsRead);

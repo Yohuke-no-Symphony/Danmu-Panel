@@ -38,11 +38,12 @@ public sealed partial class SqliteMessageStore
         {
             readCache.BeginSnapshot(Convert.ToInt64(version.ExecuteScalar(), CultureInfo.InvariantCulture));
         }
-        var filtered = hideEmoticons || filter is { Enabled: true };
+        var giftMinimum = kind == MessageKind.Gift ? ReadOptions(connection, transaction).GiftAutoPinMinimum : 0;
+        var filtered = giftMinimum > 0 || hideEmoticons || filter is { Enabled: true };
         var predicate = filtered ? VISIBILITY_PREDICATE : "";
         if (filtered)
         {
-            RegisterFeedVisibility(connection, hideEmoticons, filter);
+            RegisterFeedVisibility(connection, hideEmoticons, filter, giftMinimum);
         }
         try
         {
@@ -66,9 +67,9 @@ public sealed partial class SqliteMessageStore
             var unreadCount = 0;
             if (kind != MessageKind.Danmu)
             {
-                using var unread = Command(connection, transaction, """
+                using var unread = Command(connection, transaction, $"""
                     SELECT COUNT(*) FROM message_records
-                    WHERE room_tab_id=$room AND kind=$kind AND json_extract(payload,'$.IsRead')=0;
+                    WHERE room_tab_id=$room AND kind=$kind AND json_extract(payload,'$.IsRead')=0 {predicate};
                     """, ("$room", roomTabId), ("$kind", (int)kind));
                 unreadCount = Convert.ToInt32(unread.ExecuteScalar(), CultureInfo.InvariantCulture);
             }
@@ -107,7 +108,8 @@ public sealed partial class SqliteMessageStore
         }
     }
 
-    private void RegisterFeedVisibility(SqliteConnection connection, bool hideEmoticons, DanmuRegexFilter? filter)
+    private void RegisterFeedVisibility(SqliteConnection connection, bool hideEmoticons, DanmuRegexFilter? filter,
+        decimal giftMinimum)
     {
         var matches = new Dictionary<string, bool>(StringComparer.Ordinal);
         connection.CreateFunction<long, bool>("is_cached_message", readCache.IsValidated);
@@ -116,6 +118,10 @@ public sealed partial class SqliteMessageStore
             var record = payload is not null ? CaptureFeedPayload(sequence, id!, payload) :
                 readCache.TryGetValidated(sequence, out var entry) ? entry.Record :
                 throw new InvalidOperationException("A validated message cache entry disappeared during SQL evaluation.");
+            if (record.Kind == MessageKind.Gift && record.TotalPrice < giftMinimum)
+            {
+                return false;
+            }
             if (hideEmoticons && TranslationTextExtractor.IsEmoticonOnly(record.Content,
                     record.Emoticons.Select(emoticon => emoticon.Text)))
             {
