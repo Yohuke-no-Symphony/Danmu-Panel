@@ -316,6 +316,8 @@
     "Settings.Language": "Interface language",
     "Settings.Light": "Light",
     "Settings.MessageDisplay": "Message display",
+    "Settings.ShowUserAvatars": "Show user avatars",
+    "Settings.ShowUserAvatarsHelp": "Show round avatars to the left of names in all messages, with local caching and automatic updates.",
     "Settings.MessageRetentionCount": "Messages to retain",
     "Settings.MessageRetentionCountHelp": "Number of recent records shown by default in each message panel, initially 300. Pinned and priority unread messages are shown in addition. Reading history keeps the current records, and earlier history can still be loaded.",
     "Settings.InvalidMessageRetentionCount": "Enter a whole number from 1 to {0} for messages to retain.",

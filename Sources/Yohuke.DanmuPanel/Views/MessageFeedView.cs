@@ -297,6 +297,8 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         Resources["MessageMedalSlotWidth"] = 66 * scale;
         Resources["MessageMedalLevelWidth"] = 20 * scale;
         Resources["MessagePinBadgeSize"] = 14 * scale;
+        Resources["MessageUserAvatarSize"] = 20 * scale;
+        Resources["MessageUserAvatarCompactSize"] = 16 * scale;
     }
 
     private void OnInitialLoadCompleted()
@@ -373,7 +375,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
 
     private MessageFeedRow CreateRow(MessageKind kind)
     {
-        var row = new MessageFeedRow(kind);
+        var row = new MessageFeedRow(kind, runtime.UserAvatars);
         row.Click += async (_, args) =>
         {
             args.Handled = true;

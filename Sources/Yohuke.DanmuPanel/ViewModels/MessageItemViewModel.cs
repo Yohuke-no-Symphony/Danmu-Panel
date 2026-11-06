@@ -39,6 +39,10 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     internal MessageDisplaySettings PresentationSettings => settings;
     internal bool TranslationPending => translationPending;
     public string Name => Record.UserName;
+    /// <summary>当前消息用户的稳定身份，用于独立于消息行缓存头像。</summary>
+    public long UserUid => Record.UserUid;
+    /// <summary>是否显示消息用户头像。</summary>
+    public bool ShowUserAvatars => settings.ShowUserAvatars;
     public string NamePinyin => namePinyin;
     public bool HasNamePinyin => NamePinyin.Length > 0;
     public bool IsNamePinyinPending => isPresentationPending && settings.ShowUserPinyin &&
@@ -195,6 +199,8 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         }
 
         NotifyChange(previous.UserName, record.UserName, nameof(Name));
+        NotifyChange(previous.UserUid, record.UserUid, nameof(UserUid));
+        NotifyChange(previousSettings.ShowUserAvatars, settings.ShowUserAvatars, nameof(ShowUserAvatars));
         NotifyChange(previous.MedalLevel, record.MedalLevel, nameof(MedalLevel));
         NotifyChange(showedPin, ShowPinBadge, nameof(ShowPinBadge));
         NotifyChange(showedUnread, ShowUnreadDot, nameof(ShowUnreadDot));

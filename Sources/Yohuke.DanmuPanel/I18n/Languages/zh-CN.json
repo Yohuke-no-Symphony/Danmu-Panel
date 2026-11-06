@@ -315,6 +315,8 @@
     "Settings.Language": "界面语言",
     "Settings.Light": "浅色",
     "Settings.MessageDisplay": "消息显示",
+    "Settings.ShowUserAvatars": "显示用户头像",
+    "Settings.ShowUserAvatarsHelp": "在所有消息的名字左侧显示圆形头像，支持本地缓存并自动更新。",
     "Settings.MessageRetentionCount": "消息留存数量（条）",
     "Settings.MessageRetentionCountHelp": "设置各消息面板默认显示的最近记录数量，默认为 300 条。置顶与未读优先消息额外显示；阅读历史时保留当前记录，可继续加载更早历史。",
     "Settings.InvalidMessageRetentionCount": "请输入 1 至 {0} 之间的整数作为消息留存数量。",

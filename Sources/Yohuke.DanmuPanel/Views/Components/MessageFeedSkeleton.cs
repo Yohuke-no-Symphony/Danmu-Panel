@@ -184,6 +184,12 @@ public sealed class MessageFeedSkeleton : Button
         var time = CreateTextSlot("00:00:00", "danmuFeedMeta");
         DockPanel.SetDock(time, Avalonia.Controls.Dock.Right);
         identity.Children.Add(time);
+        var avatar = new UserAvatarView();
+        avatar.Bind(UserAvatarView.ShowAvatarProperty, new Binding("DataContext.ShowUserAvatars")
+        {
+            RelativeSource = new(RelativeSourceMode.FindAncestor) { AncestorType = typeof(MessageFeedSurface) },
+            FallbackValue = true
+        });
         Grid? medalSlot = null;
         if (Kind == MessageKind.Danmu)
         {
@@ -195,9 +201,15 @@ public sealed class MessageFeedSkeleton : Button
             slots.Add((medal, 1, 1, HorizontalAlignment.Left));
         }
         var name = CreateTextSlot("　", "danmuFeedUser");
-        identity.Children.Add(name);
-        slots.Add((name, 0.78, 0.65, Kind is MessageKind.Gift or MessageKind.Guard
-            ? HorizontalAlignment.Left : HorizontalAlignment.Center));
+        var userIdentity = new Grid
+        {
+            ColumnDefinitions = new("Auto,*"),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Children = { avatar, name }
+        };
+        Grid.SetColumn(name, 1);
+        identity.Children.Add(userIdentity);
+        slots.Add((name, 0.78, 0.65, HorizontalAlignment.Left));
         slots.Add((time, 0.9, 0.65, HorizontalAlignment.Right));
         var original = CreateTextSlot("　", "danmuFeedContent", "regularFeedContent", "originalText");
         slots.Add((original, 0.84, 0.65, HorizontalAlignment.Left));

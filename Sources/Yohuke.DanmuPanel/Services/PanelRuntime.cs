@@ -28,6 +28,8 @@ public sealed class PanelRuntime : IAsyncDisposable
     public TestMessageService TestMessages { get; }
     public EmoticonCacheService Emoticons { get; }
     public AvatarCacheService Avatars { get; }
+    /// <summary>按用户 UID 共享消息头像缓存与更新通知。</summary>
+    public UserAvatarService UserAvatars { get; }
     public ColorSchemeService Colors { get; } = new();
     public BilibiliAccountSessionService AccountSessions { get; } = new();
     public IPinyinService Pinyin { get; }
@@ -68,6 +70,7 @@ public sealed class PanelRuntime : IAsyncDisposable
         scheduler.Error += message => ReportError(message, I18n.Localization.Get("Panel.Log.Translation"));
         Emoticons = new(new AppDirectoryService(configurationStore.DirectoryPath));
         Avatars = new(new AppDirectoryService(configurationStore.DirectoryPath));
+        UserAvatars = new(new AppDirectoryService(configurationStore.DirectoryPath), Avatars);
     }
 
     /// <summary>应用保存的阅读规则并恢复翻译队列。</summary>
@@ -219,6 +222,7 @@ public sealed class PanelRuntime : IAsyncDisposable
             await translationCache.DisposeAsync();
             await ConfigurationStore.SaveAsync(Configuration);
             Emoticons.Dispose();
+            await UserAvatars.DisposeAsync();
             Avatars.Dispose();
             Colors.Dispose();
             Configuration.Accounts.CollectionChanged -= OnAccountsChanged;

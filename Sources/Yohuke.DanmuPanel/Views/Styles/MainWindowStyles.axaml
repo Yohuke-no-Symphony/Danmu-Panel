@@ -923,6 +923,17 @@
         <Setter Property="Cursor" Value="Hand" />
     </Style>
 
+    <Style Selector=":is(Control).messageUserAvatar">
+        <Setter Property="Width" Value="{DynamicResource MessageUserAvatarSize}" />
+        <Setter Property="Height" Value="{DynamicResource MessageUserAvatarSize}" />
+        <Setter Property="Margin" Value="0,0,4,0" />
+    </Style>
+
+    <Style Selector="Grid.compactDanmu :is(Control).messageUserAvatar">
+        <Setter Property="Width" Value="{DynamicResource MessageUserAvatarCompactSize}" />
+        <Setter Property="Height" Value="{DynamicResource MessageUserAvatarCompactSize}" />
+    </Style>
+
     <Style Selector="TextBlock.danmuFeedUser">
         <Setter Property="Foreground" Value="{DynamicResource MessageUserNameBrush}" />
         <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeBody}" />

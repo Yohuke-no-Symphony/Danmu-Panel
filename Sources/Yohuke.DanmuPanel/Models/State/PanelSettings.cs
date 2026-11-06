@@ -49,6 +49,9 @@ public sealed class PanelSettings
     /// <summary>四类消息面板共用的常规窗口容量，置顶与未读优先消息额外显示。</summary>
     public int MessageRetentionCount { get; set; } = DEFAULT_MESSAGE_RETENTION_COUNT;
 
+    /// <summary>在四类消息的用户名左侧显示圆形头像，旧配置默认开启。</summary>
+    public bool ShowUserAvatars { get; set; } = true;
+
     /// <summary>为四类消息启用 Neo 紧凑显示，旧配置默认启用。</summary>
     public bool CompactDanmuDisplay { get; set; } = true;
 

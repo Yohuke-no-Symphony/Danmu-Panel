@@ -8,6 +8,7 @@ using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.Messages;
+using Yohuke.DanmuPanel.Services;
 using Yohuke.DanmuPanel.ViewModels;
 
 namespace Yohuke.DanmuPanel.Views.Components;
@@ -28,7 +29,7 @@ internal sealed class MessageFeedRow : Button
     /// <inheritdoc/>
     protected override Type StyleKeyOverride => typeof(Button);
 
-    internal MessageFeedRow(MessageKind kind)
+    internal MessageFeedRow(MessageKind kind, IUserAvatarService? avatars = null)
     {
         canCopy = kind is MessageKind.Danmu or MessageKind.SuperChat;
         Gestures.SetIsHoldingEnabled(this, canCopy);
@@ -39,6 +40,9 @@ internal sealed class MessageFeedRow : Button
         time.Classes.Add("danmuFeedMeta");
         DockPanel.SetDock(time, Avalonia.Controls.Dock.Right);
         identity.Children.Add(time);
+        var avatar = new UserAvatarView(avatars);
+        avatar.Bind(UserAvatarView.UserUidProperty, new Binding(nameof(MessageItemViewModel.UserUid)));
+        avatar.Bind(UserAvatarView.ShowAvatarProperty, new Binding(nameof(MessageItemViewModel.ShowUserAvatars)));
         Grid? medalSlot = null;
         if (kind == MessageKind.Danmu)
         {
@@ -74,17 +78,24 @@ internal sealed class MessageFeedRow : Button
         name.Bind(EmoticonTextBlock.PinyinForegroundProperty, new DynamicResourceExtension("MessagePinyinBrush"));
         name.Bind(EmoticonTextBlock.PinyinFontSizeProperty, new DynamicResourceExtension("MessageFontSizePinyin"));
         name.Classes.Add("danmuFeedUser");
-        name.TextAlignment = kind is MessageKind.Gift or MessageKind.Guard ? TextAlignment.Left : TextAlignment.Center;
+        name.TextAlignment = TextAlignment.Left;
         name.Bind(ToolTip.TipProperty, new Binding(nameof(MessageItemViewModel.Name)));
         var namePending = CreatePinyinPlaceholder(nameof(MessageItemViewModel.IsNamePinyinPending), 4);
         namePending.Classes.Add("namePinyinPending");
-        namePending.HorizontalAlignment = kind is MessageKind.Gift or MessageKind.Guard
-            ? HorizontalAlignment.Left : HorizontalAlignment.Center;
-        identity.Children.Add(new StackPanel
+        namePending.HorizontalAlignment = HorizontalAlignment.Left;
+        var userName = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
             Children = { namePending, name }
-        });
+        };
+        var userIdentity = new Grid
+        {
+            ColumnDefinitions = new("Auto,*"),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Children = { avatar, userName }
+        };
+        Grid.SetColumn(userName, 1);
+        identity.Children.Add(userIdentity);
         identity.Classes.Add("danmuFeedIdentity");
         var original = new EmoticonTextBlock { TextWrapping = TextWrapping.Wrap };
         original.Classes.Add("danmuFeedContent");

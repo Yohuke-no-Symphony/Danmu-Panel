@@ -55,6 +55,7 @@ public sealed class SettingsView : UserControl
     private readonly NumericUpDown giftBorderThickness;
     private readonly NumericUpDown guardBorderThickness;
     private readonly NumericUpDown messageRetentionCount;
+    private readonly CheckBox showUserAvatars;
     private readonly CheckBox compactDisplay;
     private readonly CheckBox compactDanmuWrap;
     private readonly CheckBox compactSuperChatWrap;
@@ -154,6 +155,8 @@ public sealed class SettingsView : UserControl
             Value = settings.MessageRetentionCount,
             FormatString = "0"
         };
+        showUserAvatars = Check("Settings.ShowUserAvatars", settings.ShowUserAvatars);
+        showUserAvatars.Name = "ShowUserAvatarsCheckBox";
         compactDisplay = Check("Settings.CompactDisplay", settings.CompactDanmuDisplay);
         compactDisplay.Name = "CompactDanmuDisplayCheckBox";
         compactDanmuWrap = Check("Settings.CompactMessageWrap", settings.CompactDanmuWrap);
@@ -211,6 +214,7 @@ public sealed class SettingsView : UserControl
             Card("Settings.MessageDisplay",
                 WithHint(Row("Settings.MessageRetentionCount", messageRetentionCount), "Settings.MessageRetentionCountHelp"),
                 WithHint(Row("Settings.MessageTextScale", messageTextScale), "Settings.MessageTextScaleHelp"),
+                WithHint(showUserAvatars, "Settings.ShowUserAvatarsHelp"),
                 WithHint(hideEmoticonDanmu, "Settings.HideEmoticonDanmuHelp"), compactDisplay,
                 new StackPanel
                 {
@@ -473,6 +477,7 @@ public sealed class SettingsView : UserControl
             MessageTextScale = (double)(messageTextScale.Value ?? 100) / 100,
             MessageColumns = settings.MessageColumns,
             MessageRetentionCount = (int)retentionCount,
+            ShowUserAvatars = showUserAvatars.IsChecked == true,
             CompactDanmuDisplay = compactDisplay.IsChecked == true,
             CompactDanmuWrap = compactDanmuWrap.IsChecked == true,
             CompactSuperChatWrap = compactSuperChatWrap.IsChecked == true,

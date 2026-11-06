@@ -316,6 +316,8 @@
     "Settings.Language": "表示言語",
     "Settings.Light": "ライト",
     "Settings.MessageDisplay": "メッセージ表示",
+    "Settings.ShowUserAvatars": "ユーザーアイコンを表示",
+    "Settings.ShowUserAvatarsHelp": "すべてのメッセージで名前の左に丸いアイコンを表示します。ローカルに保存し、自動更新します。",
     "Settings.MessageRetentionCount": "メッセージ保持件数",
     "Settings.MessageRetentionCountHelp": "各メッセージパネルに初期表示する最新の履歴件数です。初期値は300件です。固定済み・優先表示の未読メッセージは別枠で表示します。履歴の閲覧中は現在の記録を保持し、さらに古い履歴も読み込めます。",
     "Settings.InvalidMessageRetentionCount": "メッセージ保持件数は1から{0}までの整数で入力してください。",

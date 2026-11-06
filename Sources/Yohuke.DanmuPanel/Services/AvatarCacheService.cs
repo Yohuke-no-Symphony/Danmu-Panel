@@ -28,11 +28,22 @@ public sealed class AvatarCacheService : IRoomAvatarService, IDisposable
     private readonly HttpClient httpClient;
     private readonly bool disposeHttpClient;
     private readonly ConcurrentDictionary<string, Lazy<Task<string>>> downloads = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> ownerLocks = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, AvatarDownloadOwnerGate> ownerLocks = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim downloadSlots = new(4);
     private readonly CancellationTokenSource lifetime = new();
     private readonly object syncRoot = new();
     private bool isDisposed;
+
+    internal int ActiveOwnerGateCount
+    {
+        get
+        {
+            lock (syncRoot)
+            {
+                return ownerLocks.Count;
+            }
+        }
+    }
 
     /// <summary>
     /// 初始化头像缓存服务。
@@ -223,10 +234,11 @@ public sealed class AvatarCacheService : IRoomAvatarService, IDisposable
 
     private async Task<string> DownloadAndRemoveAsync(string roomId, Uri uri, string filePath)
     {
+        var ownerKey = NormalizeFileNamePart(roomId);
+        var ownerGate = BorrowOwnerGate(ownerKey);
         try
         {
-            var ownerLock = ownerLocks.GetOrAdd(NormalizeFileNamePart(roomId), _ => new(1, 1));
-            await ownerLock.WaitAsync(lifetime.Token).ConfigureAwait(false);
+            await ownerGate.Semaphore.WaitAsync(lifetime.Token).ConfigureAwait(false);
             try
             {
                 await downloadSlots.WaitAsync(lifetime.Token).ConfigureAwait(false);
@@ -241,7 +253,7 @@ public sealed class AvatarCacheService : IRoomAvatarService, IDisposable
             }
             finally
             {
-                ownerLock.Release();
+                ownerGate.Semaphore.Release();
             }
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
@@ -256,7 +268,35 @@ public sealed class AvatarCacheService : IRoomAvatarService, IDisposable
         }
         finally
         {
+            ReturnOwnerGate(ownerKey, ownerGate);
             downloads.TryRemove(filePath, out _);
+        }
+    }
+
+    private AvatarDownloadOwnerGate BorrowOwnerGate(string ownerKey)
+    {
+        lock (syncRoot)
+        {
+            if (!ownerLocks.TryGetValue(ownerKey, out var gate))
+            {
+                gate = new();
+                ownerLocks.Add(ownerKey, gate);
+            }
+            gate.BorrowerCount++;
+            return gate;
+        }
+    }
+
+    private void ReturnOwnerGate(string ownerKey, AvatarDownloadOwnerGate gate)
+    {
+        lock (syncRoot)
+        {
+            gate.BorrowerCount--;
+            if (gate.BorrowerCount == 0)
+            {
+                ownerLocks.Remove(ownerKey);
+                gate.Semaphore.Dispose();
+            }
         }
     }
 
@@ -330,10 +370,6 @@ public sealed class AvatarCacheService : IRoomAvatarService, IDisposable
             if (disposeHttpClient)
             {
                 httpClient.Dispose();
-            }
-            foreach (var gate in ownerLocks.Values)
-            {
-                gate.Dispose();
             }
             downloadSlots.Dispose();
             lifetime.Dispose();
