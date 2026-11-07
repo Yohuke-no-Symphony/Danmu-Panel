@@ -32,6 +32,7 @@ public sealed class ColorSchemeEditor : UserControl
     /// <summary>创建针对现有全局设置的颜色编辑器，保存由设置宿主统一执行。</summary>
     public ColorSchemeEditor(PanelSettings settings, ColorSchemeService colors, IReadOnlySet<string>? detachedColorKeys = null)
     {
+        settings.ColorScheme = ColorSchemeService.Snapshot(settings.ColorScheme);
         this.settings = settings;
         this.colors = colors;
         Name = "ColorSchemeEditor";

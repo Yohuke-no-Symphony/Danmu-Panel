@@ -1,11 +1,13 @@
 using System.Collections.Frozen;
+using Yohuke.DanmuPanel.Models.Appearance;
 
 namespace Yohuke.DanmuPanel.Services.Appearance;
 
 /// <summary>集中描述界面与消息中允许覆盖的颜色。</summary>
 public static class ColorSettingCatalog
 {
-    public const string SPECIAL_ATTENTION_MESSAGE_BRUSH = "SpecialAttentionMessageBrush";
+    public const string SPECIAL_ATTENTION_USER_NAME_BRUSH = ColorSchemeSettings.SPECIAL_ATTENTION_USER_NAME_BRUSH;
+    public const string SPECIAL_ATTENTION_CONTENT_BRUSH = ColorSchemeSettings.SPECIAL_ATTENTION_CONTENT_BRUSH;
     public const string GUARD_CAPTAIN_COLOR = "#4F8FDD";
     public const string GUARD_ADMIRAL_COLOR = "#A46EE8";
     public const string GUARD_GOVERNOR_COLOR = "#E9A23B";
@@ -36,11 +38,15 @@ public static class ColorSettingCatalog
         Define("AppDanmuAlternateRowBrush", "Messages"),
         Define("MessageOriginalBrush", "Messages", "AppTextBrush"),
         Define("MessageTranslationBrush", "Messages", "AppTextBrush"),
-        Define(SPECIAL_ATTENTION_MESSAGE_BRUSH, "Messages"),
+        Define(SPECIAL_ATTENTION_USER_NAME_BRUSH, "Messages"),
+        Define(SPECIAL_ATTENTION_CONTENT_BRUSH, "Messages"),
         Define("MessageUserNameBrush", "Messages", "AppTextBrush"),
         Define("MessagePinyinBrush", "Messages", "AppMutedTextBrush"),
         Define("MessageTimeBrush", "Messages", "AppMutedTextBrush"),
         Define("MedalBackgroundBrush", "Medals", "AppSidebarSelectedBrush"),
+        Define("MedalCaptainBackgroundBrush", "Medals", color: GUARD_CAPTAIN_COLOR),
+        Define("MedalAdmiralBackgroundBrush", "Medals", color: GUARD_ADMIRAL_COLOR),
+        Define("MedalGovernorBackgroundBrush", "Medals", color: GUARD_GOVERNOR_COLOR),
         Define("MedalTextBrush", "Medals", "AppMutedTextBrush"),
         Define("GuardCaptainBrush", "Borders", color: GUARD_CAPTAIN_COLOR),
         Define("GuardAdmiralBrush", "Borders", color: GUARD_ADMIRAL_COLOR),
@@ -92,7 +98,7 @@ public static class ColorSettingCatalog
 
     internal static bool Contains(string key)
     {
-        return definitionsByKey.ContainsKey(key);
+        return key == ColorSchemeSettings.LEGACY_SPECIAL_ATTENTION_MESSAGE_BRUSH || definitionsByKey.ContainsKey(key);
     }
 
     internal static ColorSettingDefinition GetSuperChatBorder(decimal price)

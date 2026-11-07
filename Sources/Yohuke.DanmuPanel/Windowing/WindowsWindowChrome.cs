@@ -252,17 +252,14 @@ internal sealed class WindowsWindowChrome : IWindowChrome
 
     private unsafe nint HitTest(nint nativeWindow, uint message, nint wParam, nint lParam)
     {
-        if (WindowsNativeMethods.DwmDefWindowProc(nativeWindow, message, wParam, lParam, out var result) != 0 &&
-            result != (nint)WindowsChromeHitTest.CLIENT && result != (nint)WindowsChromeHitTest.NONE)
-        {
-            return result;
-        }
-
+        var dwmHit = WindowsNativeMethods.DwmDefWindowProc(nativeWindow, message, wParam, lParam, out var result) != 0
+            ? (WindowsChromeHitTest)result
+            : WindowsChromeHitTest.NONE;
         var point = WindowsChromeGeometry.GetScreenPoint(lParam);
         var nativeTitleBar = new WindowsTitleBarInfoEx { Size = checked((uint)sizeof(WindowsTitleBarInfoEx)) };
         WindowsNativeMethods.DefWindowProc(handle, WindowsNativeMethods.WM_GETTITLEBARINFOEX, 0,
             (nint)(&nativeTitleBar));
-        var captionHit = WindowsChromeGeometry.HitCaptionButtons(point, in nativeTitleBar);
+        var captionHit = WindowsChromeGeometry.HitCaptionButtons(point, in nativeTitleBar, dwmHit);
         if (captionHit != WindowsChromeHitTest.NONE)
         {
             return (nint)captionHit;

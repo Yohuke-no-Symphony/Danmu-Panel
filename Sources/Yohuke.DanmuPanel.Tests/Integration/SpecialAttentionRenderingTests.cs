@@ -1,9 +1,11 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
@@ -21,7 +23,7 @@ namespace Yohuke.DanmuPanel.Tests.Integration;
 /// <summary>验证特别关注强调普通弹幕的用户名和正文，并在原位刷新和行复用后恢复样式。</summary>
 public sealed class SpecialAttentionRenderingTests
 {
-    /// <summary>常规、紧凑和换行模式同步强调用户名、原文与译文，并保留辅助信息及注音样式。</summary>
+    /// <summary>常规、紧凑和换行模式分别设置用户名和正文颜色，并保留译文、辅助信息及注音样式。</summary>
     [AvaloniaTheory]
     [InlineData(false, false, PinyinLayoutMode.Ruby, false)]
     [InlineData(false, false, PinyinLayoutMode.SeparateLine, true)]
@@ -38,7 +40,9 @@ public sealed class SpecialAttentionRenderingTests
         var row = new MessageFeedRow(MessageKind.Danmu) { DataContext = model };
         var window = CreateWindow(row, compact, wrap, dark);
         var attentionBrush = new SolidColorBrush(Color.Parse("#C026D3"));
-        window.Resources["SpecialAttentionMessageBrush"] = attentionBrush;
+        var userNameBrush = new SolidColorBrush(Color.Parse("#2563EB"));
+        window.Resources["SpecialAttentionContentBrush"] = attentionBrush;
+        window.Resources["SpecialAttentionUserNameBrush"] = userNameBrush;
         try
         {
             window.Show();
@@ -71,10 +75,10 @@ public sealed class SpecialAttentionRenderingTests
             Assert.Same(original, FindOriginal(row, compact, wrap));
             Assert.Same(translated, FindTranslated(row, compact, wrap));
             Assert.Equal(FontWeight.Bold, original.FontWeight);
-            Assert.Equal(FontWeight.Bold, translated.FontWeight);
+            Assert.Equal(translatedWeight, translated.FontWeight);
             Assert.Same(attentionBrush, original.Foreground);
-            Assert.Same(attentionBrush, translated.Foreground);
-            Assert.Same(attentionBrush, name.Foreground);
+            Assert.Same(translatedBrush, translated.Foreground);
+            Assert.Same(userNameBrush, name.Foreground);
             Assert.Equal(FontWeight.Bold, name.FontWeight);
             Assert.Same(namePinyinBrush, name.PinyinForeground);
             Assert.Same(nameAnnotations, model.NameAnnotations);
@@ -82,6 +86,8 @@ public sealed class SpecialAttentionRenderingTests
             Assert.Same(medalBrush, medal.Foreground);
             Assert.Same(pinyinBrush, original.PinyinForeground);
             Assert.Same(annotations, model.ContentPinyin);
+            CaptureIfRequested(window,
+                $"special-attention-row-{(dark ? "dark" : "light")}-{(compact ? "compact" : "normal")}-{(wrap ? "wrap" : "single")}-{pinyinLayout}.png");
             if (pinyinLayout == PinyinLayoutMode.Ruby)
             {
                 var nameSyllables = name.GetVisualDescendants().OfType<PinyinRubySyllable>().ToArray();
@@ -89,7 +95,7 @@ public sealed class SpecialAttentionRenderingTests
                 Assert.All(nameSyllables, syllable =>
                 {
                     Assert.Equal(FontWeight.Bold, syllable.OriginalText.FontWeight);
-                    Assert.Same(attentionBrush, syllable.OriginalText.Foreground);
+                    Assert.Same(userNameBrush, syllable.OriginalText.Foreground);
                     Assert.Equal(FontWeight.Normal, syllable.PronunciationText.FontWeight);
                     Assert.Same(namePinyinBrush, syllable.PronunciationText.Foreground);
                 });
@@ -105,11 +111,18 @@ public sealed class SpecialAttentionRenderingTests
             }
 
             var changedBrush = new SolidColorBrush(Color.Parse("#16A34A"));
-            window.Resources["SpecialAttentionMessageBrush"] = changedBrush;
+            window.Resources["SpecialAttentionContentBrush"] = changedBrush;
             PinyinTextRenderingTests.Pump(window);
             Assert.Same(changedBrush, original.Foreground);
-            Assert.Same(changedBrush, translated.Foreground);
-            Assert.Same(changedBrush, name.Foreground);
+            Assert.Same(translatedBrush, translated.Foreground);
+            Assert.Equal(translatedWeight, translated.FontWeight);
+            Assert.Same(userNameBrush, name.Foreground);
+            var changedUserNameBrush = new SolidColorBrush(Color.Parse("#EA580C"));
+            window.Resources["SpecialAttentionUserNameBrush"] = changedUserNameBrush;
+            PinyinTextRenderingTests.Pump(window);
+            Assert.Same(changedUserNameBrush, name.Foreground);
+            Assert.Same(changedBrush, original.Foreground);
+            Assert.Same(translatedBrush, translated.Foreground);
 
             settings.SpecialAttention.Users.Clear();
             model.Update(record, settings);
@@ -141,7 +154,8 @@ public sealed class SpecialAttentionRenderingTests
         var row = new MessageFeedRow(MessageKind.Danmu) { DataContext = ordinary };
         var window = CreateWindow(row, compact, false, false);
         var attentionBrush = new SolidColorBrush(Color.Parse("#C026D3"));
-        window.Resources["SpecialAttentionMessageBrush"] = attentionBrush;
+        window.Resources["SpecialAttentionContentBrush"] = attentionBrush;
+        window.Resources["SpecialAttentionUserNameBrush"] = Brushes.DarkCyan;
         try
         {
             window.Show();
@@ -159,7 +173,7 @@ public sealed class SpecialAttentionRenderingTests
             Assert.Same(body, FindOriginal(row, compact, false));
             Assert.Equal(FontWeight.Bold, body.FontWeight);
             Assert.Same(attentionBrush, body.Foreground);
-            Assert.Same(attentionBrush, name.Foreground);
+            Assert.Same(Brushes.DarkCyan, name.Foreground);
             Assert.Equal(FontWeight.Bold, name.FontWeight);
 
             row.DataContext = ordinary;
@@ -173,7 +187,7 @@ public sealed class SpecialAttentionRenderingTests
             PinyinTextRenderingTests.Pump(window);
             Assert.Equal(FontWeight.Bold, body.FontWeight);
             Assert.Same(attentionBrush, body.Foreground);
-            Assert.Same(attentionBrush, name.Foreground);
+            Assert.Same(Brushes.DarkCyan, name.Foreground);
             Assert.Equal(FontWeight.Bold, name.FontWeight);
         }
         finally
@@ -237,7 +251,7 @@ public sealed class SpecialAttentionRenderingTests
         };
         var row = new MessageFeedRow(MessageKind.Danmu) { DataContext = model };
         var window = CreateWindow(row, compact, false, false);
-        window.Resources["SpecialAttentionMessageBrush"] = Brushes.DarkMagenta;
+        window.Resources["SpecialAttentionContentBrush"] = Brushes.DarkMagenta;
         try
         {
             window.Show();
@@ -260,6 +274,20 @@ public sealed class SpecialAttentionRenderingTests
         {
             window.Close();
         }
+    }
+
+    private static void CaptureIfRequested(Window window, string name)
+    {
+        if (Environment.GetEnvironmentVariable("DANMUPANEL_SPECIAL_ATTENTION_SCREENSHOTS") is not { Length: > 0 } directory)
+        {
+            return;
+        }
+        Directory.CreateDirectory(directory);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick(2);
+        Dispatcher.UIThread.RunJobs();
+        using var frame = window.CaptureRenderedFrame();
+        Assert.NotNull(frame);
+        frame.Save(Path.Combine(directory, name));
     }
 
     private static PanelSettings CreateSettings(PinyinLayoutMode pinyinLayout)

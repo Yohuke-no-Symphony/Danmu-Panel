@@ -3,7 +3,6 @@
              x:Class="Yohuke.DanmuPanel.Views.Settings.DanmuRegexEditorSurface"
              x:CompileBindings="False">
     <StackPanel Spacing="12">
-        <TextBlock Text="{Loc Key=Settings.DanmuRegexRulesHelp}" Classes="muted" TextWrapping="Wrap" />
         <Button x:Name="AddDanmuRegexRuleButton" HorizontalAlignment="Left"
                 Command="{Binding AddRuleCommand}">
             <StackPanel Orientation="Horizontal" Spacing="6">

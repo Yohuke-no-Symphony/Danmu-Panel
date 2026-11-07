@@ -82,8 +82,14 @@ internal static class WindowsChromeGeometry
         return new(0, 0, right * STANDARD_DPI / dpi, 0);
     }
 
-    internal static WindowsChromeHitTest HitCaptionButtons(WindowsPoint screenPoint, in WindowsTitleBarInfoEx titleBar)
+    internal static WindowsChromeHitTest HitCaptionButtons(WindowsPoint screenPoint, in WindowsTitleBarInfoEx titleBar,
+        WindowsChromeHitTest dwmHit = WindowsChromeHitTest.NONE)
     {
+        if (dwmHit is WindowsChromeHitTest.MINIMIZE or WindowsChromeHitTest.MAXIMIZE or WindowsChromeHitTest.CLOSE)
+        {
+            return dwmHit;
+        }
+
         if (HitCaptionButton(screenPoint, titleBar.MinimizeBounds, titleBar.MinimizeState))
         {
             return WindowsChromeHitTest.MINIMIZE;

@@ -129,6 +129,39 @@ public sealed class MessageCardColorTests
         AssertColor("#123456", item.BorderBrush);
     }
 
+    /// <summary>舰队边框与同档粉丝牌底色分别覆盖和恢复，任意一侧的修改都不影响另一侧。</summary>
+    [Theory]
+    [InlineData(3, "GuardCaptainBrush", "MedalCaptainBackgroundBrush", "#4F8FDD")]
+    [InlineData(2, "GuardAdmiralBrush", "MedalAdmiralBackgroundBrush", "#A46EE8")]
+    [InlineData(1, "GuardGovernorBrush", "MedalGovernorBackgroundBrush", "#E9A23B")]
+    public void GuardBordersAndMedalBackgroundsAreIndependent(int level, string borderKey, string medalKey, string defaultColor)
+    {
+        var settings = new PanelSettings();
+        var record = new MessageRecord { Kind = MessageKind.Guard, GuardLevel = level, MedalGuardLevel = level, IsRead = true };
+        var item = new MessageItemViewModel(record, settings, new PinyinService());
+        AssertColor(defaultColor, item.BorderBrush);
+        AssertColor(defaultColor, item.MedalBackgroundBrush);
+
+        settings.ColorScheme.Overrides[borderKey] = "#123456";
+        item.Update(record, settings);
+        AssertColor("#123456", item.BorderBrush);
+        AssertColor(defaultColor, item.MedalBackgroundBrush);
+
+        settings.ColorScheme.Overrides[medalKey] = "#FEDCBA";
+        item.Update(record, settings);
+        AssertColor("#123456", item.BorderBrush);
+        AssertColor("#FEDCBA", item.MedalBackgroundBrush);
+
+        settings.ColorScheme.Overrides.Remove(borderKey);
+        item.Update(record, settings);
+        AssertColor(defaultColor, item.BorderBrush);
+        AssertColor("#FEDCBA", item.MedalBackgroundBrush);
+
+        settings.ColorScheme.Overrides.Remove(medalKey);
+        item.Update(record, settings);
+        AssertColor(defaultColor, item.MedalBackgroundBrush);
+    }
+
     private static void AssertColor(string expected, IBrush brush)
     {
         Assert.Equal(Color.Parse(expected), Assert.IsAssignableFrom<ISolidColorBrush>(brush).Color);

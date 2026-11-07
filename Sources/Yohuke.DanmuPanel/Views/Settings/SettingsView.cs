@@ -108,8 +108,13 @@ public sealed class SettingsView : UserControl
         this.accountsView = accountsView;
         var settings = runtime.Configuration.Settings;
         colorSchemeEditor = new(settings, runtime.Colors,
-            new HashSet<string>(StringComparer.Ordinal) { ColorSettingCatalog.SPECIAL_ATTENTION_MESSAGE_BRUSH });
-        SpecialAttentionEditor = new(runtime, colorSchemeEditor.GetInput(ColorSettingCatalog.SPECIAL_ATTENTION_MESSAGE_BRUSH), userSearch, userAvatars);
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                ColorSettingCatalog.SPECIAL_ATTENTION_USER_NAME_BRUSH, ColorSettingCatalog.SPECIAL_ATTENTION_CONTENT_BRUSH
+            });
+        SpecialAttentionEditor = new(runtime,
+            colorSchemeEditor.GetInput(ColorSettingCatalog.SPECIAL_ATTENTION_USER_NAME_BRUSH),
+            colorSchemeEditor.GetInput(ColorSettingCatalog.SPECIAL_ATTENTION_CONTENT_BRUSH), userSearch, userAvatars);
         DanmuRegexEditor = new(settings.DanmuRegexFilter);
         superChatBorderThickness = CreateBorderThicknessInput("SuperChatBorderThicknessInput", settings.MessageBorders.SuperChat);
         giftBorderThickness = CreateBorderThicknessInput("GiftBorderThicknessInput", settings.MessageBorders.Gift);
@@ -635,7 +640,6 @@ public sealed class SettingsView : UserControl
         };
         return Stack(Card("Settings.Appearance", Row("Settings.Language", languages), Row("Settings.Theme", theme), windowMenuOnMac),
             Card("Settings.MessageBorders",
-                Help("Settings.MessageBordersHelp"),
                 Row("Settings.SuperChatBorderThickness", superChatBorderThickness),
                 Row("Settings.GiftBorderThickness", giftBorderThickness),
                 Row("Settings.GuardBorderThickness", guardBorderThickness)),

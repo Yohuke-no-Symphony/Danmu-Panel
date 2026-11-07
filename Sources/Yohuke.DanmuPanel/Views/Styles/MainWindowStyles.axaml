@@ -997,10 +997,6 @@
         <Setter Property="TextAlignment" Value="Center" />
     </Style>
 
-    <Style Selector="Button:guardMedal Border.danmuMedalBadge TextBlock.danmuMedalText" x:DataType="viewModels:MessageItemViewModel">
-        <Setter Property="Foreground" Value="{Binding MedalForegroundBrush}" />
-    </Style>
-
     <Style Selector="TextBlock.danmuFeedContent">
         <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeBody}" />
         <Setter Property="LineSpacing" Value="1" />
@@ -1030,13 +1026,18 @@
         <Setter Property="Foreground" Value="{DynamicResource MessageTranslationBrush}" />
     </Style>
 
-    <Style Selector="Button:specialAttention TextBlock.danmuFeedUser, Button:specialAttention TextBlock.originalText, Button:specialAttention TextBlock.translatedText">
-        <Setter Property="Foreground" Value="{DynamicResource SpecialAttentionMessageBrush}" />
+    <Style Selector="Button:specialAttention TextBlock.danmuFeedUser">
+        <Setter Property="Foreground" Value="{DynamicResource SpecialAttentionUserNameBrush}" />
         <Setter Property="FontWeight" Value="Bold" />
     </Style>
 
-    <Style Selector="Button:specialAttention components|HoverMarqueeTextBlock.originalText, Button:specialAttention components|HoverMarqueeTextBlock.translatedText">
-        <Setter Property="Foreground" Value="{DynamicResource SpecialAttentionMessageBrush}" />
+    <Style Selector="Button:specialAttention TextBlock.originalText">
+        <Setter Property="Foreground" Value="{DynamicResource SpecialAttentionContentBrush}" />
+        <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+
+    <Style Selector="Button:specialAttention components|HoverMarqueeTextBlock.originalText">
+        <Setter Property="Foreground" Value="{DynamicResource SpecialAttentionContentBrush}" />
         <Setter Property="FontWeight" Value="Bold" />
     </Style>
 

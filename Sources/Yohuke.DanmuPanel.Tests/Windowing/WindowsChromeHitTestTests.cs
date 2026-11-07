@@ -105,4 +105,134 @@ public sealed class WindowsChromeHitTestTests
         Assert.Equal(WindowsChromeHitTest.NONE,
             WindowsChromeGeometry.HitCaptionButtons(new() { X = 145, Y = 25 }, in titleBar));
     }
+
+    /// <summary>
+    /// 最大化右上角的实测关闭区域不会被 DWM 的非按钮命中结果覆盖。
+    /// </summary>
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(10)]
+    [InlineData(11)]
+    [InlineData(12)]
+    [InlineData(13)]
+    [InlineData(14)]
+    [InlineData(15)]
+    [InlineData(16)]
+    [InlineData(17)]
+    public void MaximizedCloseButtonOverridesDwmNonButtonHits(int dwmHit)
+    {
+        var titleBar = new WindowsTitleBarInfoEx
+        {
+            CloseBounds = new()
+            {
+                Left = 1874,
+                Top = 0,
+                Right = 1920,
+                Bottom = 32
+            }
+        };
+        var point = new WindowsPoint
+        {
+            X = 1919,
+            Y = 0
+        };
+
+        Assert.Equal(WindowsChromeHitTest.CLOSE,
+            WindowsChromeGeometry.HitCaptionButtons(point, in titleBar, (WindowsChromeHitTest)dwmHit));
+    }
+
+    /// <summary>
+    /// 非按钮命中必须继续进入窗口自身的缩放、拖动与客户区判断。
+    /// </summary>
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(10)]
+    [InlineData(11)]
+    [InlineData(12)]
+    [InlineData(13)]
+    [InlineData(14)]
+    [InlineData(15)]
+    [InlineData(16)]
+    [InlineData(17)]
+    public void DwmNonButtonHitsDoNotBypassManagedFrameHitTesting(int dwmHit)
+    {
+        var titleBar = new WindowsTitleBarInfoEx();
+        var point = new WindowsPoint
+        {
+            X = 1800,
+            Y = 10
+        };
+
+        Assert.Equal(WindowsChromeHitTest.NONE,
+            WindowsChromeGeometry.HitCaptionButtons(point, in titleBar, (WindowsChromeHitTest)dwmHit));
+    }
+
+    /// <summary>
+    /// DWM 成功命中的系统按钮保留原生结果。
+    /// </summary>
+    [Theory]
+    [InlineData(8)]
+    [InlineData(9)]
+    [InlineData(20)]
+    public void DwmCaptionButtonHitsRemainAuthoritative(int dwmHit)
+    {
+        var titleBar = new WindowsTitleBarInfoEx
+        {
+            CloseBounds = new()
+            {
+                Left = 1874,
+                Top = 0,
+                Right = 1920,
+                Bottom = 32
+            }
+        };
+        var point = new WindowsPoint
+        {
+            X = 1919,
+            Y = 0
+        };
+
+        Assert.Equal((WindowsChromeHitTest)dwmHit,
+            WindowsChromeGeometry.HitCaptionButtons(point, in titleBar, (WindowsChromeHitTest)dwmHit));
+    }
+
+    /// <summary>
+    /// 最大化关闭区域使用原生屏幕坐标，保留四条边界及负坐标显示器语义。
+    /// </summary>
+    [Theory]
+    [InlineData(0, 0, 1874, 0, 20)]
+    [InlineData(0, 0, 1919, 31, 20)]
+    [InlineData(0, 0, 1873, 0, 0)]
+    [InlineData(0, 0, 1920, 0, 0)]
+    [InlineData(0, 0, 1919, -1, 0)]
+    [InlineData(0, 0, 1919, 32, 0)]
+    [InlineData(-1920, -1080, -1, -1080, 20)]
+    [InlineData(-1920, -1080, 0, -1080, 0)]
+    public void MaximizedCloseButtonUsesActualScreenBounds(int screenLeft, int screenTop, int x, int y, int expected)
+    {
+        var titleBar = new WindowsTitleBarInfoEx
+        {
+            CloseBounds = new()
+            {
+                Left = screenLeft + 1874,
+                Top = screenTop,
+                Right = screenLeft + 1920,
+                Bottom = screenTop + 32
+            }
+        };
+        var point = new WindowsPoint
+        {
+            X = x,
+            Y = y
+        };
+
+        Assert.Equal((WindowsChromeHitTest)expected,
+            WindowsChromeGeometry.HitCaptionButtons(point, in titleBar, WindowsChromeHitTest.TOP_RIGHT));
+    }
 }

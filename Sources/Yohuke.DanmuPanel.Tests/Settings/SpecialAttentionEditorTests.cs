@@ -12,7 +12,6 @@ using CommunityToolkit.Mvvm.Input;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Services;
-using Yohuke.DanmuPanel.Services.Appearance;
 using Yohuke.DanmuPanel.Tests.Messages;
 using Yohuke.DanmuPanel.Tests.Workspace;
 using Yohuke.DanmuPanel.Views.Components;
@@ -96,18 +95,25 @@ public sealed class SpecialAttentionEditorTests
             Assert.Contains(editor.GetVisualDescendants().OfType<TextBlock>(), text => text.Text == "已关注的用户");
             Assert.Contains(editor.GetVisualDescendants().OfType<TextBlock>(), text => text.Text == "搜索到的用户");
             Assert.Contains(73L, avatars.RequestedUsers);
-            var color = editor.GetVisualDescendants().OfType<ColorInput>().Single();
+            Assert.Equal(2, editor.GetVisualDescendants().OfType<ColorInput>().Count());
+            var color = FindColor(editor, "SpecialAttentionContentBrush");
+            var userNameColor = FindColor(editor, "SpecialAttentionUserNameBrush");
             color.GetVisualDescendants().OfType<TextBox>().Single(value => value.Name == "ColorHexInput").Text = "#12AB34";
             Pump(window);
-            Assert.Equal("#12AB34", configuration.Settings.ColorScheme.Overrides[ColorSettingCatalog.SPECIAL_ATTENTION_MESSAGE_BRUSH]);
+            userNameColor.GetVisualDescendants().OfType<TextBox>().Single(value => value.Name == "ColorHexInput").Text = "#80654321";
+            Pump(window);
+            Assert.Equal("#12AB34", configuration.Settings.ColorScheme.Overrides["SpecialAttentionContentBrush"]);
+            Assert.Equal("#80654321", configuration.Settings.ColorScheme.Overrides["SpecialAttentionUserNameBrush"]);
             Select(view, "Appearance");
             Assert.DoesNotContain(view.GetVisualDescendants().OfType<ColorInput>(), value => ReferenceEquals(value, color));
+            Assert.DoesNotContain(view.GetVisualDescendants().OfType<ColorInput>(), value => ReferenceEquals(value, userNameColor));
             Select(view, "Reading");
             Pump(window);
             Assert.Empty(view.GetVisualDescendants().OfType<SpecialAttentionEditor>());
             Select(view, "SpecialAttention");
             Assert.Equal(2, editor.Model.Users.Count);
-            Assert.Same(color, editor.GetVisualDescendants().OfType<ColorInput>().Single());
+            Assert.Same(color, FindColor(editor, "SpecialAttentionContentBrush"));
+            Assert.Same(userNameColor, FindColor(editor, "SpecialAttentionUserNameBrush"));
             editor.BringIntoView();
             Pump(window);
             await WaitUntilAsync(() => editor.GetVisualDescendants().OfType<UserAvatarView>().All(avatar => avatar.AvatarImage is not null), window);
@@ -119,7 +125,17 @@ public sealed class SpecialAttentionEditorTests
             var restored = runtime.ConfigurationStore.Load().Settings;
             Assert.Equal(new long[] { 42, 73 }, restored.SpecialAttention.Users.Select(user => user.UserUid));
             Assert.Equal("搜索到的用户", restored.SpecialAttention.Users[1].DisplayName);
-            Assert.Equal("#12AB34", restored.ColorScheme.Overrides[ColorSettingCatalog.SPECIAL_ATTENTION_MESSAGE_BRUSH]);
+            Assert.Equal("#12AB34", restored.ColorScheme.Overrides["SpecialAttentionContentBrush"]);
+            Assert.Equal("#80654321", restored.ColorScheme.Overrides["SpecialAttentionUserNameBrush"]);
+            userNameColor.GetVisualDescendants().OfType<Button>().Single(value => value.Name == "ResetColorButton")
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Pump(window);
+            Assert.False(configuration.Settings.ColorScheme.Overrides.ContainsKey("SpecialAttentionUserNameBrush"));
+            Assert.Equal("#12AB34", configuration.Settings.ColorScheme.Overrides["SpecialAttentionContentBrush"]);
+            Assert.True(await view.SaveAsync());
+            var afterReset = runtime.ConfigurationStore.Load().Settings.ColorScheme;
+            Assert.False(afterReset.Overrides.ContainsKey("SpecialAttentionUserNameBrush"));
+            Assert.Equal("#12AB34", afterReset.Overrides["SpecialAttentionContentBrush"]);
         }
         finally
         {
@@ -135,8 +151,10 @@ public sealed class SpecialAttentionEditorTests
     }
 
     /// <summary>非法颜色保留原始输入并拒绝保存整份名单草稿。</summary>
-    [AvaloniaFact]
-    public async Task InvalidAttentionColorPreventsApplyingUserDraft()
+    [AvaloniaTheory]
+    [InlineData("SpecialAttentionUserNameBrush")]
+    [InlineData("SpecialAttentionContentBrush")]
+    public async Task InvalidAttentionColorPreventsApplyingUserDraft(string colorKey)
     {
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = new PanelRuntime(new(directory.Path), new());
@@ -151,7 +169,7 @@ public sealed class SpecialAttentionEditorTests
             var editor = view.SpecialAttentionEditor;
             editor.Model.ManualUid = "42";
             editor.Model.AddManualUserCommand.Execute(null);
-            editor.GetVisualDescendants().OfType<ColorInput>().Single().GetVisualDescendants().OfType<TextBox>()
+            FindColor(editor, colorKey).GetVisualDescendants().OfType<TextBox>()
                 .Single(value => value.Name == "ColorHexInput").Text = "invalid";
 
             Assert.False(await view.SaveAsync());
@@ -165,6 +183,11 @@ public sealed class SpecialAttentionEditorTests
         {
             window.Close();
         }
+    }
+
+    private static ColorInput FindColor(Control root, string key)
+    {
+        return root.GetVisualDescendants().OfType<ColorInput>().Single(input => input.Name == "ColorInput_" + key);
     }
 
     private static string WriteAvatar(string directory)

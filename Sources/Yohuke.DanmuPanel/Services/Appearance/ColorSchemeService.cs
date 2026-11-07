@@ -20,6 +20,10 @@ public sealed class ColorSchemeService : IDisposable
     public void Apply(Application target, ColorSchemeSettings settings)
     {
         Validate(settings);
+        if (settings.Overrides.ContainsKey(ColorSchemeSettings.LEGACY_SPECIAL_ATTENTION_MESSAGE_BRUSH))
+        {
+            settings = Snapshot(settings);
+        }
         Attach(target);
         resources.Clear();
         foreach (var (key, value) in settings.Overrides)
@@ -60,13 +64,17 @@ public sealed class ColorSchemeService : IDisposable
     public Color? GetCurrentColor(Application target, ColorSchemeSettings settings, string key)
     {
         ColorSettingCatalog.Get(key);
+        if (settings.Overrides.ContainsKey(ColorSchemeSettings.LEGACY_SPECIAL_ATTENTION_MESSAGE_BRUSH))
+        {
+            settings = Snapshot(settings);
+        }
         return settings.Overrides.TryGetValue(key, out var color) ? Color.Parse(color) : GetDefaultColor(target, key);
     }
 
     /// <summary>深复制全部当前颜色与已保存方案，草稿不会修改原始设置。</summary>
     public static ColorSchemeSettings Snapshot(ColorSchemeSettings settings)
     {
-        return new()
+        var snapshot = new ColorSchemeSettings
         {
             Overrides = new(settings.Overrides, StringComparer.Ordinal),
             SelectedSchemeId = settings.SelectedSchemeId,
@@ -78,6 +86,8 @@ public sealed class ColorSchemeService : IDisposable
                 Colors = new(scheme.Colors, StringComparer.Ordinal)
             }).ToList()
         };
+        snapshot.UpgradeLegacyAttentionColors();
+        return snapshot;
     }
 
     /// <summary>在加载或提交边界验证方案结构与颜色，拒绝无法应用的配置。</summary>

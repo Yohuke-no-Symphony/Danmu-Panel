@@ -22,7 +22,7 @@ internal sealed class SpecialAttentionEditor : UserControl
     internal SpecialAttentionEditorViewModel Model { get; }
     internal Task PendingSearchDialog { get; private set; } = Task.CompletedTask;
 
-    internal SpecialAttentionEditor(PanelRuntime runtime, ColorInput color,
+    internal SpecialAttentionEditor(PanelRuntime runtime, ColorInput userNameColor, ColorInput contentColor,
         IBilibiliUserSearchService? search = null, IUserAvatarService? userAvatars = null)
     {
         Name = "SpecialAttentionEditor";
@@ -30,7 +30,8 @@ internal sealed class SpecialAttentionEditor : UserControl
             () => runtime.Configuration.Accounts.FirstOrDefault(account => account.Id == runtime.Configuration.Settings.DefaultAccountId)?.Cookie);
         avatars = new(runtime.Avatars, userAvatars ?? runtime.UserAvatars);
         var surface = new SpecialAttentionEditorSurface { DataContext = Model };
-        surface.FindControl<ContentControl>("SpecialAttentionColorInputHost")!.Content = color;
+        surface.FindControl<ContentControl>("SpecialAttentionUserNameColorInputHost")!.Content = userNameColor;
+        surface.FindControl<ContentControl>("SpecialAttentionContentColorInputHost")!.Content = contentColor;
         searchResultsTemplate = new FuncDataTemplate<UserSearchResult>((result, _) =>
             {
                 if (result is null)

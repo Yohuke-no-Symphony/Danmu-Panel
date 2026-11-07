@@ -75,7 +75,7 @@ public sealed class AppearanceRenderingTests
         }
     }
 
-    /// <summary>SC 默认尊重消息配色，用户可覆盖并恢复；三级粉丝牌底色沿用全局舰队颜色。</summary>
+    /// <summary>SC 默认尊重消息配色，用户可覆盖并恢复；粉丝牌底色可独立覆盖并恢复默认。</summary>
     [Fact]
     public void BorderOverridesPreserveMessageColorsAndRestoreDefaults()
     {
@@ -84,17 +84,15 @@ public sealed class AppearanceRenderingTests
         var item = new MessageItemViewModel(record, settings, new PinyinService());
         AssertColor("#123456", item.BorderBrush);
         settings.ColorScheme.Overrides["SuperChatBorderBrush"] = "#AABBCC";
-        settings.ColorScheme.Overrides["GuardAdmiralBrush"] = "#102030";
+        settings.ColorScheme.Overrides["MedalAdmiralBackgroundBrush"] = "#102030";
         item.Update(record, settings);
         AssertColor("#AABBCC", item.BorderBrush);
         AssertColor("#102030", item.MedalBackgroundBrush);
-        AssertColor("White", item.MedalForegroundBrush);
         Assert.Equal("#123456", item.Record.BorderColor);
         settings.ColorScheme.Overrides.Clear();
         item.Update(record, settings);
         AssertColor("#123456", item.BorderBrush);
         AssertColor("#A46EE8", item.MedalBackgroundBrush);
-        AssertColor("Black", item.MedalForegroundBrush);
     }
 
     private static void AssertColor(string expected, IBrush? brush)

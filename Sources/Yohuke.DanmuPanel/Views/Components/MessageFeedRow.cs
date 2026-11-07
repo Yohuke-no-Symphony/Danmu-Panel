@@ -66,14 +66,19 @@ internal sealed class MessageFeedRow : Button
             var medalLayout = new Grid { ColumnDefinitions = new("*,Auto"), Children = { medal, level } };
             medalLayout.Classes.Add("danmuMedalLayout");
             Grid.SetColumn(level, 1);
-            var medalFrame = new Border { Child = medalLayout };
+            var medalFrame = new AdaptiveForegroundBorder { Child = medalLayout };
+            medalFrame.Bind(AdaptiveForegroundBorder.PreferredForegroundProperty, new DynamicResourceExtension("MedalTextBrush"));
+            medal.Bind(TextBlock.ForegroundProperty, medalFrame.GetObservable(AdaptiveForegroundBorder.ForegroundProperty));
+            level.Bind(TextBlock.ForegroundProperty, medalFrame.GetObservable(AdaptiveForegroundBorder.ForegroundProperty));
             medalFrame.Classes.Add("danmuMedalBadge");
             medalFrame.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.HasMedal)));
             medalFrame.Bind(ToolTip.TipProperty, new Binding(nameof(MessageItemViewModel.Medal)));
             var noMedal = Ui.Text("Panel.NoMedal");
             noMedal.Classes.Add("danmuMedalText");
             noMedal.Classes.Add("danmuMedalPlaceholder");
-            var noMedalFrame = new Border { Child = noMedal };
+            var noMedalFrame = new AdaptiveForegroundBorder { Child = noMedal };
+            noMedalFrame.Bind(AdaptiveForegroundBorder.PreferredForegroundProperty, new DynamicResourceExtension("AppMutedTextBrush"));
+            noMedal.Bind(TextBlock.ForegroundProperty, noMedalFrame.GetObservable(AdaptiveForegroundBorder.ForegroundProperty));
             noMedalFrame.Classes.Add("danmuMedalPlaceholder");
             noMedalFrame.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.HasMedal))
             {

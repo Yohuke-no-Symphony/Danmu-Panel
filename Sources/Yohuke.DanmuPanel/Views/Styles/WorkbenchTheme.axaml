@@ -39,7 +39,8 @@
                     <SolidColorBrush x:Key="AppMutedTextBrush" Color="#627087" />
                     <SolidColorBrush x:Key="MessageOriginalBrush" Color="#111827" />
                     <SolidColorBrush x:Key="MessageTranslationBrush" Color="#111827" Opacity="0.85" />
-                    <SolidColorBrush x:Key="SpecialAttentionMessageBrush" Color="#B45309" />
+                    <SolidColorBrush x:Key="SpecialAttentionUserNameBrush" Color="#B45309" />
+                    <SolidColorBrush x:Key="SpecialAttentionContentBrush" Color="#B45309" />
                     <SolidColorBrush x:Key="MessageUserNameBrush" Color="#111827" />
                     <SolidColorBrush x:Key="MessagePinyinBrush" Color="#627087" />
                     <SolidColorBrush x:Key="MessageTimeBrush" Color="#627087" Opacity="0.6" />
@@ -78,7 +79,8 @@
                     <SolidColorBrush x:Key="AppMutedTextBrush" Color="#9AAAC2" />
                     <SolidColorBrush x:Key="MessageOriginalBrush" Color="#F2F4F8" />
                     <SolidColorBrush x:Key="MessageTranslationBrush" Color="#F2F4F8" Opacity="0.85" />
-                    <SolidColorBrush x:Key="SpecialAttentionMessageBrush" Color="#FBBF24" />
+                    <SolidColorBrush x:Key="SpecialAttentionUserNameBrush" Color="#FBBF24" />
+                    <SolidColorBrush x:Key="SpecialAttentionContentBrush" Color="#FBBF24" />
                     <SolidColorBrush x:Key="MessageUserNameBrush" Color="#F2F4F8" />
                     <SolidColorBrush x:Key="MessagePinyinBrush" Color="#9AAAC2" />
                     <SolidColorBrush x:Key="MessageTimeBrush" Color="#9AAAC2" Opacity="0.6" />
