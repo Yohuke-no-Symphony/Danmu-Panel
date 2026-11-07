@@ -31,9 +31,11 @@ public sealed class GiftPriorityFeedTests
         model.Failed += errors.Add;
         await model.SelectRoomAsync(new() { Id = "tab", RoomId = "123" });
         var targetItem = model.Items.Single(item => item.Record.Id == target.Id);
-        var readItem = model.Items.Single(item => item.Record.Id == read.Id);
-        Assert.Equal(new[] { "target", "read" }, model.ScrollingItems.Select(item => item.Record.Id));
+        Assert.Same(targetItem, Assert.Single(model.ScrollingItems));
         Assert.Equal(1, model.UnreadCount);
+        await model.SelectReadFilterAsync(MessageReadFilter.Read);
+        var readItem = Assert.Single(model.ScrollingItems);
+        Assert.Equal(read.Id, readItem.Record.Id);
 
         configuration.Settings.Reading = new() { GiftAutoPinMinimum = 200 };
         await runtime.ApplySettingsAsync();
@@ -42,26 +44,28 @@ public sealed class GiftPriorityFeedTests
         Assert.Same(readItem, Assert.Single(model.ScrollingItems));
         Assert.False((await runtime.Messages.GetByIdAsync(target.Id))!.IsRead);
         Assert.False((await runtime.Messages.GetByIdAsync(smaller.Id))!.IsRead);
+        await model.SelectReadFilterAsync(MessageReadFilter.Unread);
+        Assert.Empty(model.Items);
 
         configuration.Settings.Reading = new() { GiftAutoPinMinimum = 50 };
         await runtime.ApplySettingsAsync();
-        await WaitUntilAsync(() => model.Items.Count == 3 && model.UnreadCount == 2);
+        await WaitUntilAsync(() => model.Items.Count == 2 && model.UnreadCount == 2);
         targetItem = model.Items.Single(item => item.Record.Id == target.Id);
         Assert.True(targetItem.Record.IsPriority);
-        Assert.Equal(new[] { "smaller", "target", "read" }, model.ScrollingItems.Select(item => item.Record.Id));
+        Assert.Equal(new[] { "smaller", "target" }, model.ScrollingItems.Select(item => item.Record.Id));
 
         configuration.Settings.Reading = new() { GiftAutoPinMinimum = 150 };
         await runtime.ApplySettingsAsync();
-        await WaitUntilAsync(() => model.Items.Count == 2 && model.UnreadCount == 1);
+        await WaitUntilAsync(() => model.Items.Count == 1 && model.UnreadCount == 1);
 
-        Assert.Equal(new[] { "target", "read" }, model.ScrollingItems.Select(item => item.Record.Id));
-        Assert.Same(targetItem, model.ScrollingItems[0]);
-        Assert.Same(readItem, model.ScrollingItems[1]);
+        Assert.Same(targetItem, Assert.Single(model.ScrollingItems));
         Assert.True(targetItem.Record.IsPriority);
         Assert.True(targetItem.ShowUnreadDot);
         Assert.Equal(1, model.UnreadCount);
         Assert.Empty(model.PinnedItems);
-        var confirmed = model.Items.Single(item => item.Record.Id == read.Id);
+        await model.SelectReadFilterAsync(MessageReadFilter.Read);
+        var confirmed = Assert.Single(model.Items);
+        Assert.Equal(read.Id, confirmed.Record.Id);
         Assert.True(confirmed.Record.IsRead);
         Assert.False(confirmed.Record.IsPriority);
         Assert.Empty(errors);

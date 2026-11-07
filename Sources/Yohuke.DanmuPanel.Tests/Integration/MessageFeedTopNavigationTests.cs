@@ -36,10 +36,9 @@ public sealed class MessageFeedTopNavigationTests
         var configuration = new PanelConfiguration();
         configuration.Settings.Translation.Enabled = false;
         await using var runtime = new PanelRuntime(new(directory.Path), configuration);
-        await runtime.Messages.AppendBatchAsync(Enumerable.Range(0, 60).Select(index => Message(kind, index)).ToArray(), new());
-        await runtime.Messages.MarkAllReadAsync("tab", kind);
-        var unread = Message(kind, 60);
-        await runtime.Messages.AppendAsync(unread, new());
+        var messages = Enumerable.Range(0, 60).Select(index => Message(kind, index)).ToArray();
+        await runtime.Messages.AppendBatchAsync(messages, new());
+        var unread = messages[0];
         var errors = new List<Exception>();
         var view = new MessageFeedView(runtime, kind, errors.Add);
         var window = new Window { Width = 520, Height = 320, Content = view };
@@ -76,7 +75,7 @@ public sealed class MessageFeedTopNavigationTests
             var container = Assert.IsAssignableFrom<Control>(list.ContainerFromItem(first));
             Assert.InRange(Math.Abs(container.TranslatePoint(default, viewer)!.Value.Y), 0, 1);
             Assert.True(first.ShowUnreadDot);
-            Assert.Equal(1, view.Model.UnreadCount);
+            Assert.Equal(60, view.Model.UnreadCount);
 
             await runtime.Messages.AppendAsync(Message(kind, 61), new());
             await view.Model.RefreshAsync();
@@ -86,7 +85,7 @@ public sealed class MessageFeedTopNavigationTests
             Assert.InRange(viewer.Offset.Y, 0, 1);
             Assert.Same(first, view.Model.ScrollingItems[0]);
             Assert.False(first.Record.IsRead);
-            Assert.Equal(2, view.Model.UnreadCount);
+            Assert.Equal(61, view.Model.UnreadCount);
             await Assert.IsAssignableFrom<IAsyncRelayCommand>(latest.Command).ExecuteAsync(null);
             Pump(window);
             Assert.InRange(Math.Abs(viewer.ScrollBarMaximum.Y - viewer.Offset.Y), 0, 1);

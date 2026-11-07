@@ -67,6 +67,8 @@
     "Updates.Close": "Close",
     "Updates.OpenRelease": "Open GitHub",
     "Panel.MarkAllRead": "Mark all as read",
+    "Panel.Unread": "Unread",
+    "Panel.Read": "Read",
     "Colors.GiftValueUnder1Brush": "Gift border: below CNY 1",
     "Colors.GiftValue1Brush": "Gift border: CNY 1–9.99",
     "Colors.GiftValue10Brush": "Gift border: CNY 10–29.99",

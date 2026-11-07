@@ -11,7 +11,7 @@ namespace Yohuke.DanmuPanel.Tests.Integration;
 /// <summary>验证可配置消息窗口的默认容量、实时调整与历史加载。</summary>
 public sealed class MessageRetentionFeedTests
 {
-    /// <summary>四类消息默认保留最近三百条普通记录，新消息只替换窗口中最早的一条。</summary>
+    /// <summary>弹幕及付费消息的已读窗口默认保留最近三百条，新记录替换窗口中最早的一条。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.Danmu)]
     [InlineData(MessageKind.SuperChat)]
@@ -24,6 +24,10 @@ public sealed class MessageRetentionFeedTests
         await AppendAsync(runtime, kind, 0, 320);
         using var model = new FeedViewModel(runtime, kind);
         await model.SelectRoomAsync(Room());
+        if (kind != MessageKind.Danmu)
+        {
+            await model.SelectReadFilterAsync(MessageReadFilter.Read);
+        }
 
         Assert.Equal(300, model.ScrollingItems.Count);
         Assert.Equal("message 20", model.ScrollingItems[0].Record.Content);
@@ -56,6 +60,10 @@ public sealed class MessageRetentionFeedTests
         await AppendAsync(runtime, kind, 0, 450);
         using var model = new FeedViewModel(runtime, kind);
         await model.SelectRoomAsync(Room());
+        if (kind != MessageKind.Danmu)
+        {
+            await model.SelectReadFilterAsync(MessageReadFilter.Read);
+        }
         Assert.Equal(27, model.ScrollingItems.Count);
         var latest = model.ScrollingItems[^1];
 
@@ -139,7 +147,7 @@ public sealed class MessageRetentionFeedTests
         Assert.NotNull(await runtime.Messages.GetByIdAsync(anchor.Record.Id));
     }
 
-    /// <summary>置顶或未读优先消息额外显示，不挤占配置的普通记录容量。</summary>
+    /// <summary>弹幕置顶不占普通容量，付费消息的未读窗口独立于已读历史容量。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.Danmu)]
     [InlineData(MessageKind.SuperChat)]
@@ -167,9 +175,21 @@ public sealed class MessageRetentionFeedTests
         using var model = new FeedViewModel(runtime, kind);
         await model.SelectRoomAsync(Room());
 
-        Assert.Equal(4, model.Items.Count);
-        Assert.Equal(priority.Id, Assert.Single(model.Items, item => item.Record.IsPriority).Record.Id);
-        Assert.Equal(3, model.Items.Count(item => !item.Record.IsPriority));
+        if (kind == MessageKind.Danmu)
+        {
+            Assert.Equal(4, model.Items.Count);
+            Assert.Equal(priority.Id, Assert.Single(model.Items, item => item.Record.IsPriority).Record.Id);
+            Assert.Equal(3, model.Items.Count(item => !item.Record.IsPriority));
+        }
+        else
+        {
+            Assert.Equal(priority.Id, Assert.Single(model.Items).Record.Id);
+            Assert.Equal(1, model.UnreadCount);
+            await model.SelectReadFilterAsync(MessageReadFilter.Read);
+            Assert.Equal(3, model.Items.Count);
+            Assert.All(model.Items, item => Assert.True(item.Record.IsRead));
+            Assert.Equal(1, model.UnreadCount);
+        }
     }
 
     private static RoomTabState Room()

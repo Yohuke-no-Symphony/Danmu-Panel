@@ -99,7 +99,7 @@ public sealed class ShellPreviewTests
             Assert.Equal(6, feeds[0].Model.Items.Count);
             Assert.True(feeds[0].Model.Items[0].Record.IsPinned);
             Assert.All(feeds, feed => Assert.NotEmpty(feed.Model.Items));
-            Assert.True(feeds[1].Model.Items[^1].Record.IsRead);
+            Assert.All(feeds.Skip(1), feed => Assert.All(feed.Model.Items, item => Assert.False(item.Record.IsRead)));
             if (Environment.GetEnvironmentVariable("DANMUPANEL_SCREENSHOT") is { Length: > 0 } screenshot)
             {
                 using var frame = shell.CaptureRenderedFrame();

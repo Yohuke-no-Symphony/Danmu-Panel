@@ -20,13 +20,13 @@ namespace Yohuke.DanmuPanel.Tests.Integration;
 /// <summary>验证弹幕固定置顶、其他消息排序置顶与普通历史窗口。</summary>
 public sealed class PinnedFeedTests
 {
-    /// <summary>仅弹幕进入固定区，其他优先消息在普通列表顶部，解除优先状态时复用行模型。</summary>
+    /// <summary>弹幕置顶和取消置顶复用行模型，其他消息确认后移入独立已读窗口。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.Danmu)]
     [InlineData(MessageKind.SuperChat)]
     [InlineData(MessageKind.Gift)]
     [InlineData(MessageKind.Guard)]
-    public async Task PriorityAndNormalRegionsMoveExistingViewModels(MessageKind kind)
+    public async Task PinningMovesDanmuAndReadingMovesPaidMessagesBetweenTabs(MessageKind kind)
     {
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = CreateRuntime(directory);
@@ -49,7 +49,8 @@ public sealed class PinnedFeedTests
             window.Show();
             Pump(window);
             var targetItem = view.Model.Items.Single(item => item.Record.Id == target.Id);
-            var normalItem = view.Model.Items.Single(item => item.Record.Id == normal.Id);
+            var normalItem = kind == MessageKind.Danmu
+                ? view.Model.Items.Single(item => item.Record.Id == normal.Id) : null;
             if (kind == MessageKind.Danmu)
             {
                 Assert.Empty(view.Model.PinnedItems);
@@ -69,17 +70,12 @@ public sealed class PinnedFeedTests
             {
                 Assert.Empty(view.Model.PinnedItems);
                 Assert.False(view.Model.HasPinnedItems);
-                Assert.Equal(new[] { targetItem, normalItem }, view.Model.ScrollingItems);
+                Assert.Same(targetItem, Assert.Single(view.Model.ScrollingItems));
+                Assert.DoesNotContain(view.Model.Items, item => item.Record.Id == normal.Id);
             }
             Assert.Same(view.Model.ScrollingRows, FindList(view, "ScrollingMessages").ItemsSource);
             Assert.Equal(view.Model.ScrollingItems, view.Model.ScrollingRows.OfType<MessageItemViewModel>());
             Assert.True(targetItem.Record.IsPriority);
-            if (kind == MessageKind.Gift)
-            {
-                Assert.True(normalItem.Record.IsRead);
-                Assert.False(normalItem.Record.IsPriority);
-            }
-
             var targetList = FindList(view, kind == MessageKind.Danmu ? "PinnedMessages" : "ScrollingMessages");
             FindRow(targetList, target.Id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await WaitUntilAsync(async () => !(await runtime.Messages.GetByIdAsync(target.Id))!.IsPriority);
@@ -87,13 +83,19 @@ public sealed class PinnedFeedTests
             Pump(window);
 
             Assert.Empty(view.Model.PinnedItems);
-            Assert.Equal(2, view.Model.ScrollingItems.Count);
-            Assert.Same(normalItem, view.Model.ScrollingItems[0]);
-            Assert.Same(targetItem, view.Model.ScrollingItems[1]);
             Assert.False(view.Model.HasPinnedItems);
-            if (kind != MessageKind.Danmu)
+            if (kind == MessageKind.Danmu)
             {
-                Assert.False(targetItem.ShowUnreadDot);
+                Assert.Equal(2, view.Model.ScrollingItems.Count);
+                Assert.Same(normalItem, view.Model.ScrollingItems[0]);
+                Assert.Same(targetItem, view.Model.ScrollingItems[1]);
+            }
+            else
+            {
+                Assert.Empty(view.Model.ScrollingItems);
+                await view.Model.SelectReadFilterAsync(MessageReadFilter.Read);
+                Assert.Equal(new[] { normal.Id, target.Id }, view.Model.ScrollingItems.Select(item => item.Record.Id));
+                Assert.All(view.Model.ScrollingItems, item => Assert.False(item.ShowUnreadDot));
             }
             Assert.Empty(errors);
         }
@@ -201,12 +203,12 @@ public sealed class PinnedFeedTests
         }
     }
 
-    /// <summary>未读与历史在同一列表滚动，未读消息不会固定在面板顶部。</summary>
+    /// <summary>未读窗口的消息共同滚动，不会固定在面板顶部。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.SuperChat)]
     [InlineData(MessageKind.Gift)]
     [InlineData(MessageKind.Guard)]
-    public async Task PriorityMessagesScrollTogetherWithHistory(MessageKind kind)
+    public async Task UnreadMessagesScrollWithoutPinnedRegion(MessageKind kind)
     {
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = CreateRuntime(directory);
@@ -216,7 +218,6 @@ public sealed class PinnedFeedTests
         {
             var record = Message(kind, index);
             await runtime.Messages.AppendAsync(record, new());
-            await runtime.Messages.MarkReadAsync(record.Id, record.Quantity, record.TotalPrice);
         }
         var errors = new List<Exception>();
         var view = new MessageFeedView(runtime, kind, errors.Add);
@@ -258,12 +259,12 @@ public sealed class PinnedFeedTests
         }
     }
 
-    /// <summary>超过一页的优先消息不占历史容量，刷新保留历史边界，加载更多只增加一百条历史。</summary>
+    /// <summary>完整未读窗口不占已读分页容量，已读刷新保留边界，加载更多增加一百条历史。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.SuperChat)]
     [InlineData(MessageKind.Gift)]
     [InlineData(MessageKind.Guard)]
-    public async Task MoreThanOneHundredPriorityMessagesDoNotConsumeNormalPage(MessageKind kind)
+    public async Task UnreadMessagesDoNotConsumeReadHistoryPages(MessageKind kind)
     {
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = CreateRuntime(directory);
@@ -281,10 +282,11 @@ public sealed class PinnedFeedTests
         await model.SelectRoomAsync(Room());
 
         Assert.Empty(model.PinnedItems);
-        Assert.Equal(205, model.ScrollingItems.Count);
-        Assert.All(model.ScrollingItems.Take(105), item => Assert.False(item.Record.IsRead));
-        Assert.All(model.ScrollingItems.Skip(105), item => Assert.True(item.Record.IsRead));
-        Assert.Equal(205, model.Items.Count);
+        Assert.Equal(105, model.ScrollingItems.Count);
+        Assert.All(model.ScrollingItems, item => Assert.False(item.Record.IsRead));
+        await model.SelectReadFilterAsync(MessageReadFilter.Read);
+        Assert.Equal(100, model.Items.Count);
+        Assert.All(model.Items, item => Assert.True(item.Record.IsRead));
         var oldest = model.ScrollingItems.First(item => !item.Record.IsPriority);
         model.IsReadingHistory = true;
         var incoming = Message(kind, 1000);
@@ -293,15 +295,19 @@ public sealed class PinnedFeedTests
         await runtime.Messages.AppendAsync(Message(kind, 1001), new());
         await model.RefreshAsync();
 
-        Assert.Equal(106, model.ScrollingItems.Count(item => item.Record.IsPriority));
+        Assert.Equal(106, model.UnreadCount);
+        Assert.DoesNotContain(model.ScrollingItems, item => item.Record.IsPriority);
         Assert.Equal(101, model.ScrollingItems.Count(item => !item.Record.IsPriority));
         Assert.Same(oldest, model.ScrollingItems.First(item => !item.Record.IsPriority));
 
         await model.LoadMoreAsync();
 
-        Assert.Equal(106, model.ScrollingItems.Count(item => item.Record.IsPriority));
+        Assert.Equal(106, model.UnreadCount);
         Assert.Equal(201, model.ScrollingItems.Count(item => !item.Record.IsPriority));
-        Assert.Same(oldest, model.ScrollingItems[206]);
+        Assert.Same(oldest, model.ScrollingItems[100]);
+        await model.SelectReadFilterAsync(MessageReadFilter.Unread);
+        Assert.Equal(106, model.Items.Count);
+        Assert.All(model.Items, item => Assert.False(item.Record.IsRead));
     }
 
     /// <summary>读到普通列表尾部后接收新消息，保留最老行实例，加载更多再追加一百条。</summary>

@@ -88,6 +88,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     {
         this.runtime = runtime;
         this.kind = kind;
+        readFilter = kind == MessageKind.Danmu ? MessageReadFilter.All : MessageReadFilter.Unread;
         retentionCount = runtime.Configuration.Settings.MessageRetentionCount;
         limit = retentionCount;
         UpdateLayoutOptions();
@@ -108,6 +109,13 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         Volatile.Write(ref room, selected);
         OnPropertyChanged(nameof(SelectedRoom));
         OnPropertyChanged(nameof(HasSelectedRoom));
+        ResetWindow();
+        UnreadCount = 0;
+        await RefreshAsync();
+    }
+
+    private void ResetWindow()
+    {
         IsReadingHistory = false;
         revision++;
         loadingRevision++;
@@ -124,9 +132,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         PinnedItems.Clear();
         ScrollingItems.Clear();
         ScrollingRows.Clear();
-        UnreadCount = 0;
         NotifyRegions();
-        await RefreshAsync();
     }
 
     /// <summary>继续加载更早的记录。</summary>
@@ -231,7 +237,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
             var snapshot = await runtime.Messages.LoadFeedAsync(current.Id, kind, requestedLimit,
                 IsReadingHistory ? ScrollingItems.FirstOrDefault(item => !item.Record.IsPriority)?.Record.Id : null,
                 cancellationToken, hideEmoticonDanmu: runtime.Configuration.Settings.HideEmoticonDanmu,
-                danmuRegexFilter: runtime.DanmuFilter);
+                danmuRegexFilter: runtime.DanmuFilter, readFilter: ReadFilter);
             loadingHint?.Dispose();
             loadingHint = null;
             if (disposed || version != revision || cancellationToken.IsCancellationRequested)

@@ -67,6 +67,8 @@
     "Updates.Close": "閉じる",
     "Updates.OpenRelease": "GitHub を開く",
     "Panel.MarkAllRead": "すべて既読にする",
+    "Panel.Unread": "未読",
+    "Panel.Read": "既読",
     "Colors.GiftValueUnder1Brush": "ギフト枠：1元未満",
     "Colors.GiftValue1Brush": "ギフト枠：1〜9.99元",
     "Colors.GiftValue10Brush": "ギフト枠：10〜29.99元",

@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Data.Converters;
@@ -18,7 +19,7 @@ using Yohuke.DanmuPanel.Views.Components;
 namespace Yohuke.DanmuPanel.Views;
 
 /// <summary>使用虚拟化容器展示可点击的消息行。</summary>
-public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWorkbenchHeaderBadge
+public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWorkbenchHeaderBadge, IWorkbenchHeaderTabs
 {
     private readonly PanelRuntime runtime;
     private readonly Action<Exception> reportError;
@@ -41,6 +42,9 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
 
     /// <inheritdoc />
     public IDataTemplate? HeaderBadgeTemplate { get; }
+
+    /// <inheritdoc />
+    public IDataTemplate? HeaderTabsTemplate { get; }
 
     /// <summary>创建指定消息面板。</summary>
     public MessageFeedView(PanelRuntime runtime, MessageKind kind, Action<Exception> reportError)
@@ -111,6 +115,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         if (kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard)
         {
             HeaderBadgeTemplate = new FuncDataTemplate<MessageFeedView>((_, _) => CreateUnreadBadge());
+            HeaderTabsTemplate = new FuncDataTemplate<MessageFeedView>((_, _) => CreateReadTabs());
         }
         var surface = new MessageFeedSurface { DataContext = Model };
         surface.Host.Content = list;
@@ -123,7 +128,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         surface.SizeChanged += (_, _) => UpdatePinnedHeight();
         Model.PropertyChanged += (_, args) =>
         {
-            if (args.PropertyName == nameof(FeedViewModel.SelectedRoom))
+            if (args.PropertyName is nameof(FeedViewModel.SelectedRoom) or nameof(FeedViewModel.ReadFilter))
             {
                 isScrollToTopPending = false;
                 CancelColumnResizes();
@@ -435,6 +440,32 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         return badge;
     }
 
+    private TabStrip CreateReadTabs()
+    {
+        var unread = new TabStripItem { Name = "UnreadMessagesTab" };
+        unread.Bind(ContentProperty, Localization.Observe("Panel.Unread"));
+        var read = new TabStripItem { Name = "ReadMessagesTab" };
+        read.Bind(ContentProperty, Localization.Observe("Panel.Read"));
+        var tabs = new TabStrip
+        {
+            Name = "MessageReadTabs",
+            Items = { unread, read }
+        };
+        tabs.Classes.Add("messageReadTabs");
+        tabs.Bind(SelectingItemsControl.SelectedIndexProperty,
+            new Binding(nameof(FeedViewModel.SelectedReadTabIndex)) { Source = Model, Mode = BindingMode.OneWay });
+        tabs.SelectionChanged += async (_, args) =>
+        {
+            args.Handled = true;
+            if (tabs.SelectedIndex is 0 or 1)
+            {
+                await RunAsync(() => Model.SelectReadFilterAsync(tabs.SelectedIndex == 0
+                    ? MessageReadFilter.Unread : MessageReadFilter.Read));
+            }
+        };
+        return tabs;
+    }
+
     private LocalizedContextMenu CreateMessageMenu(MessageFeedRow row, MessageKind kind)
     {
         var menu = new LocalizedContextMenu();
@@ -539,6 +570,10 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     private async Task ActivateMessageAsync(MessageItemViewModel item)
     {
         var record = item.Record;
+        if (record.Kind != MessageKind.Danmu && record.IsRead)
+        {
+            return;
+        }
         if (record.Kind == MessageKind.Danmu || !record.IsRead)
         {
             scroll?.PrepareForItemMove(item);

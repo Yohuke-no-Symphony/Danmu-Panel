@@ -186,6 +186,30 @@
         <Setter Property="BorderThickness" Value="0" />
     </Style>
 
+    <Style Selector="TabStrip.messageReadTabs">
+        <Setter Property="Margin" Value="6,0,0,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="TabStrip.messageReadTabs TabStripItem">
+        <Setter Property="FontSize" Value="{DynamicResource AppFontSizeCaption}" />
+        <Setter Property="Padding" Value="7,2" />
+        <Setter Property="MinHeight" Value="22" />
+        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="Foreground" Value="{DynamicResource AppMutedTextBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="TabStrip.messageReadTabs TabStripItem:pointerover">
+        <Setter Property="Background" Value="{DynamicResource AppSidebarHoverBrush}" />
+    </Style>
+
+    <Style Selector="TabStrip.messageReadTabs TabStripItem:selected">
+        <Setter Property="Foreground" Value="{DynamicResource AppPrimaryBrush}" />
+        <Setter Property="Background" Value="{DynamicResource AppSidebarSelectedBrush}" />
+    </Style>
+
     <Style Selector="Border.panelUnreadBadge">
         <Setter Property="Background" Value="{DynamicResource AppUnreadBrush}" />
         <Setter Property="CornerRadius" Value="9" />

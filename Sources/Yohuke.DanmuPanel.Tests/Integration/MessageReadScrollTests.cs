@@ -16,7 +16,7 @@ using Xunit;
 
 namespace Yohuke.DanmuPanel.Tests.Integration;
 
-/// <summary>验证点击已读并重新排序时保留当前阅读位置。</summary>
+/// <summary>验证点击已读移出未读窗口时保留当前阅读位置。</summary>
 public sealed class MessageReadScrollTests
 {
     /// <summary>点击视口顶部或中部消息后，固定最顶部可见且未被点击的消息；半行也作为阅读锚点。</summary>
@@ -92,23 +92,29 @@ public sealed class MessageReadScrollTests
                 .OrderBy(container => container.TranslatePoint(default, viewer)!.Value.Y).First();
             var neighbor = Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(retained));
             var before = retained.TranslatePoint(default, viewer)!.Value.Y;
+            var neighborContentY = before + viewer.Offset.Y;
+            var removedHeight = clicked.Bounds.Height;
+            var removedAboveNeighbor = clicked.TranslatePoint(default, viewer)!.Value.Y < before;
             var row = clicked.GetVisualDescendants().OfType<Button>().Single(button => ReferenceEquals(button.DataContext, target));
             var point = row.TranslatePoint(new Point(row.Bounds.Width / 2, row.Bounds.Height / 2), window)!.Value;
             window.MouseMove(point);
             window.MouseDown(point, MouseButton.Left);
             window.MouseUp(point, MouseButton.Left);
-            for (var attempt = 0; attempt < 100 && !target.Record.IsRead; attempt++)
+            for (var attempt = 0; attempt < 100 && view.Model.Items.Contains(target); attempt++)
             {
                 await Task.Delay(20);
                 Pump(window);
             }
-            Assert.True(target.Record.IsRead);
+            Assert.DoesNotContain(target, view.Model.Items);
+            Assert.True((await runtime.Messages.GetByIdAsync(target.Record.Id))!.IsRead);
             Pump(window);
-            Assert.False(target.Record.IsPriority);
             Assert.True(view.Model.IsReadingHistory);
             var after = Assert.IsAssignableFrom<Control>(list.ContainerFromItem(neighbor));
-            Assert.InRange(Math.Abs(after.TranslatePoint(default, viewer)!.Value.Y - before), 0, 1);
-            Assert.True(view.Model.ScrollingItems.IndexOf(target) > view.Model.ScrollingItems.IndexOf(neighbor));
+            var contentY = neighborContentY - (removedAboveNeighbor ? removedHeight : 0);
+            var expectedOffset = Math.Clamp(contentY - before, 0, viewer.ScrollBarMaximum.Y);
+            var expectedY = contentY - expectedOffset;
+            Assert.InRange(Math.Abs(after.TranslatePoint(default, viewer)!.Value.Y - expectedY), 0, 1);
+            Assert.DoesNotContain(target, view.Model.ScrollingItems);
             Assert.Empty(errors);
         }
         finally

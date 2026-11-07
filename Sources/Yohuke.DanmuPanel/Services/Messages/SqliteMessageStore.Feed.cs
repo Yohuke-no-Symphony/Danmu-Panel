@@ -22,20 +22,25 @@ public sealed partial class SqliteMessageStore
     internal long PayloadTextBytesRead => Interlocked.Read(ref payloadTextBytesRead);
     internal long FeedVisibilityEvaluations => Interlocked.Read(ref feedVisibilityEvaluations);
 
-    /// <summary>在同一读取事务中取得完整未读条数和消息窗口，仅补读缺失或变化的正文。</summary>
+    /// <summary>在同一读取事务中取得按阅读状态筛选的消息窗口及完整未读条数，普通弹幕忽略阅读筛选。</summary>
     public Task<MessageFeedSnapshot> LoadFeedAsync(string roomTabId, MessageKind kind, int historyLimit,
         string? oldestHistoryId, CancellationToken cancellationToken = default, bool hideEmoticonDanmu = false,
-        DanmuRegexFilter? danmuRegexFilter = null)
+        DanmuRegexFilter? danmuRegexFilter = null, MessageReadFilter readFilter = MessageReadFilter.All)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(historyLimit);
+        if (!Enum.IsDefined(readFilter))
+        {
+            throw new ArgumentOutOfRangeException(nameof(readFilter));
+        }
         return EnqueueAsync(connection => ReadFeed(connection, roomTabId, kind, historyLimit, oldestHistoryId,
             hideEmoticonDanmu && kind == MessageKind.Danmu,
-            kind == MessageKind.Danmu ? danmuRegexFilter : null, cancellationToken), cancellationToken);
+            kind == MessageKind.Danmu ? danmuRegexFilter : null,
+            kind == MessageKind.Danmu ? MessageReadFilter.All : readFilter, cancellationToken), cancellationToken);
     }
 
     private MessageFeedSnapshot ReadFeed(SqliteConnection connection, string roomTabId, MessageKind kind,
         int historyLimit, string? oldestHistoryId, bool hideEmoticons, DanmuRegexFilter? filter,
-        CancellationToken cancellationToken)
+        MessageReadFilter readFilter, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var transaction = connection.BeginTransaction(deferred: true);
@@ -55,9 +60,15 @@ public sealed partial class SqliteMessageStore
                 RegisterFeedVisibility(connection, hideEmoticons, filter, giftMinimum, cancellationToken);
             }
             var (sequences, unreadCount) = ReadPrioritySequences(connection, transaction, roomTabId, kind,
-                predicate, cancellationToken);
+                predicate, readFilter, cancellationToken);
+            var readPredicate = readFilter switch
+            {
+                MessageReadFilter.Unread => " AND json_extract(payload,'$.IsRead')=0",
+                MessageReadFilter.Read => " AND json_extract(payload,'$.IsRead')=1",
+                _ => ""
+            };
             sequences.AddRange(ReadHistorySequences(connection, transaction, roomTabId, kind, historyLimit,
-                oldestHistoryId, predicate, cancellationToken));
+                oldestHistoryId, predicate + readPredicate, cancellationToken));
             var records = LoadFeedRecords(connection, transaction, sequences, cancellationToken);
             var pending = ReadFeedPending(connection, transaction, records.Values, cancellationToken);
             var resultRecords = new MessageRecord[sequences.Count];
@@ -89,7 +100,7 @@ public sealed partial class SqliteMessageStore
 
     private static (List<long> Sequences, int UnreadCount) ReadPrioritySequences(SqliteConnection connection,
         SqliteTransaction transaction, string roomTabId, MessageKind kind, string predicate,
-        CancellationToken cancellationToken)
+        MessageReadFilter readFilter, CancellationToken cancellationToken)
     {
         var readStatus = kind == MessageKind.Danmu ? "1" : "json_extract(payload,'$.IsRead')";
         using var command = Command(connection, transaction, $"""
@@ -104,8 +115,14 @@ public sealed partial class SqliteMessageStore
             while (reader.Read())
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                sequences.Add(reader.GetInt64(0));
-                if (!reader.IsDBNull(1) && reader.GetInt64(1) == 0)
+                var readState = reader.IsDBNull(1) ? (long?)null : reader.GetInt64(1);
+                if (readFilter == MessageReadFilter.All ||
+                    readFilter == MessageReadFilter.Unread && readState == 0 ||
+                    readFilter == MessageReadFilter.Read && readState == 1)
+                {
+                    sequences.Add(reader.GetInt64(0));
+                }
+                if (readState == 0)
                 {
                     unreadCount++;
                 }

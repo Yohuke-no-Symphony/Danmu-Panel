@@ -177,12 +177,13 @@ public sealed class UnreadIndicatorTests
             Assert.True(badge.TranslatePoint(default, title)!.Value.X >= title.Bounds.Width);
             var first = view.Model.ScrollingItems[^1];
             FindRow(view, first.Record.Id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            for (var attempt = 0; attempt < 100 && !first.Record.IsRead; attempt++)
+            for (var attempt = 0; attempt < 100 && view.Model.Items.Contains(first); attempt++)
             {
                 await Task.Delay(10);
                 Dispatcher.UIThread.RunJobs();
             }
-            Assert.True(first.Record.IsRead);
+            Assert.DoesNotContain(first, view.Model.Items);
+            Assert.True((await runtime.Messages.GetByIdAsync(first.Record.Id))!.IsRead);
             Pump(shell);
             AssertBadge(badge, "104");
 

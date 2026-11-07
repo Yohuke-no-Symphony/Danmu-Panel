@@ -67,6 +67,8 @@
     "Updates.Close": "关闭",
     "Updates.OpenRelease": "前往 GitHub",
     "Panel.MarkAllRead": "全部已读",
+    "Panel.Unread": "未读",
+    "Panel.Read": "已读",
     "Colors.GiftValueUnder1Brush": "礼物边框：低于 ￥1",
     "Colors.GiftValue1Brush": "礼物边框：￥1–9.99",
     "Colors.GiftValue10Brush": "礼物边框：￥10–29.99",

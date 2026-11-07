@@ -46,14 +46,23 @@ internal sealed class WorkbenchToolChromeControl : ToolChromeControl
             };
             var titleLayout = new Grid
             {
-                ColumnDefinitions = new("*,Auto"),
+                ColumnDefinitions = new("*,Auto,Auto"),
                 HorizontalAlignment = HorizontalAlignment.Left
+            };
+            var tabs = new ContentControl
+            {
+                Name = "PART_HeaderTabs",
+                VerticalContentAlignment = VerticalAlignment.Center,
+                [!ContentProperty] = new Binding(nameof(IDock.ActiveDockable)),
+                ContentTemplate = new WorkbenchHeaderTabsTemplate()
             };
             var titleIndex = titleHost.Children.IndexOf(title);
             titleHost.Children.Remove(title);
             Grid.SetColumn(badge, 1);
+            Grid.SetColumn(tabs, 2);
             titleLayout.Children.Add(title);
             titleLayout.Children.Add(badge);
+            titleLayout.Children.Add(tabs);
             titleHost.Children.Insert(titleIndex, titleLayout);
         }
 

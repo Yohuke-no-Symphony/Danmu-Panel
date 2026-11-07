@@ -103,8 +103,8 @@ public sealed class MessageFeedScrollTests
                 await runtime.Messages.MarkReadAsync(oldest.Record.Id, oldest.Record.Quantity, oldest.Record.TotalPrice);
                 await view.Model.RefreshAsync();
                 Pump(window);
-                Assert.Same(oldest, view.Model.ScrollingItems[^1]);
-                Assert.True(oldest.Record.IsRead);
+                Assert.DoesNotContain(oldest, view.Model.ScrollingItems);
+                Assert.True((await runtime.Messages.GetByIdAsync(oldest.Record.Id))!.IsRead);
                 after = Assert.IsAssignableFrom<Control>(list.ContainerFromItem(item));
                 Assert.InRange(Math.Abs(after.TranslatePoint(default, viewer)!.Value.Y - before), 0, 1);
             }
