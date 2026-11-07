@@ -28,6 +28,9 @@ public sealed class PanelSettings
 
     public TranslationSettings Translation { get; set; } = new();
     public MessageReadOptions Reading { get; set; } = new();
+
+    /// <summary>SC、礼物与大航海各自独立的未读和已读排序。</summary>
+    public MessageSortSettings MessageSorting { get; set; } = new();
     public bool ShowUserPinyin { get; set; }
     public bool ShowGiftPinyin { get; set; }
 

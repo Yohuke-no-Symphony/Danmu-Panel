@@ -8,7 +8,7 @@ public sealed partial class FeedViewModel
 
     private void AddLoadingRows()
     {
-        var index = kind == MessageKind.Danmu ? 0 :
+        var index = kind == MessageKind.Danmu ? 0 : SortOrder == MessageSortOrder.NewestFirst ? ScrollingRows.Count :
             ScrollingRows.TakeWhile(row => row is MessageItemViewModel item && item.Record.IsPriority).Count();
         for (var offset = 0; offset < LOADING_HINT_ROW_COUNT; offset++)
         {

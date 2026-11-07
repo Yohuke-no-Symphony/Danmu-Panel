@@ -25,6 +25,7 @@ public sealed partial class FeedViewModel
         }
 
         SetProperty(ref readFilter, selected, nameof(ReadFilter));
+        UpdateSortOrder();
         ResetWindow();
         OnPropertyChanged(nameof(SelectedReadTabIndex));
         await RefreshAsync();

@@ -446,7 +446,7 @@ public sealed class AsyncHistoryLoadingTests
         }
     }
 
-    /// <summary>不自动跟随的面板在首屏分批完成后定位最新消息，用户中途滚动时保留阅读位置。</summary>
+    /// <summary>付费面板首屏分批完成后从顶部开始，用户中途滚动时保留阅读位置。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.SuperChat, false)]
     [InlineData(MessageKind.SuperChat, true)]
@@ -454,7 +454,7 @@ public sealed class AsyncHistoryLoadingTests
     [InlineData(MessageKind.Gift, true)]
     [InlineData(MessageKind.Guard, false)]
     [InlineData(MessageKind.Guard, true)]
-    public async Task InitialHistoryBatchesFollowLatestUnlessTheUserScrolls(MessageKind kind, bool userScrolls)
+    public async Task InitialHistoryBatchesStartAtTopUnlessTheUserScrolls(MessageKind kind, bool userScrolls)
     {
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = new PanelRuntime(new(directory.Path), new());
@@ -481,8 +481,8 @@ public sealed class AsyncHistoryLoadingTests
                 Dispatcher.UIThread.Post(() =>
                 {
                     var viewer = FindViewer(view);
-                    viewer.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Home });
-                    viewer.Offset = default;
+                    viewer.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.End });
+                    viewer.Offset = new(0, viewer.ScrollBarMaximum.Y);
                     inputHandled = true;
                 }, DispatcherPriority.Input);
             }
@@ -506,13 +506,12 @@ public sealed class AsyncHistoryLoadingTests
             if (userScrolls)
             {
                 Assert.True(inputHandled);
-                Assert.InRange(Math.Abs(viewer.Offset.Y), 0, 2);
-                Assert.True(view.Model.IsReadingHistory);
+                Assert.True(viewer.Offset.Y > 0);
             }
             else
             {
-                Assert.InRange(Math.Abs(viewer.ScrollBarMaximum.Y - viewer.Offset.Y), 0, 1);
-                Assert.NotNull(list.ContainerFromItem(view.Model.ScrollingItems[^1]));
+                Assert.InRange(viewer.Offset.Y, 0, 1);
+                Assert.NotNull(list.ContainerFromItem(view.Model.ScrollingItems[0]));
             }
             Assert.Empty(errors);
         }
@@ -524,12 +523,12 @@ public sealed class AsyncHistoryLoadingTests
         }
     }
 
-    /// <summary>首屏先完成再显示窗口时，定位前的行变更和随后拼音补齐都不能打断初始回底。</summary>
+    /// <summary>首屏先完成再显示窗口时，行变更和拼音补齐均保留顶部定位。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.SuperChat)]
     [InlineData(MessageKind.Gift)]
     [InlineData(MessageKind.Guard)]
-    public async Task ShowingPreparedHistoryFollowsLatestThroughDeferredRowPresentation(MessageKind kind)
+    public async Task ShowingPreparedHistoryKeepsTopThroughDeferredRowPresentation(MessageKind kind)
     {
         using var directory = new MessageStoreTestDirectory();
         var pinyin = new BlockingPinyinService();
@@ -546,24 +545,24 @@ public sealed class AsyncHistoryLoadingTests
             await view.Model.SelectRoomAsync(Room());
             await pinyin.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(100, view.Model.ScrollingItems.Count);
-            var latest = view.Model.ScrollingItems[^1];
+            var first = view.Model.ScrollingItems[0];
 
             window.Show();
             window.UpdateLayout();
-            latest.Update(latest.Record with { UserName = "更新观众" }, runtime.Configuration.Settings);
+            first.Update(first.Record with { UserName = "更新观众" }, runtime.Configuration.Settings);
             Pump(window);
             var viewer = FindViewer(view);
-            Assert.InRange(Math.Abs(viewer.ScrollBarMaximum.Y - viewer.Offset.Y), 0, 1);
+            Assert.InRange(viewer.Offset.Y, 0, 1);
 
             pinyin.Release.TrySetResult();
             await view.Model.WaitForPresentationAsync().WaitAsync(TimeSpan.FromSeconds(15));
             Pump(window);
 
-            Assert.NotEmpty(latest.NameAnnotations);
-            Assert.InRange(Math.Abs(viewer.ScrollBarMaximum.Y - viewer.Offset.Y), 0, 1);
+            Assert.NotEmpty(first.NameAnnotations);
+            Assert.InRange(viewer.Offset.Y, 0, 1);
             var list = Assert.Single(view.GetVisualDescendants().OfType<ListBox>(), control => control.Name == "ScrollingMessages");
-            Assert.NotNull(list.ContainerFromItem(latest));
-            Assert.False(view.Model.IsReadingHistory);
+            Assert.NotNull(list.ContainerFromItem(first));
+            Assert.True(view.Model.IsReadingHistory);
             Assert.Empty(errors);
         }
         finally

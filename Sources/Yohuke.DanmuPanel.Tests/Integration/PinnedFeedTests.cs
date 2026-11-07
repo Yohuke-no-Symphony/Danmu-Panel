@@ -94,7 +94,7 @@ public sealed class PinnedFeedTests
             {
                 Assert.Empty(view.Model.ScrollingItems);
                 await view.Model.SelectReadFilterAsync(MessageReadFilter.Read);
-                Assert.Equal(new[] { normal.Id, target.Id }, view.Model.ScrollingItems.Select(item => item.Record.Id));
+                Assert.Equal(new[] { target.Id, normal.Id }, view.Model.ScrollingItems.Select(item => item.Record.Id));
                 Assert.All(view.Model.ScrollingItems, item => Assert.False(item.ShowUnreadDot));
             }
             Assert.Empty(errors);
@@ -287,7 +287,7 @@ public sealed class PinnedFeedTests
         await model.SelectReadFilterAsync(MessageReadFilter.Read);
         Assert.Equal(100, model.Items.Count);
         Assert.All(model.Items, item => Assert.True(item.Record.IsRead));
-        var oldest = model.ScrollingItems.First(item => !item.Record.IsPriority);
+        var oldest = model.ScrollingItems.Last(item => !item.Record.IsPriority);
         model.IsReadingHistory = true;
         var incoming = Message(kind, 1000);
         await runtime.Messages.AppendAsync(incoming, new());
@@ -298,7 +298,7 @@ public sealed class PinnedFeedTests
         Assert.Equal(106, model.UnreadCount);
         Assert.DoesNotContain(model.ScrollingItems, item => item.Record.IsPriority);
         Assert.Equal(101, model.ScrollingItems.Count(item => !item.Record.IsPriority));
-        Assert.Same(oldest, model.ScrollingItems.First(item => !item.Record.IsPriority));
+        Assert.Same(oldest, model.ScrollingItems.Last(item => !item.Record.IsPriority));
 
         await model.LoadMoreAsync();
 

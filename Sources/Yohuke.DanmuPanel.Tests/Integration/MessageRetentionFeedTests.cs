@@ -30,17 +30,19 @@ public sealed class MessageRetentionFeedTests
         }
 
         Assert.Equal(300, model.ScrollingItems.Count);
-        Assert.Equal("message 20", model.ScrollingItems[0].Record.Content);
-        var oldest = model.ScrollingItems[0];
-        var latest = model.ScrollingItems[^1];
+        var chronological = InChronologicalOrder(model);
+        Assert.Equal("message 20", chronological[0].Record.Content);
+        var oldest = chronological[0];
+        var latest = chronological[^1];
 
         await AppendAsync(runtime, kind, 320, 1);
         await model.RefreshAsync();
 
         Assert.Equal(300, model.ScrollingItems.Count);
         Assert.DoesNotContain(oldest, model.ScrollingItems);
-        Assert.Same(latest, model.ScrollingItems[^2]);
-        Assert.Equal("message 320", model.ScrollingItems[^1].Record.Content);
+        chronological = InChronologicalOrder(model);
+        Assert.Same(latest, chronological[^2]);
+        Assert.Equal("message 320", chronological[^1].Record.Content);
         Assert.NotNull(await runtime.Messages.GetByIdAsync(oldest.Record.Id));
     }
 
@@ -65,7 +67,7 @@ public sealed class MessageRetentionFeedTests
             await model.SelectReadFilterAsync(MessageReadFilter.Read);
         }
         Assert.Equal(27, model.ScrollingItems.Count);
-        var latest = model.ScrollingItems[^1];
+        var latest = InChronologicalOrder(model)[^1];
 
         await model.LoadMoreAsync();
 
@@ -79,13 +81,13 @@ public sealed class MessageRetentionFeedTests
         await model.RefreshAsync();
 
         Assert.Equal(65, model.ScrollingItems.Count);
-        Assert.Same(latest, model.ScrollingItems[^1]);
+        Assert.Same(latest, InChronologicalOrder(model)[^1]);
         runtime.Configuration.Settings.MessageRetentionCount = 401;
         await runtime.ApplySettingsAsync();
         await model.RefreshAsync();
 
         Assert.Equal(401, model.ScrollingItems.Count);
-        Assert.Same(latest, model.ScrollingItems[^1]);
+        Assert.Same(latest, InChronologicalOrder(model)[^1]);
         await model.SelectRoomAsync(Room());
         Assert.Equal(401, model.ScrollingItems.Count);
     }
@@ -190,6 +192,11 @@ public sealed class MessageRetentionFeedTests
             Assert.All(model.Items, item => Assert.True(item.Record.IsRead));
             Assert.Equal(1, model.UnreadCount);
         }
+    }
+
+    private static MessageItemViewModel[] InChronologicalOrder(FeedViewModel model)
+    {
+        return model.SortOrder == MessageSortOrder.NewestFirst ? model.ScrollingItems.Reverse().ToArray() : model.ScrollingItems.ToArray();
     }
 
     private static RoomTabState Room()

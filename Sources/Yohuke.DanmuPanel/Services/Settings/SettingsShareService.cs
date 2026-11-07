@@ -57,6 +57,7 @@ public sealed class SettingsShareService
         target.MessageTextScale = settings.MessageTextScale;
         target.MessageColumns = settings.MessageColumns;
         target.MessageRetentionCount = settings.MessageRetentionCount;
+        target.MessageSorting = settings.MessageSorting;
         target.ShowUserAvatars = settings.ShowUserAvatars;
         target.ShowFanMedals = settings.ShowFanMedals;
         target.CompactDanmuDisplay = settings.CompactDanmuDisplay;
@@ -132,6 +133,7 @@ public sealed class SettingsShareService
         SpecialAttentionSettingsValidator.Validate(settings.SpecialAttention);
         MessageColumnSettingsValidator.Validate(settings.MessageColumns);
         MessageRetentionSettingsValidator.Validate(settings.MessageRetentionCount);
+        MessageSortSettingsValidator.Validate(settings.MessageSorting);
         var reading = settings.Reading;
         if (reading is null || reading.GiftAutoPinMinimum is < 0 or > 1000000000 || !Enum.IsDefined(reading.GiftReadResetPolicy))
         {

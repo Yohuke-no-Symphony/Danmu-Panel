@@ -6,6 +6,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using CommunityToolkit.Mvvm.Input;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Services;
@@ -65,6 +66,10 @@ public sealed class MessageReadScrollTests
             var viewer = list.GetVisualDescendants().OfType<ScrollViewer>().Single(control => control.TemplatedParent == list);
             if (startAtLatest)
             {
+                var actions = Assert.IsType<StackPanel>(view.HeaderActionsTemplate.Build(view));
+                var bottom = actions.Children.OfType<Button>().Single(button => button.Name == "BackToLatestButton");
+                await Assert.IsAssignableFrom<IAsyncRelayCommand>(bottom.Command).ExecuteAsync(null);
+                Pump(window);
                 Assert.InRange(Math.Abs(viewer.ScrollBarMaximum.Y - viewer.Offset.Y), 0, 1);
                 Assert.False(view.Model.IsReadingHistory);
             }

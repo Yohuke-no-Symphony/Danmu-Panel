@@ -25,22 +25,27 @@ public sealed partial class SqliteMessageStore
     /// <summary>在同一读取事务中取得按阅读状态筛选的消息窗口及完整未读条数，普通弹幕忽略阅读筛选。</summary>
     public Task<MessageFeedSnapshot> LoadFeedAsync(string roomTabId, MessageKind kind, int historyLimit,
         string? oldestHistoryId, CancellationToken cancellationToken = default, bool hideEmoticonDanmu = false,
-        DanmuRegexFilter? danmuRegexFilter = null, MessageReadFilter readFilter = MessageReadFilter.All)
+        DanmuRegexFilter? danmuRegexFilter = null, MessageReadFilter readFilter = MessageReadFilter.All,
+        MessageSortOrder sortOrder = MessageSortOrder.OldestFirst)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(historyLimit);
         if (!Enum.IsDefined(readFilter))
         {
             throw new ArgumentOutOfRangeException(nameof(readFilter));
         }
+        if (!Enum.IsDefined(sortOrder))
+        {
+            throw new ArgumentOutOfRangeException(nameof(sortOrder));
+        }
         return EnqueueAsync(connection => ReadFeed(connection, roomTabId, kind, historyLimit, oldestHistoryId,
             hideEmoticonDanmu && kind == MessageKind.Danmu,
             kind == MessageKind.Danmu ? danmuRegexFilter : null,
-            kind == MessageKind.Danmu ? MessageReadFilter.All : readFilter, cancellationToken), cancellationToken);
+            kind == MessageKind.Danmu ? MessageReadFilter.All : readFilter, sortOrder, cancellationToken), cancellationToken);
     }
 
     private MessageFeedSnapshot ReadFeed(SqliteConnection connection, string roomTabId, MessageKind kind,
         int historyLimit, string? oldestHistoryId, bool hideEmoticons, DanmuRegexFilter? filter,
-        MessageReadFilter readFilter, CancellationToken cancellationToken)
+        MessageReadFilter readFilter, MessageSortOrder sortOrder, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var transaction = connection.BeginTransaction(deferred: true);
@@ -67,9 +72,15 @@ public sealed partial class SqliteMessageStore
                 MessageReadFilter.Read => " AND json_extract(payload,'$.IsRead')=1",
                 _ => ""
             };
-            sequences.AddRange(ReadHistorySequences(connection, transaction, roomTabId, kind, historyLimit,
-                oldestHistoryId, predicate + readPredicate, cancellationToken));
+            var history = ReadHistorySequences(connection, transaction, roomTabId, kind, historyLimit,
+                oldestHistoryId, predicate + readPredicate, cancellationToken);
+            sequences.AddRange(history);
             var records = LoadFeedRecords(connection, transaction, sequences, cancellationToken);
+            if (kind != MessageKind.Danmu && readFilter != MessageReadFilter.All)
+            {
+                sequences.Sort((left, right) => sortOrder == MessageSortOrder.NewestFirst
+                    ? CompareChronologically(right, left, records) : CompareChronologically(left, right, records));
+            }
             var pending = ReadFeedPending(connection, transaction, records.Values, cancellationToken);
             var resultRecords = new MessageRecord[sequences.Count];
             for (var index = 0; index < sequences.Count; index++)
@@ -81,6 +92,7 @@ public sealed partial class SqliteMessageStore
             transaction.Commit();
             return new MessageFeedSnapshot(resultRecords, unreadCount)
             {
+                OldestHistoryId = history.Count > 0 ? records[history[0]].Id : null,
                 PendingTranslationIds = pending
             };
         }
@@ -96,6 +108,14 @@ public sealed partial class SqliteMessageStore
                 connection.CreateFunction<long, string?, string?, bool>("is_record_visible", null);
             }
         }
+    }
+
+    private static int CompareChronologically(long left, long right,
+        IReadOnlyDictionary<long, (string Id, MessageRecord Record)> records)
+    {
+        var time = records[left].Record.Time.ToUnixTimeMilliseconds()
+            .CompareTo(records[right].Record.Time.ToUnixTimeMilliseconds());
+        return time != 0 ? time : left.CompareTo(right);
     }
 
     private static (List<long> Sequences, int UnreadCount) ReadPrioritySequences(SqliteConnection connection,

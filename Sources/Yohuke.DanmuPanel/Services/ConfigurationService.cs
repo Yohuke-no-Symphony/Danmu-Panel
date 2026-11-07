@@ -43,6 +43,7 @@ public sealed class ConfigurationService
         SpecialAttentionSettingsValidator.Validate(configuration.Settings.SpecialAttention);
         MessageColumnSettingsValidator.Validate(configuration.Settings.MessageColumns);
         MessageRetentionSettingsValidator.Validate(configuration.Settings.MessageRetentionCount);
+        MessageSortSettingsValidator.Validate(configuration.Settings.MessageSorting);
         var snapshots = new Dictionary<string, string>
         {
             ["settings.json"] = JsonSerializer.Serialize(configuration.Settings, JSON_OPTIONS),
@@ -109,6 +110,7 @@ public sealed class ConfigurationService
                 SpecialAttentionSettingsValidator.Validate(settings.SpecialAttention);
                 MessageColumnSettingsValidator.Validate(settings.MessageColumns);
                 MessageRetentionSettingsValidator.Validate(settings.MessageRetentionCount);
+                MessageSortSettingsValidator.Validate(settings.MessageSorting);
             }
             return true;
         }

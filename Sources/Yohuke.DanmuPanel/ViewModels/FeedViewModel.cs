@@ -21,6 +21,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     private RoomTabState? room;
     private int retentionCount;
     private int limit;
+    private string? oldestHistoryId;
     private int revision;
     private int unreadCount;
     private int refreshRequested;
@@ -89,6 +90,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         this.runtime = runtime;
         this.kind = kind;
         readFilter = kind == MessageKind.Danmu ? MessageReadFilter.All : MessageReadFilter.Unread;
+        UpdateSortOrder();
         retentionCount = runtime.Configuration.Settings.MessageRetentionCount;
         limit = retentionCount;
         UpdateLayoutOptions();
@@ -122,6 +124,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         IsLoadingHistory = false;
         historyLoadTask = null;
         hasLoadedRoom = false;
+        oldestHistoryId = null;
         retentionCount = runtime.Configuration.Settings.MessageRetentionCount;
         limit = retentionCount;
         translationRequested.Clear();
@@ -189,6 +192,10 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         {
             return;
         }
+        if (UpdateSortOrder())
+        {
+            ResetWindow();
+        }
         UpdateLayoutOptions();
         var current = room;
         var version = revision;
@@ -235,9 +242,9 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
                 ? Math.Max(limit, ScrollingItems.Count(item => !item.Record.IsPriority)) + HISTORY_PAGE_SIZE
                 : limit;
             var snapshot = await runtime.Messages.LoadFeedAsync(current.Id, kind, requestedLimit,
-                IsReadingHistory ? ScrollingItems.FirstOrDefault(item => !item.Record.IsPriority)?.Record.Id : null,
+                IsReadingHistory ? oldestHistoryId : null,
                 cancellationToken, hideEmoticonDanmu: runtime.Configuration.Settings.HideEmoticonDanmu,
-                danmuRegexFilter: runtime.DanmuFilter, readFilter: ReadFilter);
+                danmuRegexFilter: runtime.DanmuFilter, readFilter: ReadFilter, sortOrder: SortOrder);
             loadingHint?.Dispose();
             loadingHint = null;
             if (disposed || version != revision || cancellationToken.IsCancellationRequested)
@@ -307,6 +314,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
             {
                 limit = requestedLimit;
             }
+            oldestHistoryId = snapshot.OldestHistoryId;
             UnreadCount = snapshot.UnreadCount;
             NotifyRegions();
             if (!hasLoadedRoom)

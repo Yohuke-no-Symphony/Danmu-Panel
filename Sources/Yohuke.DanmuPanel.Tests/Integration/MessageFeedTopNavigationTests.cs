@@ -50,7 +50,7 @@ public sealed class MessageFeedTopNavigationTests
             Pump(window);
             var list = Assert.Single(view.GetVisualDescendants().OfType<ListBox>(), control => control.Name == "ScrollingMessages");
             var viewer = Assert.Single(list.GetVisualDescendants().OfType<ScrollViewer>(), control => control.TemplatedParent == list);
-            Assert.True(viewer.Offset.Y > 0);
+            Assert.InRange(viewer.Offset.Y, 0, 1);
             var actions = Assert.IsType<StackPanel>(view.HeaderActionsTemplate.Build(view));
             var latest = actions.Children.OfType<Button>().Single(button => button.Name == "BackToLatestButton");
             await Assert.IsAssignableFrom<IAsyncRelayCommand>(latest.Command).ExecuteAsync(null);

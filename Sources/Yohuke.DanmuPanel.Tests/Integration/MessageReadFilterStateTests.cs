@@ -93,7 +93,7 @@ public sealed class MessageReadFilterStateTests
         await model.WaitForPresentationAsync().WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Equal(MessageReadFilter.Read, model.ReadFilter);
-        Assert.Equal(new[] { "message-300", "message-301", "message-302" }, model.Items.Select(item => item.Record.Id));
+        Assert.Equal(new[] { "message-302", "message-301", "message-300" }, model.Items.Select(item => item.Record.Id));
         Assert.All(model.Items, item => Assert.Equal("second", item.Record.RoomTabId));
         Assert.All(model.ScrollingRows, row => Assert.IsType<MessageItemViewModel>(row));
         Assert.Equal(2, model.UnreadCount);
@@ -123,7 +123,7 @@ public sealed class MessageReadFilterStateTests
         await model.SelectReadFilterAsync(MessageReadFilter.Read);
         await model.MarkAllReadAsync();
 
-        Assert.Equal(new[] { "message-0", "message-1" }, model.Items.Select(item => item.Record.Id));
+        Assert.Equal(new[] { "message-1", "message-0" }, model.Items.Select(item => item.Record.Id));
         Assert.All(model.Items, item => Assert.True(item.Record.IsRead));
         Assert.Equal(0, model.UnreadCount);
         await runtime.Messages.AppendAsync(Message(kind, 2), new());

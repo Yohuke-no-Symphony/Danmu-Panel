@@ -18,6 +18,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
     private readonly ScrollViewer scrollViewer;
     private readonly ItemsControl itemsControl;
     private readonly bool followNewMessages;
+    private readonly bool startAtTop;
     private readonly HashSet<INotifyPropertyChanged> observedItems = [];
     private readonly HashSet<(Size Extent, Size Viewport, Rect AnchorBounds)> correctedAnchorGeometries = [];
     private readonly HashSet<(Size Extent, Size Viewport, Rect? LastBounds)> followedGeometries = [];
@@ -52,11 +53,13 @@ internal sealed class DanmuFeedScrollController : IDisposable
     public event Action<bool>? FollowingLatestChanged;
 
     /// <summary>连接虚拟化列表及滚动宿主，用户输入始终优先于消息更新。</summary>
-    public DanmuFeedScrollController(ScrollViewer scrollViewer, ItemsControl itemsControl, bool followNewMessages = true)
+    public DanmuFeedScrollController(ScrollViewer scrollViewer, ItemsControl itemsControl, bool followNewMessages = true,
+        bool startAtTop = false)
     {
         this.scrollViewer = scrollViewer;
         this.itemsControl = itemsControl;
         this.followNewMessages = followNewMessages;
+        this.startAtTop = startAtTop;
         scrollViewer.PropertyChanged += OnScrollPropertyChanged;
         scrollViewer.LayoutUpdated += OnLayoutUpdated;
         scrollViewer.AddHandler(InputElement.PointerWheelChangedEvent, OnPointerWheelChanged,
@@ -86,7 +89,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
         {
             items.CollectionChanged += OnCollectionChanged;
             ObserveItems(items as IEnumerable);
-            ResetToLatest();
+            ResetPosition(startAtTop);
         }
         else
         {
@@ -100,7 +103,8 @@ internal sealed class DanmuFeedScrollController : IDisposable
         ObjectDisposedException.ThrowIf(isDisposed, this);
         if (items is not null)
         {
-            ResetToLatest();
+            ResetPosition(atTop: false);
+            hasUserScrolledSinceReset = true;
         }
     }
 
@@ -120,6 +124,12 @@ internal sealed class DanmuFeedScrollController : IDisposable
         scrollingPointer = null;
         readingItem = null;
         SetFollowingLatest(false);
+        MoveToTop();
+        CaptureReadingAnchor();
+    }
+
+    private void MoveToTop()
+    {
         isUpdatingScroll = true;
         try
         {
@@ -135,7 +145,6 @@ internal sealed class DanmuFeedScrollController : IDisposable
         {
             isUpdatingScroll = false;
         }
-        CaptureReadingAnchor();
     }
 
     internal void CompleteInitialLoad()
@@ -143,7 +152,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
         ObjectDisposedException.ThrowIf(isDisposed, this);
         if (items is not null && !hasUserScrolledSinceReset)
         {
-            ResetToLatest();
+            ResetPosition(startAtTop);
         }
     }
 
@@ -244,7 +253,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
         {
             ClearItemSubscriptions();
             ObserveItems(items as IEnumerable);
-            ResetToLatest();
+            ResetPosition(startAtTop);
         }
         else
         {
@@ -446,7 +455,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
         }
     }
 
-    private void ResetToLatest()
+    private void ResetPosition(bool atTop)
     {
         CancelPendingFollow();
         hasUserScrolledSinceReset = false;
@@ -455,8 +464,16 @@ internal sealed class DanmuFeedScrollController : IDisposable
         hasFollowTargetChanged = false;
         scrollingPointer = null;
         readingItem = null;
-        SetFollowingLatest(true);
-        QueueFollowLatest();
+        SetFollowingLatest(!atTop);
+        if (atTop)
+        {
+            MoveToTop();
+            CaptureReadingAnchor();
+        }
+        else
+        {
+            QueueFollowLatest();
+        }
     }
 
     private void CancelPendingFollow()

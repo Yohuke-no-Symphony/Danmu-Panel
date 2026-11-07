@@ -45,6 +45,10 @@ public sealed class MessageFeedScrollTests
             await view.Model.SelectRoomAsync(new() { Id = "tab" });
             window.Show();
             Pump(window);
+            var bottomActions = Assert.IsType<StackPanel>(view.HeaderActionsTemplate.Build(view));
+            var bottom = bottomActions.Children.OfType<Button>().Single(button => button.Name == "BackToLatestButton");
+            await Assert.IsAssignableFrom<IAsyncRelayCommand>(bottom.Command).ExecuteAsync(null);
+            Pump(window);
             var list = Assert.Single(view.GetVisualDescendants().OfType<ListBox>(), control => control.Name == "ScrollingMessages");
             var viewer = Assert.Single(list.GetVisualDescendants().OfType<ScrollViewer>(), control => control.TemplatedParent == list);
             AssertAtBottom(viewer);

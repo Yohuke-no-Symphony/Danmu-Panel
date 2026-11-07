@@ -128,7 +128,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         surface.SizeChanged += (_, _) => UpdatePinnedHeight();
         Model.PropertyChanged += (_, args) =>
         {
-            if (args.PropertyName is nameof(FeedViewModel.SelectedRoom) or nameof(FeedViewModel.ReadFilter))
+            if (args.PropertyName is nameof(FeedViewModel.SelectedRoom) or nameof(FeedViewModel.ReadFilter) or nameof(FeedViewModel.SortOrder))
             {
                 isScrollToTopPending = false;
                 CancelColumnResizes();
@@ -137,6 +137,10 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             else if (args.PropertyName == nameof(FeedViewModel.HasScrollingItems))
             {
                 UpdatePinnedHeight();
+                if (scroll is not null)
+                {
+                    UpdateReadingState(scroll.IsFollowingLatest);
+                }
             }
             else if (args.PropertyName == nameof(FeedViewModel.MessageTextScale))
             {
@@ -324,7 +328,16 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
 
     private void OnInitialLoadCompleted()
     {
-        scroll?.CompleteInitialLoad();
+        if (scroll is not null)
+        {
+            scroll.CompleteInitialLoad();
+            UpdateReadingState(scroll.IsFollowingLatest);
+        }
+    }
+
+    private void UpdateReadingState(bool followingLatest)
+    {
+        Model.IsReadingHistory = Model.ScrollingItems.Count > 0 && !followingLatest;
     }
 
     private void OnViewportUpdateStarted()
@@ -379,9 +392,10 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         if (list.GetVisualRoot() is not null && scroll is null &&
             list.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault() is { } viewer)
         {
-            scroll = new(viewer, list, followNewMessages: kind == MessageKind.Danmu);
-            scroll.FollowingLatestChanged += following => Model.IsReadingHistory = !following;
+            scroll = new(viewer, list, followNewMessages: kind == MessageKind.Danmu, startAtTop: kind != MessageKind.Danmu);
+            scroll.FollowingLatestChanged += UpdateReadingState;
             scroll.Attach(Model.ScrollingRows);
+            UpdateReadingState(scroll.IsFollowingLatest);
             for (var index = 0; index < Model.ViewportUpdateDepth; index++)
             {
                 scroll.BeginViewportUpdate();
@@ -611,12 +625,12 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         else
         {
             isScrollToTopPending = true;
-            Model.IsReadingHistory = true;
             if (Model.ScrollingItems.Count > 0)
             {
                 list.ScrollIntoView(Model.ScrollingItems[0]);
             }
         }
+        Model.IsReadingHistory = true;
         return Task.CompletedTask;
     }
 

@@ -46,6 +46,7 @@ public sealed class SettingsView : UserControl
     private readonly ComboBox backlogMode;
     private readonly NumericUpDown giftMinimum;
     private readonly ComboBox giftResetPolicy;
+    private readonly Dictionary<MessageKind, (ComboBox Unread, ComboBox Read)> messageSortChoices = [];
     private readonly CheckBox userPinyin;
     private readonly CheckBox giftPinyin;
     private readonly CheckBox danmuPinyin;
@@ -134,6 +135,15 @@ public sealed class SettingsView : UserControl
         backlogMode = Choices(["Settings.Realtime", "Settings.AllMessages"], (int)translation.BacklogMode);
         giftMinimum = new() { Value = settings.Reading.GiftAutoPinMinimum, Minimum = 0, Maximum = 1000000000, Increment = 1, FormatString = "0.##" };
         giftResetPolicy = Choices(["Settings.ComboOnce", "Settings.ComboNewQuantity", "Settings.ComboNewValue"], (int)settings.Reading.GiftReadResetPolicy);
+        foreach (var kind in new[] { MessageKind.SuperChat, MessageKind.Gift, MessageKind.Guard })
+        {
+            var sorting = settings.MessageSorting.GetPanel(kind);
+            var unread = Choices(["Settings.SortOldestFirst", "Settings.SortNewestFirst"], (int)sorting.Unread);
+            unread.Name = kind + "UnreadSortOrderComboBox";
+            var read = Choices(["Settings.SortOldestFirst", "Settings.SortNewestFirst"], (int)sorting.Read);
+            read.Name = kind + "ReadSortOrderComboBox";
+            messageSortChoices.Add(kind, (unread, read));
+        }
         userPinyin = Check("Settings.UserPinyin", settings.ShowUserPinyin);
         giftPinyin = Check("Settings.GiftPinyin", settings.ShowGiftPinyin);
         danmuPinyin = Check("Settings.DanmuPinyin", settings.ShowDanmuPinyin);
@@ -236,6 +246,7 @@ public sealed class SettingsView : UserControl
             Card("Settings.DanmuRegexFilter", danmuRegexEnabled,
                 Row("Settings.DanmuRegexPatterns", danmuRegexPatterns)),
             Card("Settings.Reading", Row("Settings.GiftMinimum", giftMinimum), Row("Settings.ComboPolicy", giftResetPolicy)),
+            BuildMessageSorting(),
             Card("Settings.Pinyin",
                 WithHint(userPinyin, "Settings.PinyinHelp"),
                 WithHint(giftPinyin, "Settings.PinyinHelp"),
@@ -414,6 +425,12 @@ public sealed class SettingsView : UserControl
     private bool TryCreateDraft(out PanelSettings draft)
     {
         draft = null!;
+        if (messageSortChoices.Values.Any(choices => !Enum.IsDefined((MessageSortOrder)choices.Unread.SelectedIndex) ||
+            !Enum.IsDefined((MessageSortOrder)choices.Read.SelectedIndex)))
+        {
+            SetStatus(Localization.Get("Settings.InvalidMessageSortOrder"));
+            return false;
+        }
         if (!TryCreateMessageBorders(out var messageBorders))
         {
             return false;
@@ -486,6 +503,12 @@ public sealed class SettingsView : UserControl
                 GiftAutoPinMinimum = giftMinimum.Value ?? 0,
                 GiftReadResetPolicy = (GiftReadResetPolicy)giftResetPolicy.SelectedIndex
             },
+            MessageSorting = new()
+            {
+                SuperChat = CreateMessageSortDraft(MessageKind.SuperChat),
+                Gift = CreateMessageSortDraft(MessageKind.Gift),
+                Guard = CreateMessageSortDraft(MessageKind.Guard)
+            },
             ShowUserPinyin = userPinyin.IsChecked == true,
             ShowGiftPinyin = giftPinyin.IsChecked == true,
             ShowDanmuPinyin = danmuPinyin.IsChecked == true,
@@ -505,6 +528,47 @@ public sealed class SettingsView : UserControl
             SpecialAttention = SpecialAttentionEditor.Model.CreateSnapshot(settings.SpecialAttention)
         };
         return true;
+    }
+
+    private MessageReadSortSettings CreateMessageSortDraft(MessageKind kind)
+    {
+        var choices = messageSortChoices[kind];
+        return new()
+        {
+            Unread = (MessageSortOrder)choices.Unread.SelectedIndex,
+            Read = (MessageSortOrder)choices.Read.SelectedIndex
+        };
+    }
+
+    private Control BuildMessageSorting()
+    {
+        var table = new Grid
+        {
+            ColumnDefinitions = new("Auto,*,*"), RowDefinitions = new("Auto,Auto,Auto,Auto"),
+            ColumnSpacing = 16, RowSpacing = 8
+        };
+        var unread = Label("Settings.UnreadSortOrder");
+        Grid.SetColumn(unread, 1);
+        table.Children.Add(unread);
+        var read = Label("Settings.ReadSortOrder");
+        Grid.SetColumn(read, 2);
+        table.Children.Add(read);
+        var index = 1;
+        foreach (var (kind, choices) in messageSortChoices)
+        {
+            var title = Label("Workbench.Panel." + kind);
+            title.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetRow(title, index);
+            Grid.SetRow(choices.Unread, index);
+            Grid.SetColumn(choices.Unread, 1);
+            Grid.SetRow(choices.Read, index);
+            Grid.SetColumn(choices.Read, 2);
+            table.Children.Add(title);
+            table.Children.Add(choices.Unread);
+            table.Children.Add(choices.Read);
+            index++;
+        }
+        return Card("Settings.MessageSorting", WithHint(table, "Settings.MessageSortingHelp"));
     }
 
     private bool TryCreateMessageBorders(out MessageBorderSettings borders)
