@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:settings="using:Yohuke.DanmuPanel.Views.Settings"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Settings"
+             x:Class="Yohuke.DanmuPanel.Views.Settings.SettingsSpecialAttentionPage"
+             x:Name="Root"
+             x:DataType="vm:SettingsDialogViewModel"
+             x:CompileBindings="True">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <settings:SettingsCard Title="{Loc Key=SpecialAttention.Title}">
+            <StackPanel Spacing="14">
+                <ContentPresenter Content="{Binding Editor, ElementName=Root}" HorizontalContentAlignment="Stretch"/>
+            </StackPanel>
+        </settings:SettingsCard>
+    </ScrollViewer>
+</UserControl>

@@ -177,8 +177,9 @@ public sealed class WorkspaceInteractionTests
             add.Show();
             Pump(add);
             Capture(add, "new-workspace");
-            add.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "CancelButton")
-                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var cancel = add.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "CancelButton");
+            cancel.Command!.Execute(null);
+            Assert.False(add.IsVisible);
             Assert.Equal("", draft.Name);
             Assert.Equal(2, runtime.Configuration.Workspaces.Count);
             roomEditor.Show();

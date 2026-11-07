@@ -1,0 +1,12 @@
+<StackPanel xmlns="https://github.com/avaloniaui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+            xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
+            x:Class="Yohuke.DanmuPanel.Views.Components.SkeletonBodySurface"
+            VerticalAlignment="Center" HorizontalAlignment="Stretch" Classes="messageBody">
+    <Grid>
+        <TextBlock Text="　" Opacity="0" VerticalAlignment="Center"
+                   Classes="danmuFeedContent regularFeedContent originalText" components:SkeletonSlot.WidthRatio="0.84" components:SkeletonSlot.Order="3" />
+        <components:HoverMarqueeTextBlock Text="　" Opacity="0" Classes="compactFeedContent originalText"
+                                          components:SkeletonSlot.WidthRatio="0.84" components:SkeletonSlot.Order="3" />
+    </Grid>
+</StackPanel>

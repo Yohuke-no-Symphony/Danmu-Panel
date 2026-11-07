@@ -56,7 +56,7 @@ public sealed class EmoticonDanmuSettingsTests
         {
             window.Show();
             view.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "SettingsSectionReading")
-                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                .ExecuteBoundCommand();
             Dispatcher.UIThread.RunJobs();
             var check = view.GetVisualDescendants().OfType<CheckBox>()
                 .Single(value => value.Name == "HideEmoticonDanmuCheckBox");

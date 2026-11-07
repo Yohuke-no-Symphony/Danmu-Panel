@@ -1,8 +1,8 @@
 using Avalonia;
+using Avalonia.Markup.Xaml;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
-using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -13,13 +13,13 @@ using Yohuke.DanmuPanel.Services;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
-internal sealed class UserAvatarView : UserControl
+internal sealed partial class UserAvatarView : UserControl
 {
     private const int DECODE_WIDTH = 96;
     private const double PREVIEW_SIZE = 160;
-    private readonly IUserAvatarService? avatars;
-    private readonly Ellipse circle = new();
-    private readonly LucideIcon placeholder = new() { Kind = LucideIconKind.UserRound };
+    private IUserAvatarService? avatars;
+    private readonly Ellipse circle;
+    private readonly LucideIcon placeholder;
     private readonly DispatcherTimer refreshTimer = new() { Interval = TimeSpan.FromMinutes(5) };
     private readonly DispatcherTimer previewTimer = new();
     private readonly List<Visual> visibilityAncestors = [];
@@ -38,6 +38,14 @@ internal sealed class UserAvatarView : UserControl
         AvaloniaProperty.Register<UserAvatarView, long>(nameof(UserUid));
     public static readonly StyledProperty<bool> ShowAvatarProperty =
         AvaloniaProperty.Register<UserAvatarView, bool>(nameof(ShowAvatar), true);
+    public static readonly StyledProperty<IUserAvatarService?> AvatarServiceProperty =
+        AvaloniaProperty.Register<UserAvatarView, IUserAvatarService?>(nameof(AvatarService));
+
+    public IUserAvatarService? AvatarService
+    {
+        get => GetValue(AvatarServiceProperty);
+        set => SetValue(AvatarServiceProperty, value);
+    }
 
     public long UserUid
     {
@@ -56,19 +64,19 @@ internal sealed class UserAvatarView : UserControl
     internal Task PendingLoad { get; private set; } = Task.CompletedTask;
     internal Task PendingPreviewLoad { get; private set; } = Task.CompletedTask;
 
-    internal UserAvatarView(IUserAvatarService? avatars = null)
+    public UserAvatarView()
+        : this(null)
     {
-        this.avatars = avatars;
+    }
+
+    internal UserAvatarView(IUserAvatarService? avatars)
+    {
+        AvaloniaXamlLoader.Load(this);
+        circle = this.FindControl<Ellipse>("AvatarCircle")!;
+        placeholder = this.FindControl<LucideIcon>("AvatarPlaceholder")!;
+        AvatarService = avatars;
         ToolTip.SetServiceEnabled(this, false);
-        VerticalAlignment = VerticalAlignment.Center;
-        Classes.Add("messageUserAvatar");
         ResetPlaceholder();
-        placeholder.Bind(ForegroundProperty, new DynamicResourceExtension("AppAvatarTextBrush"));
-        placeholder.Width = 12;
-        placeholder.Height = 12;
-        placeholder.HorizontalAlignment = HorizontalAlignment.Center;
-        placeholder.VerticalAlignment = VerticalAlignment.Center;
-        Content = new Grid { Background = Brushes.Transparent, Children = { circle, placeholder } };
         refreshTimer.Tick += (_, _) => RefreshAvatar();
         previewTimer.Tick += (_, _) => ShowPreview();
         EffectiveViewportChanged += (_, args) =>
@@ -84,7 +92,26 @@ internal sealed class UserAvatarView : UserControl
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == ShowAvatarProperty)
+        if (change.Property == AvatarServiceProperty)
+        {
+            if (isAttached && avatars is not null)
+            {
+                avatars.AvatarChanged -= OnAvatarChanged;
+            }
+            avatars = change.GetNewValue<IUserAvatarService?>();
+            if (isAttached)
+            {
+                CancelRequest();
+                activeUserUid = 0;
+                ClearImage();
+                if (avatars is not null)
+                {
+                    avatars.AvatarChanged += OnAvatarChanged;
+                }
+                UpdateActivity();
+            }
+        }
+        else if (change.Property == ShowAvatarProperty)
         {
             IsVisible = ShowAvatar;
             UpdateActivity();
@@ -227,16 +254,16 @@ internal sealed class UserAvatarView : UserControl
         }
         CancelRequest();
         request = new();
-        PendingLoad = LoadAvatarAsync(activeUserUid, revision, request.Token);
+        PendingLoad = LoadAvatarAsync(activeUserUid, revision, request.Token, avatars!);
     }
 
-    private async Task LoadAvatarAsync(long userUid, int requestRevision, CancellationToken cancellationToken,
+    private async Task LoadAvatarAsync(long userUid, int requestRevision, CancellationToken cancellationToken, IUserAvatarService source,
         bool retryInvalidImage = true)
     {
         Bitmap? image = null;
         try
         {
-            var path = await avatars!.GetAvatarAsync(userUid, cancellationToken).ConfigureAwait(false);
+            var path = await source.GetAvatarAsync(userUid, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             if (path.Length == 0)
             {
@@ -252,10 +279,11 @@ internal sealed class UserAvatarView : UserControl
             cancellationToken.ThrowIfCancellationRequested();
             if (image is null)
             {
-                await avatars.InvalidateAvatarAsync(userUid, path, cancellationToken).ConfigureAwait(false);
+                await source.InvalidateAvatarAsync(userUid, path, cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
                 if (retryInvalidImage)
                 {
-                    await LoadAvatarAsync(userUid, requestRevision, cancellationToken, retryInvalidImage: false)
+                    await LoadAvatarAsync(userUid, requestRevision, cancellationToken, source, retryInvalidImage: false)
                         .ConfigureAwait(false);
                 }
                 return;

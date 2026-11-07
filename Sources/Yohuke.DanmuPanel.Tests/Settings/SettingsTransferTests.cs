@@ -634,7 +634,7 @@ public sealed class SettingsTransferTests
 
     private static void Click(SettingsView view, string name)
     {
-        Find<Button>(view, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Find<Button>(view, name).ExecuteBoundCommand();
         Dispatcher.UIThread.RunJobs();
     }
 

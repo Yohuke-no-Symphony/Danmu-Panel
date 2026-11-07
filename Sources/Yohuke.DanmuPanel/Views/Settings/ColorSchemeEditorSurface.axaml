@@ -1,0 +1,74 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:settings="using:Yohuke.DanmuPanel.Views.Settings"
+             xmlns:appearance="using:Yohuke.DanmuPanel.Models.Appearance"
+             x:Class="Yohuke.DanmuPanel.Views.Settings.ColorSchemeEditorSurface"
+             x:DataType="settings:ColorSchemeEditor">
+    <Border Classes="panel" Padding="14">
+        <StackPanel Spacing="12">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Text="{Loc Key=Colors.Title}" Classes="sectionTitle" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Button Name="SaveColorSchemeAs" Classes="iconButton" VerticalAlignment="Center"
+                            ToolTip.Tip="{Loc Key=Colors.SaveAs}" AutomationProperties.Name="{Loc Key=Colors.SaveAs}"
+                            Command="{Binding Model.SaveAsCommand}">
+                        <LucideIcon Kind="CopyPlus" Size="16" />
+                    </Button>
+                    <Button Name="UpdateColorScheme" Classes="iconButton" VerticalAlignment="Center"
+                            ToolTip.Tip="{Loc Key=Colors.UpdateScheme}" AutomationProperties.Name="{Loc Key=Colors.UpdateScheme}"
+                            Command="{Binding Model.UpdateCommand}">
+                        <LucideIcon Kind="Save" Size="16" />
+                    </Button>
+                    <Button Name="DeleteColorScheme" Classes="iconButton" VerticalAlignment="Center"
+                            ToolTip.Tip="{Loc Key=Colors.DeleteScheme}" AutomationProperties.Name="{Loc Key=Colors.DeleteScheme}"
+                            Command="{Binding Model.DeleteCommand}">
+                        <LucideIcon Kind="Trash2" Size="16" />
+                    </Button>
+                    <Button Name="ResetAllColors" Classes="iconButton" VerticalAlignment="Center"
+                            ToolTip.Tip="{Loc Key=Colors.ResetAll}" AutomationProperties.Name="{Loc Key=Colors.ResetAll}"
+                            Command="{Binding Model.ResetCommand}">
+                        <LucideIcon Kind="RotateCcw" Size="16" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="*,280" ColumnSpacing="14">
+                <TextBlock Text="{Loc Key=Colors.Scheme}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                <ComboBox Name="ColorSchemeSelector" Grid.Column="1" HorizontalAlignment="Stretch"
+                          ItemsSource="{Binding Model.Schemes}" SelectedItem="{Binding Model.SelectedScheme, Mode=TwoWay}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="appearance:SavedColorScheme">
+                            <TextBlock Text="{Binding Name}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </Grid>
+            <Grid ColumnDefinitions="*,280" ColumnSpacing="14">
+                <TextBlock Text="{Loc Key=Colors.SchemeName}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                <TextBox Name="ColorSchemeName" Grid.Column="1" HorizontalAlignment="Stretch"
+                         Watermark="{Loc Key=Colors.SchemeName}" Text="{Binding Model.SchemeName, Mode=TwoWay}" />
+            </Grid>
+            <TextBlock Name="ColorSchemeStatus" TextWrapping="Wrap" Text="{Binding Model.Status}"
+                       IsVisible="{Binding Model.HasStatus}" />
+            <ItemsControl ItemsSource="{Binding Groups}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="settings:ColorSettingGroupPresentation">
+                        <StackPanel Name="{Binding Name}" Spacing="2" Margin="0,8,0,0">
+                            <TextBlock Text="{Binding Title}" Classes="sectionTitle" TextWrapping="Wrap" Margin="0,12,0,0" />
+                            <ItemsControl ItemsSource="{Binding Rows}" Margin="0,8,0,0">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="settings:ColorSettingRowPresentation">
+                                        <Grid ColumnDefinitions="*,280" ColumnSpacing="14">
+                                            <TextBlock Text="{Binding Label}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                            <ContentControl Grid.Column="1" Content="{Binding Input}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -1,0 +1,11 @@
+<ContentControl xmlns="https://github.com/avaloniaui"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                xmlns:layouts="using:Yohuke.DanmuPanel.Layouts"
+                xmlns:core="using:Dock.Model.Core"
+                x:Class="Yohuke.DanmuPanel.Layouts.WorkbenchHeaderActionsHost"
+                x:DataType="core:IDock" Name="PART_HeaderActions"
+                VerticalContentAlignment="Center" Content="{Binding ActiveDockable}">
+    <ContentControl.ContentTemplate>
+        <layouts:WorkbenchHeaderActionsTemplate />
+    </ContentControl.ContentTemplate>
+</ContentControl>

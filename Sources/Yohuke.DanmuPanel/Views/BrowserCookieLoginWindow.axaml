@@ -1,11 +1,12 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Yohuke.DanmuPanel.Views.BrowserCookieLoginWindow"
+        xmlns:vm="using:Yohuke.DanmuPanel.ViewModels" x:DataType="vm:BrowserCookieLoginViewModel" Title="{Binding TitleText}"
         Width="1040"
         Height="760"
         MinWidth="860"
         MinHeight="620"
-        Title="{Loc Key=UI.BrowserCookieLoginWindow.Title}">
+        >
     <Grid Classes="rootSurface"
           RowDefinitions="Auto,*">
         <Border Classes="browserLoginToolbar">
@@ -13,36 +14,36 @@
                   ColumnSpacing="8">
 	                <Button ToolTip.Tip="{Loc Key=UI.BrowserCookieLoginWindow.Back}"
 	                        Classes="iconButton"
-	                        Click="Back_OnClick">
+	                        Command="{Binding BackCommand}">
 	                    <LucideIcon Kind="CircleArrowLeft"/>
 	                </Button>
 	                <Button Grid.Column="1"
 	                        ToolTip.Tip="{Loc Key=UI.BrowserCookieLoginWindow.Forward}"
 	                        Classes="iconButton"
-	                        Click="Forward_OnClick">
+	                        Command="{Binding ForwardCommand}">
 	                    <LucideIcon Kind="CircleArrowRight"/>
 	                </Button>
 	                <Button Grid.Column="2"
 	                        ToolTip.Tip="{Loc Key=UI.BrowserCookieLoginWindow.Refresh}"
 	                        Classes="iconButton"
-	                        Click="Refresh_OnClick">
+	                        Command="{Binding RefreshCommand}">
 	                    <LucideIcon Kind="RefreshCw"/>
 	                </Button>
                 <StackPanel Grid.Column="3"
                             Spacing="2"
                             VerticalAlignment="Center">
-                    <TextBlock x:Name="HeaderText"
+                    <TextBlock x:Name="HeaderText" Text="{Binding TitleText}"
                                FontWeight="SemiBold"/>
-                    <TextBlock x:Name="StatusText"
+                    <TextBlock x:Name="StatusText" Text="{Binding StatusText}"
                                Classes="muted"/>
                 </StackPanel>
 	                <Button Grid.Column="4"
 	                        Content="{Loc Key=UI.BrowserCookieLoginWindow.Cancel}"
-	                        Click="Cancel_OnClick"/>
+	                        Command="{Binding CancelCommand}"/>
 	                <Button Grid.Column="5"
-	                        x:Name="CaptureButton"
+	                        x:Name="CaptureButton" IsEnabled="{Binding !IsCapturing}"
 	                        Classes="primaryButton"
-	                        Click="Capture_OnClick">
+	                        Command="{Binding CaptureCommand}">
 	                    <StackPanel Orientation="Horizontal"
 	                                Spacing="6">
 	                        <LucideIcon Kind="Cookie"/>
@@ -57,7 +58,7 @@
             <Border x:Name="WebViewHost"
                     Classes="browserLoginPlaceholder">
                 <TextBlock x:Name="WebViewPlaceholderText"
-                           Text="{Loc Key=UI.BrowserCookieLoginWindow.PreparingBrowser}"
+                           Text="{Binding PlaceholderText}" IsVisible="{Binding IsPlaceholderVisible}"
                            Classes="muted"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"/>

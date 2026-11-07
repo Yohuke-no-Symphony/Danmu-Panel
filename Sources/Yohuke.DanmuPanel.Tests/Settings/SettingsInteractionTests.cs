@@ -154,7 +154,7 @@ public sealed class SettingsInteractionTests
             var row = grid.GetVisualDescendants().OfType<DataGridRow>().Single(value => ReferenceEquals(value.DataContext, terms[1]));
             var delete = Assert.IsType<MenuItem>(Assert.Single(row.ContextMenu!.Items));
             Assert.IsType<LucideIcon>(delete.Icon);
-            delete.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            delete.ExecuteBoundCommand();
             Assert.Same(terms[0], Assert.Single(grid.ItemsSource.Cast<object>()));
             Assert.True(await view.SaveAsync());
             Assert.Equal("first", Assert.Single(runtime.ConfigurationStore.Load().Settings.Translation.Glossary).Source);
@@ -219,7 +219,7 @@ public sealed class SettingsInteractionTests
     private static void Click(Control view, string name)
     {
         view.GetVisualDescendants().OfType<Button>().Single(button => button.Name == name)
-            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            .ExecuteBoundCommand();
         Dispatcher.UIThread.RunJobs();
     }
 }

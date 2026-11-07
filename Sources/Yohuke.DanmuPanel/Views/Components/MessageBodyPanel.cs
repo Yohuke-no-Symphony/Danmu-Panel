@@ -1,18 +1,19 @@
 using Avalonia;
+using Avalonia.Markup.Xaml;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.VisualTree;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
-internal sealed class MessageBodyPanel : Panel
+internal sealed partial class MessageBodyPanel : Panel
 {
-    private readonly Control original;
-    private readonly Control translation;
-    private readonly Func<double> getOriginalBaseline;
-    private readonly Func<double> getTranslationBaseline;
-    private readonly Func<double> getOriginalInlineWidth;
-    private readonly Func<bool> canShareLine;
+    private Control original = null!;
+    private Control translation = null!;
+    private Func<double> getOriginalBaseline = null!;
+    private Func<double> getTranslationBaseline = null!;
+    private Func<double> getOriginalInlineWidth = null!;
+    private Func<bool> canShareLine = null!;
     private bool isInline;
     private double originalWidth;
     private double translationX;
@@ -54,17 +55,55 @@ internal sealed class MessageBodyPanel : Panel
         AffectsMeasure<MessageBodyPanel>(AllowInlineProperty, HorizontalSpacingProperty, VerticalSpacingProperty);
     }
 
+    public MessageBodyPanel()
+    {
+        AvaloniaXamlLoader.Load(this);
+        var originalText = this.FindControl<EmoticonTextBlock>("OriginalText")!;
+        var originalMarquee = this.FindControl<HoverMarqueeTextBlock>("OriginalMarquee")!;
+        var translatedText = this.FindControl<MessageTranslationTextBlock>("TranslatedText")!;
+        var translationMarquee = this.FindControl<HoverMarqueeTextBlock>("TranslationMarquee")!;
+        var pendingTranslation = this.FindControl<ShimmerTextBlock>("PendingTranslation")!;
+        var contentPending = this.FindControl<PinyinLoadingPlaceholder>("ContentPinyinPending")!;
+        InitializeMetrics(this.FindControl<StackPanel>("OriginalRegion")!, this.FindControl<Grid>("TranslationRegion")!,
+            () => contentPending.DesiredSize.Height + (originalText.IsVisible
+                ? originalText.Padding.Top + originalText.TextLayout.Baseline : originalMarquee.TextBaseline),
+            () => pendingTranslation.IsVisible ? pendingTranslation.TextBaseline : translatedText.IsVisible
+                ? translatedText.Padding.Top + translatedText.TextLayout.Baseline : translationMarquee.TextBaseline,
+            () => originalText.IsVisible ? originalText.InlineTextWidth : originalMarquee.InlineTextWidth,
+            () => (originalText.IsVisible ? originalText.IsSingleTextLine : originalMarquee.IsSingleTextLine) &&
+                (pendingTranslation.IsVisible ? pendingTranslation.IsSingleTextLine : translatedText.IsVisible
+                    ? EmoticonTextBlock.HasSingleTextLine(translatedText) : translationMarquee.IsSingleTextLine));
+        originalText.AnnotationLayoutChanged += () => InvalidateTextMetrics(originalText);
+        originalMarquee.TextMetricsChanged += InvalidateTextMetrics;
+        translationMarquee.TextMetricsChanged += InvalidateTextMetrics;
+        ObserveText(translatedText);
+        ObserveText(pendingTranslation);
+        ObserveText(contentPending);
+    }
+
     internal MessageBodyPanel(Control original, Control translation, Func<double> getOriginalBaseline,
         Func<double> getTranslationBaseline, Func<double> getOriginalInlineWidth, Func<bool> canShareLine)
     {
-        this.original = original;
-        this.translation = translation;
-        this.getOriginalBaseline = getOriginalBaseline;
-        this.getTranslationBaseline = getTranslationBaseline;
-        this.getOriginalInlineWidth = getOriginalInlineWidth;
-        this.canShareLine = canShareLine;
+        InitializeMetrics(original, translation, getOriginalBaseline, getTranslationBaseline, getOriginalInlineWidth, canShareLine);
         Children.Add(original);
         Children.Add(translation);
+    }
+
+    private void InitializeMetrics(Control originalRegion, Control translationRegion, Func<double> originalBaselineProvider,
+        Func<double> translationBaselineProvider, Func<double> originalInlineWidthProvider, Func<bool> canShareLineProvider)
+    {
+        original = originalRegion;
+        translation = translationRegion;
+        getOriginalBaseline = originalBaselineProvider;
+        getTranslationBaseline = translationBaselineProvider;
+        getOriginalInlineWidth = originalInlineWidthProvider;
+        canShareLine = canShareLineProvider;
+    }
+
+    internal void SetBitmapCache(EmoticonBitmapCache? bitmapCache)
+    {
+        this.FindControl<EmoticonTextBlock>("OriginalText")!.BitmapCache = bitmapCache;
+        this.FindControl<HoverMarqueeTextBlock>("OriginalMarquee")!.BitmapCache = bitmapCache;
     }
 
     internal void ObserveText(Control text)

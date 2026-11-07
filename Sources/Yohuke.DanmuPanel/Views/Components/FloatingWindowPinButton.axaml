@@ -1,6 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
              x:Class="Yohuke.DanmuPanel.Views.Components.FloatingWindowPinButton"
+             x:DataType="components:FloatingWindowPinButton" x:Name="Root"
              HorizontalAlignment="Right"
              VerticalAlignment="Center"
              IsVisible="False">
@@ -11,19 +13,21 @@
     </UserControl.Styles>
     <Button x:Name="WindowTopmostButton"
             Classes="iconButton"
-            ToolTip.Tip="{Loc Key=UI.FloatingWindowPinButton.PinIndependently}"
-            AutomationProperties.Name="{Loc Key=UI.FloatingWindowPinButton.PinIndependently}"
-            Click="Pin_OnClick">
+            Classes.selected="{Binding IsIndependentlyPinned, ElementName=Root}"
+            ToolTip.Tip="{Binding PinToolTip, ElementName=Root}"
+            AutomationProperties.Name="{Binding PinToolTip, ElementName=Root}"
+            Command="{Binding ToggleCommand, ElementName=Root}">
         <Grid>
             <LucideIcon x:Name="PinOutlineIcon"
                         Kind="Pin"
+                        IsVisible="{Binding !IsIndependentlyPinned, ElementName=Root}"
                         Size="14" />
             <PathIcon x:Name="PinSolidIcon"
                       Width="14"
                       Height="14"
                       Foreground="{DynamicResource AppPrimaryBrush}"
                       Data="M16,12 L18,14 L18,16 L12.8,16 L12.8,22 L11.2,22 L11.2,16 L6,16 L6,14 L8,12 L8,4 L7,4 L7,2 L17,2 L17,4 L16,4 Z"
-                      IsVisible="False" />
+                      IsVisible="{Binding IsIndependentlyPinned, ElementName=Root}" />
         </Grid>
     </Button>
 </UserControl>

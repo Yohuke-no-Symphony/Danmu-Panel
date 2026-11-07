@@ -1,0 +1,8 @@
+<ContentControl xmlns="https://github.com/avaloniaui"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                x:Class="Yohuke.DanmuPanel.Views.ShellSurface"
+                Margin="12,0,12,12" HorizontalContentAlignment="Stretch"
+                VerticalContentAlignment="Stretch">
+    <TextBlock Text="{Loc Key=UI.MainWindow.RestoringLayout}"
+               HorizontalAlignment="Center" VerticalAlignment="Center" />
+</ContentControl>

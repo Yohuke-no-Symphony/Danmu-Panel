@@ -1,7 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Settings"
              x:Class="Yohuke.DanmuPanel.Views.Settings.DanmuRegexEditorSurface"
-             x:CompileBindings="False">
+             x:DataType="vm:DanmuRegexEditorViewModel">
     <StackPanel Spacing="12">
         <Button x:Name="AddDanmuRegexRuleButton" HorizontalAlignment="Left"
                 Command="{Binding AddRuleCommand}">
@@ -30,7 +31,7 @@
                 </Grid>
                 <ItemsControl x:Name="DanmuRegexRules" ItemsSource="{Binding Rules}">
                     <ItemsControl.ItemTemplate>
-                        <DataTemplate>
+                        <DataTemplate x:DataType="vm:DanmuRegexRuleViewModel">
                             <Grid ColumnDefinitions="36,*,84,96,40" ColumnSpacing="8" Margin="0,0,0,8">
                                 <TextBlock x:Name="DanmuRegexRuleNumber" Text="{Binding Number}"
                                            VerticalAlignment="Center" />
@@ -50,7 +51,7 @@
                                           ToolTip.Tip="{Loc Key=Settings.DanmuRegexBlockTranslationHelp}" />
                                 <Button x:Name="RemoveDanmuRegexRuleButton" Grid.Column="4"
                                         HorizontalAlignment="Center" VerticalAlignment="Center"
-                                        Command="{Binding $parent[UserControl].DataContext.RemoveRuleCommand}"
+                                        Command="{Binding $parent[UserControl].((vm:DanmuRegexEditorViewModel)DataContext).RemoveRuleCommand}"
                                         CommandParameter="{Binding}"
                                         AutomationProperties.Name="{Loc Key=Settings.DanmuRegexRemoveRule}"
                                         ToolTip.Tip="{Loc Key=Settings.DanmuRegexRemoveRule}">

@@ -1,8 +1,10 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Settings"
+             xmlns:settings="using:Yohuke.DanmuPanel.Views.Settings"
              x:Class="Yohuke.DanmuPanel.Views.Settings.SpecialAttentionSearchSurface"
-             x:CompileBindings="False">
+             x:DataType="vm:SpecialAttentionEditorViewModel">
     <components:SearchAndManualDialogSurface x:Name="LookupDialog">
         <components:SearchAndManualDialogSurface.HeaderContent>
             <StackPanel Spacing="6">
@@ -24,7 +26,13 @@
                 </StackPanel>
                 <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Spacing="8">
-                        <ItemsControl x:Name="SpecialAttentionSearchResults" ItemsSource="{Binding SearchResults}" />
+                        <ItemsControl x:Name="SpecialAttentionSearchResults" ItemsSource="{Binding SearchResultRows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SpecialAttentionUserRowViewModel">
+                                    <settings:SpecialAttentionUserRowSurface />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                         <Button x:Name="SpecialAttentionLoadMoreButton" Content="{Loc Key=Workspace.LoadMore}"
                                 Command="{Binding LoadMoreCommand}" IsVisible="{Binding HasMoreResults}"
                                 HorizontalAlignment="Center" />

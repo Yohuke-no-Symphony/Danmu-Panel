@@ -18,7 +18,7 @@ namespace Yohuke.DanmuPanel.Tests.Integration;
 /// <summary>通过真实消息视图验证外部排版设置变更后的底部跟随及阅读位置。</summary>
 public sealed class MessageFeedLayoutFollowTests
 {
-    /// <summary>字号、边框、紧凑显示与换行改变行高时，跟随状态仍到底部，历史阅读保留可见消息。</summary>
+    /// <summary>布局变化保留弹幕底部跟随、未读列表顶部和历史阅读的可见消息。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.Danmu, nameof(PanelSettings.MessageTextScale), false)]
     [InlineData(MessageKind.Danmu, nameof(PanelSettings.CompactDanmuDisplay), false)]
@@ -62,8 +62,9 @@ public sealed class MessageFeedLayoutFollowTests
             Pump(window);
             var list = Assert.Single(view.GetVisualDescendants().OfType<ListBox>(), control => control.Name == "ScrollingMessages");
             var viewer = Assert.Single(list.GetVisualDescendants().OfType<ScrollViewer>(), control => control.TemplatedParent == list);
-            Assert.InRange(Math.Abs(viewer.ScrollBarMaximum.Y - viewer.Offset.Y), 0, 1);
-            Assert.False(view.Model.IsReadingHistory);
+            var initialOffset = kind == MessageKind.Danmu ? viewer.ScrollBarMaximum.Y : 0;
+            Assert.InRange(Math.Abs(initialOffset - viewer.Offset.Y), 0, 1);
+            Assert.Equal(kind != MessageKind.Danmu, view.Model.IsReadingHistory);
             if (readingHistory)
             {
                 var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),

@@ -171,8 +171,7 @@ public sealed class DanmuRegexEditorTests
 
     private static void Select(SettingsView view, string section, Window window)
     {
-        view.GetVisualDescendants().OfType<Button>().Single(control => control.Name == "SettingsSection" + section)
-            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Execute(view.GetVisualDescendants().OfType<Button>().Single(control => control.Name == "SettingsSection" + section));
         Pump(window);
     }
 

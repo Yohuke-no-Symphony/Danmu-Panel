@@ -278,7 +278,10 @@ public sealed class ColorSchemeEditorTests
 
     private static void Click(Control editor, string name)
     {
-        Find<Button>(editor, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var button = Find<Button>(editor, name);
+        Assert.NotNull(button.Command);
+        Assert.True(button.Command.CanExecute(button.CommandParameter));
+        button.Command.Execute(button.CommandParameter);
         Dispatcher.UIThread.RunJobs();
     }
 

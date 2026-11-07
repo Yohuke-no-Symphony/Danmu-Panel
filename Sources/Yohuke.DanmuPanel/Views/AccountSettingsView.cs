@@ -1,9 +1,8 @@
 using System.Collections.Specialized;
+using Yohuke.DanmuPanel.ViewModels.Settings;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
-using Lucide.Avalonia;
-using CommunityToolkit.Mvvm.Input;
 using Yohuke.DanmuPanel.Apis;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.BrowserLogin;
@@ -19,7 +18,7 @@ public sealed class AccountSettingsView : UserControl
     private readonly AccountSettingsSurface surface = new();
     private readonly PanelRuntime runtime;
     private readonly IBilibiliAccountSessionService accountSessions;
-    private readonly Dictionary<BilibiliAccount, AccountSettingsRow> rows = [];
+    private readonly Dictionary<BilibiliAccount, AccountSettingsRowViewModel> rows = [];
     private readonly CancellationTokenSource lifetime = new();
     private bool initialized;
     private bool closed;
@@ -37,27 +36,13 @@ public sealed class AccountSettingsView : UserControl
         Content = surface;
         this.runtime = runtime;
         this.accountSessions = accountSessions;
-        surface.ContextMenu = CreateAccountMenu(null);
-        var add = surface.FindControl<Button>("BrowserAddAccount")!;
-        add.Click += async (_, _) =>
-        {
-            add.IsEnabled = false;
-            try
-            {
-                await BrowserLoginAsync(null);
-            }
-            catch (Exception exception)
-            {
-                Report(exception);
-            }
-            finally
-            {
-                add.IsEnabled = true;
-            }
-        };
+        Model = new(() => BrowserLoginAsync(null), () => EditCookieAsync(null), Report);
+        surface.DataContext = Model;
         RefreshRows();
         AttachedToVisualTree += OnAttached;
     }
+
+    public AccountSettingsViewModel Model { get; }
 
     private Window Owner => (Window)TopLevel.GetTopLevel(this)!;
 
@@ -150,19 +135,29 @@ public sealed class AccountSettingsView : UserControl
         {
             if (!rows.ContainsKey(account))
             {
-                var row = new AccountSettingsRow(account, () => BrowserLoginAsync(account), () => SetDefaultAsync(account),
-                    () => SaveAndValidateAsync(account), () => DeleteAsync(account), Report)
-                {
-                    ContextMenu = CreateAccountMenu(account)
-                };
+                var row = new AccountSettingsRowViewModel(account, () => BrowserLoginAsync(account), () => SetDefaultAsync(account),
+                    () => SaveAndValidateAsync(account), () => DeleteAsync(account), () => EditCookieAsync(account),
+                    () => EditCookieAsync(null), Report);
                 rows.Add(account, row);
             }
         }
-        var list = surface.FindControl<StackPanel>("AccountRows")!;
-        list.Children.Clear();
-        foreach (var account in runtime.Configuration.Accounts)
+        var ordered = runtime.Configuration.Accounts.Select(account => rows[account]).ToArray();
+        foreach (var row in Model.Rows.Where(row => !ordered.Contains(row)).ToArray())
         {
-            list.Children.Add(rows[account]);
+            Model.Rows.Remove(row);
+        }
+        for (var index = 0; index < ordered.Length; index++)
+        {
+            var row = ordered[index];
+            var previous = Model.Rows.IndexOf(row);
+            if (previous < 0)
+            {
+                Model.Rows.Insert(index, row);
+            }
+            else if (previous != index)
+            {
+                Model.Rows.Move(previous, index);
+            }
         }
         RefreshStates();
     }
@@ -174,39 +169,6 @@ public sealed class AccountSettingsView : UserControl
             row.RefreshState(accountSessions.GetState(account.Id),
                 runtime.Configuration.Settings.DefaultAccountId == account.Id);
         }
-    }
-
-    private ContextMenu CreateAccountMenu(BilibiliAccount? account)
-    {
-        var menu = new LocalizedContextMenu();
-        if (account is not null)
-        {
-            AddMenuAction(menu, "Panel.EditAccountCookie", LucideIconKind.Pencil, () => EditCookieAsync(account));
-            menu.Items.Add(new Separator());
-        }
-        AddMenuAction(menu, "Panel.AddAccountManually", LucideIconKind.UserPlus, () => EditCookieAsync(null));
-        return menu;
-    }
-
-    private void AddMenuAction(LocalizedContextMenu menu, string key, LucideIconKind icon, Func<Task> action)
-    {
-        var item = new MenuItem
-        {
-            Icon = new LucideIcon { Kind = icon },
-            Command = new AsyncRelayCommand(async () =>
-            {
-                try
-                {
-                    await action();
-                }
-                catch (Exception exception)
-                {
-                    Report(exception);
-                }
-            })
-        };
-        menu.SetHeader(item, key);
-        menu.Items.Add(item);
     }
 
     internal async Task EditCookieAsync(BilibiliAccount? account)
@@ -340,8 +302,6 @@ public sealed class AccountSettingsView : UserControl
         {
             return;
         }
-        var status = surface.FindControl<TextBlock>("AccountOperationStatus")!;
-        status.Text = AppLogSanitizer.Sanitize(exception.Message);
-        status.IsVisible = true;
+        Model.Status = AppLogSanitizer.Sanitize(exception.Message);
     }
 }

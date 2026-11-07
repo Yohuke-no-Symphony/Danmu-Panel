@@ -1,0 +1,10 @@
+<Button xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
+        x:Class="Yohuke.DanmuPanel.Views.Components.WindowPinButton"
+        x:Name="Root" x:DataType="components:WindowPinButton"
+        Classes="iconButton" Classes.selected="{Binding IsPinned, ElementName=Root}"
+        ToolTip.Tip="{Binding PinToolTip, ElementName=Root}"
+        AutomationProperties.Name="{Binding PinToolTip, ElementName=Root}">
+    <LucideIcon Kind="{Binding Icon, ElementName=Root}" Size="16" />
+</Button>

@@ -1,19 +1,34 @@
 using Avalonia;
-using Avalonia.Automation;
+using Avalonia.Markup.Xaml;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.Messages;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
-internal sealed class MessageFeedColumnLayout : Grid
+internal sealed partial class MessageFeedColumnLayout : Grid
 {
     private const double MIN_COLUMN_WIDTH = 32;
     private const double KEYBOARD_RATIO_STEP = 0.02;
-    private readonly double defaultRatio;
-    private readonly MessageColumnSplitter? splitter;
+    private readonly MessageColumnSplitter splitter;
+
+    public static readonly StyledProperty<MessageKind> KindProperty =
+        AvaloniaProperty.Register<MessageFeedColumnLayout, MessageKind>(nameof(Kind));
+    public static readonly StyledProperty<bool> CanResizeProperty =
+        AvaloniaProperty.Register<MessageFeedColumnLayout, bool>(nameof(CanResize), true);
+
+    public MessageKind Kind
+    {
+        get => GetValue(KindProperty);
+        set => SetValue(KindProperty, value);
+    }
+
+    public bool CanResize
+    {
+        get => GetValue(CanResizeProperty);
+        set => SetValue(CanResizeProperty, value);
+    }
 
     internal static readonly AttachedProperty<double?> IdentityRatioProperty =
         AvaloniaProperty.RegisterAttached<MessageFeedColumnLayout, Control, double?>("IdentityRatio",
@@ -28,31 +43,20 @@ internal sealed class MessageFeedColumnLayout : Grid
     /// <inheritdoc />
     protected override Type StyleKeyOverride => typeof(Grid);
 
-    internal MessageFeedColumnLayout(MessageKind kind, bool canResize)
+    public MessageFeedColumnLayout()
     {
-        defaultRatio = kind == MessageKind.Guard ? 0.6 : 0.4;
-        ColumnDefinitions = new("Auto,2*,Auto,3*");
-        ColumnSpacing = 0;
-        ClipToBounds = true;
-        Classes.Add("danmuFeedLayout");
-        if (canResize)
-        {
-            splitter = new();
-            splitter.Bind(AutomationProperties.NameProperty, Localization.Observe("Panel.ResizeColumns"));
-            splitter.Bind(ToolTip.TipProperty, Localization.Observe("Panel.ResizeColumns"));
-            splitter.ResizePressed += OnResizePressed;
-            splitter.KeyDown += OnSplitterKeyDown;
-            SetColumn(splitter, 2);
-            Children.Add(splitter);
-        }
-        else
-        {
-            var gap = new Border { MinWidth = 6 };
-            gap.Classes.Add("messageColumnSplitterSpace");
-            SetColumn(gap, 2);
-            Children.Add(gap);
-        }
+        AvaloniaXamlLoader.Load(this);
+        splitter = this.FindControl<MessageColumnSplitter>("ColumnSplitter")!;
+        splitter.ResizePressed += OnResizePressed;
+        splitter.KeyDown += OnSplitterKeyDown;
         UpdateColumnWidths();
+    }
+
+    internal MessageFeedColumnLayout(MessageKind kind, bool canResize)
+        : this()
+    {
+        Kind = kind;
+        CanResize = canResize;
     }
 
     internal static double ClampRatio(double ratio, double width)
@@ -65,7 +69,7 @@ internal sealed class MessageFeedColumnLayout : Grid
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == IdentityRatioProperty)
+        if (change.Property == IdentityRatioProperty || change.Property == KindProperty)
         {
             UpdateColumnWidths();
         }
@@ -73,7 +77,7 @@ internal sealed class MessageFeedColumnLayout : Grid
 
     private double GetRatio()
     {
-        return GetValue(IdentityRatioProperty) ?? defaultRatio;
+        return GetValue(IdentityRatioProperty) ?? (Kind == MessageKind.Guard ? 0.6 : 0.4);
     }
 
     private void UpdateColumnWidths()

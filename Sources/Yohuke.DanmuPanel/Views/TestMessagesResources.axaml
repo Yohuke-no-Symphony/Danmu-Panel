@@ -1,0 +1,80 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:vm="using:Yohuke.DanmuPanel.ViewModels" xmlns:views="using:Yohuke.DanmuPanel.Views"
+                    x:Class="Yohuke.DanmuPanel.Views.TestMessagesResources">
+    <DataTemplate x:Key="ChoiceTemplate" DataType="vm:TestMessageChoice"><TextBlock Text="{Binding Title}" /></DataTemplate>
+    <DataTemplate x:Key="HeaderActions" x:DataType="views:TestMessagesView">
+        <StackPanel Orientation="Horizontal" Spacing="2">
+            <Button Classes="iconButton dockChromeButton" Command="{Binding AddSingleCommand}"
+                    ToolTip.Tip="{Loc Key=TestMessages.AddSingle}" AutomationProperties.Name="{Loc Key=TestMessages.AddSingle}"><LucideIcon Kind="Plus" Size="16" /></Button>
+            <Button Classes="iconButton dockChromeButton" Command="{Binding AddBatchCommand}"
+                    ToolTip.Tip="{Loc Key=TestMessages.AddBatch}" AutomationProperties.Name="{Loc Key=TestMessages.AddBatch}"><LucideIcon Kind="ListPlus" Size="16" /></Button>
+            <Button Classes="iconButton dockChromeButton" Command="{Binding ClearCommand}"
+                    ToolTip.Tip="{Loc Key=TestMessages.Clear}" AutomationProperties.Name="{Loc Key=TestMessages.Clear}"><LucideIcon Kind="Trash2" Size="16" /></Button>
+        </StackPanel>
+    </DataTemplate>
+    <DataTemplate x:Key="Form" x:DataType="vm:TestMessagesViewModel">
+        <ScrollViewer x:Name="FormRoot" HorizontalScrollBarVisibility="Disabled">
+            <ScrollViewer.ContextMenu>
+                <ContextMenu DataContext="{Binding #FormRoot.((vm:TestMessagesViewModel)DataContext)}">
+                    <MenuItem Header="{Loc Key=TestMessages.AddSingle}" Command="{Binding AddSingleCommand}"><MenuItem.Icon><LucideIcon Kind="Plus" Size="16" /></MenuItem.Icon></MenuItem>
+                    <MenuItem Header="{Loc Key=TestMessages.AddBatch}" Command="{Binding AddBatchCommand}"><MenuItem.Icon><LucideIcon Kind="ListPlus" Size="16" /></MenuItem.Icon></MenuItem>
+                    <Separator />
+                    <MenuItem Header="{Loc Key=TestMessages.Clear}" Command="{Binding ClearCommand}"><MenuItem.Icon><LucideIcon Kind="Trash2" Size="16" /></MenuItem.Icon></MenuItem>
+                </ContextMenu>
+            </ScrollViewer.ContextMenu>
+            <StackPanel Margin="12" Spacing="4">
+                <TextBlock Text="{Binding TargetText}" TextWrapping="Wrap" />
+                <TextBlock Text="{Loc Key=TestMessages.Help}" TextWrapping="Wrap" Classes="muted" />
+                <StackPanel Spacing="5" Margin="0,0,0,10">
+                    <TextBlock Text="{Loc Key=TestMessages.Kind}" />
+                    <ComboBox ItemTemplate="{StaticResource ChoiceTemplate}" x:Name="TestKind" ItemsSource="{Binding KindChoices}" SelectedIndex="{Binding KindIndex, Mode=TwoWay}" HorizontalAlignment="Stretch" />
+                </StackPanel>
+                <StackPanel Spacing="5" Margin="0,0,0,10">
+                    <TextBlock Text="{Loc Key=TestMessages.UserName}" />
+                    <TextBox x:Name="TestUserName" Text="{Binding UserName, Mode=TwoWay}" />
+                </StackPanel>
+                <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding ShowsMedal}">
+                    <TextBlock Text="{Loc Key=TestMessages.MedalName}" />
+                    <TextBox x:Name="TestMedalName" Text="{Binding MedalName, Mode=TwoWay}" />
+                </StackPanel>
+                <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding ShowsMedal}">
+                    <TextBlock Text="{Loc Key=TestMessages.MedalLevel}" />
+                    <NumericUpDown x:Name="TestMedalLevel" Value="{Binding MedalLevel, Mode=TwoWay}" Minimum="0" Maximum="2147483647" Increment="1" FormatString="0" ParsingNumberStyle="Integer" />
+                </StackPanel>
+                <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding ShowsMedal}">
+                    <TextBlock Text="{Loc Key=TestMessages.MedalGuardLevel}" />
+                    <ComboBox ItemTemplate="{StaticResource ChoiceTemplate}" x:Name="TestMedalGuardLevel" ItemsSource="{Binding MedalGuardChoices}" SelectedIndex="{Binding MedalGuardIndex, Mode=TwoWay}" HorizontalAlignment="Stretch" />
+                </StackPanel>
+                <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding ShowsText}">
+                    <TextBlock Text="{Loc Key=TestMessages.Content}" />
+                    <TextBox x:Name="TestMessageContent" Text="{Binding MessageContent, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="74" MaxHeight="160" />
+                </StackPanel>
+                <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding ShowsText}">
+                    <TextBlock Text="{Loc Key=TestMessages.Translation}" />
+                    <TextBox x:Name="TestTranslation" Text="{Binding Translation, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="54" MaxHeight="120" />
+                </StackPanel>
+                <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding ShowsGift}">
+                    <TextBlock Text="{Loc Key=TestMessages.GiftName}" />
+                    <TextBox x:Name="TestGiftName" Text="{Binding GiftName, Mode=TwoWay}" />
+                </StackPanel>
+                <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding ShowsPrice}">
+                    <TextBlock Text="{Loc Key=TestMessages.UnitPrice}" />
+                    <NumericUpDown x:Name="TestUnitPrice" Value="{Binding Price, Mode=TwoWay}" Minimum="0" Maximum="50000" FormatString="0.##" />
+                </StackPanel>
+                <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding ShowsQuantity}">
+                    <TextBlock Text="{Loc Key=TestMessages.Quantity}" />
+                    <NumericUpDown x:Name="TestQuantity" Value="{Binding Quantity, Mode=TwoWay}" Minimum="1" Maximum="50000" FormatString="0" />
+                </StackPanel>
+                <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding ShowsGuard}">
+                    <TextBlock Text="{Loc Key=TestMessages.GuardLevel}" />
+                    <ComboBox ItemTemplate="{StaticResource ChoiceTemplate}" x:Name="TestGuardLevel" ItemsSource="{Binding GuardChoices}" SelectedIndex="{Binding GuardIndex, Mode=TwoWay}" HorizontalAlignment="Stretch" />
+                </StackPanel>
+                <StackPanel Spacing="5" Margin="0,0,0,10">
+                    <TextBlock Text="{Loc Key=TestMessages.BatchCount}" />
+                    <NumericUpDown x:Name="TestBatchCount" Value="{Binding BatchCount, Mode=TwoWay}" Minimum="1" Maximum="{Binding MaximumBatchCount}" FormatString="0" />
+                </StackPanel>
+                <TextBlock Text="{Binding StatusText}" IsVisible="{Binding HasStatus}" TextWrapping="Wrap" />
+            </StackPanel>
+        </ScrollViewer>
+    </DataTemplate>
+</ResourceDictionary>

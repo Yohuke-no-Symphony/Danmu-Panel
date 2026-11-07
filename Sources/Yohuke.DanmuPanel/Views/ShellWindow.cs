@@ -1,11 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Layout;
-using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
-using Lucide.Avalonia;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Layouts;
 using Yohuke.DanmuPanel.Menus;
@@ -23,8 +20,6 @@ public sealed class ShellWindow : Window
     private readonly ShellWindowRegistry windows;
     private readonly ContentControl dockHost;
     private readonly Menu menu;
-    private readonly Button pinButton;
-    private readonly LucideIcon pinIcon;
     private readonly WorkbenchMenuCatalog menuCatalog;
     private readonly WorkbenchMenuIcons menuIcons = new();
     private readonly Dictionary<Window, WorkbenchMenuProjection> menuProjections = [];
@@ -68,52 +63,22 @@ public sealed class ShellWindow : Window
             Icon = new WindowIcon(AssetLoader.Open(new("avares://Yohuke.DanmuPanel/Assets/favicon.ico")));
         }
 
-        menu = new() { VerticalAlignment = VerticalAlignment.Center };
-        menu.Classes.Add("workbenchMenu");
+        var header = new ShellHeaderSurface { RoomToolbar = roomToolbar };
+        menu = header.Menu;
         menu.IsVisible = !supportsNativeMenus;
         menuCatalog = new(() => SettingsRequested?.Invoke(), () => _ = ShowAboutAsync(), () => ClearRoomRequested?.Invoke(),
             () => ClearAllRequested?.Invoke(), () => _ = RequestCloseAsync(), () => _ = SaveLayoutAsAsync(),
             () => windows.IsInteractionBlocked, ReportFailure);
         windows.InteractionChanged += menuCatalog.Refresh;
         AttachMenu(this);
-        pinIcon = new() { Kind = LucideIconKind.Pin, Size = 16 };
-        pinButton = new() { Content = pinIcon };
-        pinButton.Classes.Add("iconButton");
-        pinButton.Click += (_, _) => Topmost = !Topmost;
-        dockHost = new()
-        {
-            Margin = new(12, 0, 12, 12),
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            VerticalContentAlignment = VerticalAlignment.Stretch,
-            Content = new TextBlock
-            {
-                Text = Localization.Get("UI.MainWindow.RestoringLayout"),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            }
-        };
+        var pinButton = new WindowPinButton { Command = new RelayCommand(() => Topmost = !Topmost) };
+        pinButton.Bind(WindowPinButton.IsPinnedProperty, this.GetObservable(TopmostProperty));
+        dockHost = new ShellSurface();
         Content = dockHost;
         var titleBar = WindowChrome.AttachFrame(this, pinButton);
-        var header = new Grid { ColumnDefinitions = new("Auto,Auto,*"), Margin = new(12, 0, 8, 0) };
-        header.Children.Add(new TextBlock
-        {
-            Text = "Danmu Panel",
-            FontSize = 13,
-            FontWeight = FontWeight.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        });
-        Grid.SetColumn(menu, 1);
-        header.Children.Add(menu);
-        Grid.SetColumn(roomToolbar, 2);
-        roomToolbar.HorizontalAlignment = HorizontalAlignment.Center;
-        roomToolbar.VerticalAlignment = VerticalAlignment.Center;
-        header.Children.Add(roomToolbar);
         titleBar.HeaderContent = header;
         Opened += OnOpened;
         Closed += OnClosed;
-        PropertyChanged += OnWindowPropertyChanged;
-        Localization.LanguageChanged += OnLanguageChanged;
-        RefreshPin();
     }
 
     /// <summary>请求打开设置窗口。</summary>
@@ -303,8 +268,6 @@ public sealed class ShellWindow : Window
 
     private void OnClosed(object? sender, EventArgs e)
     {
-        Localization.LanguageChanged -= OnLanguageChanged;
-        PropertyChanged -= OnWindowPropertyChanged;
         Opened -= OnOpened;
         Closed -= OnClosed;
         if (layouts is not null)
@@ -363,25 +326,6 @@ public sealed class ShellWindow : Window
         }
     }
 
-    private void OnLanguageChanged(object? sender, EventArgs e)
-    {
-        RefreshPin();
-    }
-
-    private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
-    {
-        if (e.Property == TopmostProperty)
-        {
-            RefreshPin();
-        }
-    }
-
-    private void RefreshPin()
-    {
-        pinButton.Classes.Set("selected", Topmost);
-        pinIcon.Kind = Topmost ? LucideIconKind.PinOff : LucideIconKind.Pin;
-        ToolTip.SetTip(pinButton, Localization.Get(Topmost ? "UI.TitleBarView.UnpinWindow" : "UI.TitleBarView.PinWindow"));
-    }
 
     private async Task ShowAboutAsync()
     {

@@ -375,7 +375,7 @@ public sealed class SettingsViewTests
     {
         var window = new Window { Content = view, Width = 1020, Height = 900 };
         window.Show();
-        Find<Button>(view, "SettingsSectionTranslation").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Find<Button>(view, "SettingsSectionTranslation").ExecuteBoundCommand();
         Dispatcher.UIThread.RunJobs();
         window.UpdateLayout();
         return window;

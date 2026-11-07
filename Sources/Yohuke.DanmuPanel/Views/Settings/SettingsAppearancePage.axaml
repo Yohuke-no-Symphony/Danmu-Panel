@@ -1,0 +1,63 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:settings="using:Yohuke.DanmuPanel.Views.Settings"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Settings"
+             x:Class="Yohuke.DanmuPanel.Views.Settings.SettingsAppearancePage"
+             x:Name="Root"
+             x:DataType="vm:SettingsAppearanceViewModel"
+             x:CompileBindings="True">
+    <UserControl.Resources>
+        <DataTemplate x:Key="SettingsChoiceTemplate" x:DataType="vm:SettingsChoiceOption">
+            <TextBlock Text="{Binding Text}" />
+        </DataTemplate>
+    </UserControl.Resources>
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="14">
+            <settings:SettingsCard Title="{Loc Key=Settings.Appearance}">
+                <StackPanel Spacing="14">
+                    <settings:SettingsRow Label="{Loc Key=Settings.Language}">
+                        <ComboBox SelectedIndex="{Binding LanguageIndex, Mode=TwoWay}" HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding LanguageOptions}" ItemTemplate="{StaticResource SettingsChoiceTemplate}" />
+                    </settings:SettingsRow>
+                    <settings:SettingsRow Label="{Loc Key=Settings.Theme}">
+                        <ComboBox SelectedIndex="{Binding ThemeIndex, Mode=TwoWay}" HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding ThemeOptions}" ItemTemplate="{StaticResource SettingsChoiceTemplate}" />
+                    </settings:SettingsRow>
+                    <CheckBox x:Name="UseWindowMenuOnMacCheckBox"
+                              Content="{Loc Key=Settings.Appearance.WindowMenuOnMac}"
+                              IsChecked="{Binding UseWindowMenuOnMac, Mode=TwoWay}"
+                              IsVisible="{Binding SupportsNativeMenus}" />
+                </StackPanel>
+            </settings:SettingsCard>
+            <settings:SettingsCard Title="{Loc Key=Settings.MessageBorders}">
+                <StackPanel Spacing="14">
+                    <settings:SettingsRow Label="{Loc Key=Settings.SuperChatBorderThickness}">
+                        <NumericUpDown x:Name="SuperChatBorderThicknessInput"
+                                       Value="{Binding SuperChatBorderThickness, Mode=TwoWay}"
+                                       Minimum="{Binding MinimumBorderThickness}"
+                                       Maximum="{Binding MaximumBorderThickness}"
+                                       Increment="0.5"
+                                       FormatString="0.##" />
+                    </settings:SettingsRow>
+                    <settings:SettingsRow Label="{Loc Key=Settings.GiftBorderThickness}">
+                        <NumericUpDown x:Name="GiftBorderThicknessInput"
+                                       Value="{Binding GiftBorderThickness, Mode=TwoWay}"
+                                       Minimum="{Binding MinimumBorderThickness}"
+                                       Maximum="{Binding MaximumBorderThickness}"
+                                       Increment="0.5"
+                                       FormatString="0.##" />
+                    </settings:SettingsRow>
+                    <settings:SettingsRow Label="{Loc Key=Settings.GuardBorderThickness}">
+                        <NumericUpDown x:Name="GuardBorderThicknessInput"
+                                       Value="{Binding GuardBorderThickness, Mode=TwoWay}"
+                                       Minimum="{Binding MinimumBorderThickness}"
+                                       Maximum="{Binding MaximumBorderThickness}"
+                                       Increment="0.5"
+                                       FormatString="0.##" />
+                    </settings:SettingsRow>
+                </StackPanel>
+            </settings:SettingsCard>
+            <ContentPresenter Content="{Binding ColorEditor, ElementName=Root}" HorizontalContentAlignment="Stretch"/>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

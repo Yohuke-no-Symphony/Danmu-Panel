@@ -193,7 +193,7 @@ public sealed class MessageSortSettingsTests
     private static void SelectReading(SettingsView view)
     {
         view.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "SettingsSectionReading")
-            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            .ExecuteBoundCommand();
         Dispatcher.UIThread.RunJobs();
     }
 

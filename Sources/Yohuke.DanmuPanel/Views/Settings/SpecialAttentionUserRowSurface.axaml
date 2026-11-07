@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Settings"
+             x:Class="Yohuke.DanmuPanel.Views.Settings.SpecialAttentionUserRowSurface"
+             x:DataType="vm:SpecialAttentionUserRowViewModel">
+    <Border Classes="panel" Padding="10" Margin="0,0,0,6">
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+            <components:UserAvatarView Width="32" Height="32" UserUid="{Binding UserUid}"
+                                       AvatarService="{Binding AvatarService}" />
+            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding DisplayName}" />
+                <TextBlock Text="{Binding UidText}" FontSize="11" Classes="muted" />
+            </StackPanel>
+            <Button Name="AddSpecialAttentionSearchResultButton" Grid.Column="2" VerticalAlignment="Center"
+                    IsVisible="{Binding IsAdding}" Content="{Loc Key=SpecialAttention.AddUser}"
+                    Command="{Binding ActionCommand}" CommandParameter="{Binding Item}" />
+            <Button Name="RemoveSpecialAttentionUserButton" Grid.Column="2" VerticalAlignment="Center"
+                    IsVisible="{Binding IsRemoving}" Content="{Loc Key=SpecialAttention.RemoveUser}"
+                    Command="{Binding ActionCommand}" CommandParameter="{Binding Item}" />
+        </Grid>
+    </Border>
+</UserControl>

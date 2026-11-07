@@ -1,0 +1,21 @@
+<Grid xmlns="https://github.com/avaloniaui"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:vm="using:Yohuke.DanmuPanel.ViewModels"
+      xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
+      x:Class="Yohuke.DanmuPanel.Views.Components.MessageMedalSurface"
+      x:DataType="vm:MessageItemViewModel" Classes="danmuMedalSlot" IsVisible="{Binding ShowFanMedals}">
+    <components:AdaptiveForegroundBorder x:Name="MedalFrame" Classes="danmuMedalBadge"
+        PreferredForeground="{DynamicResource MedalTextBrush}" IsVisible="{Binding HasMedal}" ToolTip.Tip="{Binding Medal}">
+        <Grid ColumnDefinitions="*,Auto" Classes="danmuMedalLayout">
+            <TextBlock Classes="danmuMedalText" Text="{Binding MedalName}" TextTrimming="CharacterEllipsis"
+                       Foreground="{Binding #MedalFrame.Foreground}" />
+            <TextBlock Grid.Column="1" Classes="danmuMedalText danmuMedalLevel" Text="{Binding MedalLevel}"
+                       TextTrimming="CharacterEllipsis" Foreground="{Binding #MedalFrame.Foreground}" />
+        </Grid>
+    </components:AdaptiveForegroundBorder>
+    <components:AdaptiveForegroundBorder x:Name="PlaceholderFrame" Classes="danmuMedalPlaceholder"
+        PreferredForeground="{DynamicResource AppMutedTextBrush}" IsVisible="{Binding !HasMedal}">
+        <TextBlock Classes="danmuMedalText danmuMedalPlaceholder" Text="{Loc Key=Panel.NoMedal}"
+                   Foreground="{Binding #PlaceholderFrame.Foreground}" />
+    </components:AdaptiveForegroundBorder>
+</Grid>

@@ -12,13 +12,7 @@ public sealed partial class RoomEditorSurface : UserControl
     public RoomEditorSurface()
     {
         InitializeComponent();
-        var dialog = this.FindControl<SearchAndManualDialogSurface>("LookupDialog")!;
-        DataContextChanged += (_, _) =>
-        {
-            var editing = DataContext is RoomEditorViewModel { IsExisting: true };
-            dialog.IsSearchEnabled = !editing;
-            dialog.SelectedMode = editing ? SearchAndManualDialogMode.Manual : SearchAndManualDialogMode.Search;
-        };
+
     }
 
     private void LiveRoomSearch_OnKeyDown(object? sender, KeyEventArgs e)

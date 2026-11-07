@@ -2,9 +2,7 @@ using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Views.Components;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Presenters;
 using Avalonia.Data;
-using Avalonia.Layout;
 using Avalonia.Platform;
 
 namespace Yohuke.DanmuPanel.Windowing;
@@ -15,26 +13,14 @@ public static class WindowChrome
     /// <summary>安装共享窗口标题栏并管理原生窗口边框生命周期。</summary>
     public static WindowTitleBar AttachFrame(Window window, Control? rightContent = null)
     {
-        var titleBar = new WindowTitleBar { RightContent = rightContent };
+        var frame = new WindowFrameSurface { RightContent = rightContent };
+        var titleBar = frame.TitleBar;
         var titleBinding = titleBar.Bind(WindowTitleBar.TitleProperty,
             new Binding(nameof(Window.Title)) { Source = window });
         var content = window.Content;
         window.Content = null;
-        DockPanel.SetDock(titleBar, Avalonia.Controls.Dock.Top);
-        window.Content = new DockPanel
-        {
-            LastChildFill = true,
-            Children =
-            {
-                titleBar,
-                new ContentPresenter
-                {
-                    Content = content,
-                    HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                    VerticalContentAlignment = VerticalAlignment.Stretch
-                }
-            }
-        };
+        frame.BodyContent = content;
+        window.Content = frame;
         window.ExtendClientAreaToDecorationsHint = true;
         window.ExtendClientAreaChromeHints = ExtendClientAreaChromeHints.PreferSystemChrome;
         window.ExtendClientAreaTitleBarHeightHint = titleBar.Height;

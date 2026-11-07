@@ -1,0 +1,73 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:vm="using:Yohuke.DanmuPanel.ViewModels"
+                    xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
+                    x:Class="Yohuke.DanmuPanel.Views.Components.MessageFeedRowTemplates">
+    <DataTemplate x:Key="Danmu" x:DataType="vm:MessageItemViewModel">
+        <Grid>
+            <Border BorderBrush="{Binding BorderBrush}">
+                <components:MessageFeedColumnLayout Kind="Danmu">
+                    <components:MessageMedalSurface />
+                    <components:MessageIdentitySurface Grid.Column="1" />
+                    <components:MessageBodyPanel Grid.Column="3">
+                        <components:MessageBodyPanel.AllowInline>
+                            <MultiBinding Converter="{x:Static components:MessageRowConverters.AllowInline}">
+                                <Binding Path="Detail" />
+                                <Binding Path="Translation" />
+                            </MultiBinding>
+                        </components:MessageBodyPanel.AllowInline>
+                    </components:MessageBodyPanel>
+                </components:MessageFeedColumnLayout>
+            </Border>
+            <Canvas HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False">
+                <TextBlock Text="📌" Classes="messagePinBadge" IsHitTestVisible="False" IsVisible="{Binding ShowPinBadge}" />
+            </Canvas>
+        </Grid>
+    </DataTemplate>
+    <DataTemplate x:Key="SuperChat" x:DataType="vm:MessageItemViewModel">
+        <Grid>
+            <Border Classes="scFeedCard messageCard" BorderBrush="{Binding BorderBrush}"
+                    BorderThickness="{DynamicResource MessageCardBorderThickness}">
+                <Grid RowDefinitions="Auto,Auto" Classes="scFeedLayout">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <components:MessageIdentitySurface />
+                        <TextBlock Grid.Column="1" Classes="scFeedPrice" Text="{Binding Price}"
+                                   TextTrimming="CharacterEllipsis" HorizontalAlignment="Right" />
+                    </Grid>
+                    <components:MessageBodyPanel Grid.Row="1" />
+                </Grid>
+            </Border>
+            <Canvas HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False">
+                <Border Classes="messageUnreadDot" IsHitTestVisible="False" IsVisible="{Binding ShowUnreadDot}" Canvas.Right="0" />
+            </Canvas>
+        </Grid>
+    </DataTemplate>
+    <DataTemplate x:Key="Gift" x:DataType="vm:MessageItemViewModel">
+        <Grid>
+            <Border Classes="messageCard" BorderBrush="{Binding BorderBrush}"
+                    BorderThickness="{DynamicResource MessageCardBorderThickness}">
+                <components:MessageFeedColumnLayout Kind="Gift">
+                    <components:MessageIdentitySurface Grid.Column="1" />
+                    <components:MessageBodyPanel Grid.Column="3" />
+                </components:MessageFeedColumnLayout>
+            </Border>
+            <Canvas HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False">
+                <Border Classes="messageUnreadDot" IsHitTestVisible="False" IsVisible="{Binding ShowUnreadDot}" Canvas.Right="0" />
+            </Canvas>
+        </Grid>
+    </DataTemplate>
+    <DataTemplate x:Key="Guard" x:DataType="vm:MessageItemViewModel">
+        <Grid>
+            <Border Classes="messageCard" BorderBrush="{Binding BorderBrush}"
+                    BorderThickness="{DynamicResource MessageCardBorderThickness}">
+                <components:MessageFeedColumnLayout Kind="Guard">
+                    <components:MessageIdentitySurface Grid.Column="1" />
+                    <components:MessageBodyPanel Grid.Column="3" />
+                </components:MessageFeedColumnLayout>
+            </Border>
+            <Canvas HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False">
+                <Border Classes="messageUnreadDot" IsHitTestVisible="False" IsVisible="{Binding ShowUnreadDot}" Canvas.Right="0" />
+            </Canvas>
+        </Grid>
+    </DataTemplate>
+</ResourceDictionary>

@@ -1,0 +1,36 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Settings"
+             x:Class="Yohuke.DanmuPanel.Views.Components.ColorInput"
+             x:DataType="components:ColorInput"
+             x:Name="Root">
+    <UserControl.Resources>
+        <DataTemplate x:Key="ColorPickerTemplate" x:DataType="vm:ColorInputViewModel">
+            <ColorView Name="ColorPicker" IsColorPaletteVisible="False" IsHexInputVisible="False"
+                       IsAlphaEnabled="True" IsAlphaVisible="True" HexInputAlphaPosition="Leading"
+                       Color="{Binding PreviewColor, Mode=OneWay}" />
+        </DataTemplate>
+    </UserControl.Resources>
+    <StackPanel Spacing="4">
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+            <Button Name="ColorPickerButton" Width="36" Height="32" Padding="3"
+                    ToolTip.Tip="{Loc Key=Colors.PickColor}" AutomationProperties.Name="{Loc Key=Colors.PickColor}"
+                    Click="Picker_OnClick">
+                <ColorPreviewer Width="26" Height="26" IsAccentColorsVisible="False"
+                                HsvColor="{Binding #Root.Model.PreviewHsvColor}" />
+            </Button>
+            <TextBox Name="ColorHexInput" Grid.Column="1" MinWidth="110" MaxLength="9"
+                     VerticalContentAlignment="Center" Text="{Binding #Root.Model.RawText, Mode=TwoWay}"
+                     Watermark="{Binding #Root.Model.Watermark}" />
+            <Button Name="ResetColorButton" Grid.Column="2" Width="36" Classes="iconButton"
+                    VerticalAlignment="Center" ToolTip.Tip="{Loc Key=Colors.ResetColor}"
+                    AutomationProperties.Name="{Loc Key=Colors.ResetColor}" Command="{Binding #Root.Model.ResetCommand}">
+                <LucideIcon Kind="RotateCcw" Size="16" />
+            </Button>
+        </Grid>
+        <TextBlock Name="ColorInputError" FontSize="11" TextWrapping="Wrap"
+                   Text="{Loc Key=Colors.InvalidColor}" Foreground="{DynamicResource AppErrorBrush}"
+                   IsVisible="{Binding #Root.Model.HasError}" />
+    </StackPanel>
+</UserControl>

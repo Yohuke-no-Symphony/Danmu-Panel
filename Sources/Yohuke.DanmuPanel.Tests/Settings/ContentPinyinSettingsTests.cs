@@ -82,7 +82,7 @@ public sealed class ContentPinyinSettingsTests
         try
         {
             window.Show();
-            Find<Button>(view, "SettingsSectionReading").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Find<Button>(view, "SettingsSectionReading").ExecuteBoundCommand();
             Dispatcher.UIThread.RunJobs();
             window.UpdateLayout();
             var input = Find<NumericUpDown>(view, "MessageTextScaleInput");
@@ -114,7 +114,7 @@ public sealed class ContentPinyinSettingsTests
         try
         {
             window.Show();
-            Find<Button>(view, "SettingsSectionReading").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Find<Button>(view, "SettingsSectionReading").ExecuteBoundCommand();
             Dispatcher.UIThread.RunJobs();
             window.UpdateLayout();
             var danmu = Find<CheckBox>(view, "ShowDanmuPinyinCheckBox");
@@ -169,7 +169,7 @@ public sealed class ContentPinyinSettingsTests
         try
         {
             window.Show();
-            Find<Button>(view, "SettingsSectionReading").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Find<Button>(view, "SettingsSectionReading").ExecuteBoundCommand();
             Dispatcher.UIThread.RunJobs();
             window.UpdateLayout();
             var danmu = Find<CheckBox>(view, "ShowDanmuPinyinCheckBox");

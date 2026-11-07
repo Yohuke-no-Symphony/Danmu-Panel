@@ -2,19 +2,19 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:items="clr-namespace:Yohuke.DanmuPanel.ViewModels.Workspace"
              x:Class="Yohuke.DanmuPanel.Views.WorkspaceSidebarSurface"
-             x:CompileBindings="False"
+             x:DataType="items:WorkspacePanelViewModel"
              x:Name="Root">
     <Border x:Name="WorkspaceSurface" Classes="sidebar">
         <Border.ContextMenu>
             <ContextMenu>
                 <MenuItem Header="{Loc Key=Panel.AddWorkspace}"
-                          Click="AddWorkspace_OnClick">
+                          Command="{Binding AddWorkspaceCommand}">
                     <MenuItem.Icon>
                         <LucideIcon Kind="FolderPlus" />
                     </MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Header="{Loc Key=Workspace.Import}"
-                          Click="Import_OnClick">
+                          Command="{Binding #Root.((items:WorkspacePanelViewModel)DataContext).ImportCommand}">
                     <MenuItem.Icon>
                         <LucideIcon Kind="Import" />
                     </MenuItem.Icon>
@@ -32,46 +32,46 @@
                                 <Grid.ContextMenu>
                                     <ContextMenu DataContext="{Binding}">
                                         <MenuItem Header="{Loc Key=Panel.AddRoom}"
-                                                  Click="AddRoom_OnClick">
+                                                  Command="{Binding #Root.((items:WorkspacePanelViewModel)DataContext).AddRoomCommand}" CommandParameter="{Binding}">
                                             <MenuItem.Icon>
                                                 <LucideIcon Kind="Monitor" />
                                             </MenuItem.Icon>
                                         </MenuItem>
                                         <MenuItem Header="{Loc Key=Workspace.Settings}"
-                                                  Click="EditWorkspace_OnClick">
+                                                  Command="{Binding #Root.((items:WorkspacePanelViewModel)DataContext).EditWorkspaceCommand}" CommandParameter="{Binding}">
                                             <MenuItem.Icon>
                                                 <LucideIcon Kind="Settings" />
                                             </MenuItem.Icon>
                                         </MenuItem>
                                         <Separator />
                                         <MenuItem Header="{Loc Key=Workspace.MoveUp}"
-                                                  Click="WorkspaceUp_OnClick">
+                                                  Command="{Binding #Root.((items:WorkspacePanelViewModel)DataContext).WorkspaceUpCommand}" CommandParameter="{Binding}">
                                             <MenuItem.Icon>
                                                 <LucideIcon Kind="SquareArrowUp" />
                                             </MenuItem.Icon>
                                         </MenuItem>
                                         <MenuItem Header="{Loc Key=Workspace.MoveDown}"
-                                                  Click="WorkspaceDown_OnClick">
+                                                  Command="{Binding #Root.((items:WorkspacePanelViewModel)DataContext).WorkspaceDownCommand}" CommandParameter="{Binding}">
                                             <MenuItem.Icon>
                                                 <LucideIcon Kind="SquareArrowDown" />
                                             </MenuItem.Icon>
                                         </MenuItem>
                                         <Separator />
                                         <MenuItem Header="{Loc Key=Workspace.Export}"
-                                                  Click="Export_OnClick">
+                                                  Command="{Binding #Root.((items:WorkspacePanelViewModel)DataContext).ExportCommand}" CommandParameter="{Binding}">
                                             <MenuItem.Icon>
                                                 <LucideIcon Kind="FileDown" />
                                             </MenuItem.Icon>
                                         </MenuItem>
                                         <MenuItem Header="{Loc Key=Workspace.Import}"
-                                                  Click="Import_OnClick">
+                                                  Command="{Binding #Root.((items:WorkspacePanelViewModel)DataContext).ImportCommand}">
                                             <MenuItem.Icon>
                                                 <LucideIcon Kind="Import" />
                                             </MenuItem.Icon>
                                         </MenuItem>
                                         <Separator />
                                         <MenuItem Header="{Loc Key=Panel.Delete}"
-                                                  Click="DeleteWorkspace_OnClick">
+                                                  Command="{Binding #Root.((items:WorkspacePanelViewModel)DataContext).DeleteWorkspaceCommand}" CommandParameter="{Binding}">
                                             <MenuItem.Icon>
                                                 <LucideIcon Kind="Trash2" />
                                             </MenuItem.Icon>
@@ -80,7 +80,7 @@
                                 </Grid.ContextMenu>
                                 <Button Classes="treeWorkspaceButton"
                                         Classes.selected="{Binding IsSelected}"
-                                        Click="SelectWorkspace_OnClick"
+                                        Command="{Binding #Root.((items:WorkspacePanelViewModel)DataContext).SelectWorkspaceCommand}" CommandParameter="{Binding}"
                                         DoubleTapped="Workspace_OnDoubleTapped">
                                     <Grid ColumnDefinitions="*,Auto"
                                           ColumnSpacing="10">
@@ -106,24 +106,24 @@
                                     <DataTemplate DataType="items:RoomTreeItemViewModel">
                                         <Button Classes="treeRoomButton"
                                                 Classes.selected="{Binding IsSelected}"
-                                                Click="SelectRoom_OnClick">
+                                                Command="{Binding #Root.((items:WorkspacePanelViewModel)DataContext).SelectRoomCommand}" CommandParameter="{Binding}">
                                             <Button.ContextMenu>
                                                 <ContextMenu DataContext="{Binding}">
                                                     <MenuItem Header="{Loc Key=Workspace.MoveUp}"
-                                                              Click="RoomUp_OnClick">
+                                                              Command="{Binding #Root.((items:WorkspacePanelViewModel)DataContext).RoomUpCommand}" CommandParameter="{Binding}">
                                                         <MenuItem.Icon>
                                                             <LucideIcon Kind="SquareArrowUp" />
                                                         </MenuItem.Icon>
                                                     </MenuItem>
                                                     <MenuItem Header="{Loc Key=Workspace.MoveDown}"
-                                                              Click="RoomDown_OnClick">
+                                                              Command="{Binding #Root.((items:WorkspacePanelViewModel)DataContext).RoomDownCommand}" CommandParameter="{Binding}">
                                                         <MenuItem.Icon>
                                                             <LucideIcon Kind="SquareArrowDown" />
                                                         </MenuItem.Icon>
                                                     </MenuItem>
                                                     <Separator />
                                                     <MenuItem Header="{Loc Key=Panel.Delete}"
-                                                              Click="DeleteRoom_OnClick">
+                                                              Command="{Binding #Root.((items:WorkspacePanelViewModel)DataContext).DeleteRoomCommand}" CommandParameter="{Binding}">
                                                         <MenuItem.Icon>
                                                             <LucideIcon Kind="Trash2" />
                                                         </MenuItem.Icon>

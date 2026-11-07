@@ -78,7 +78,7 @@ public sealed class CompactSettingsTests
         {
             window.Show();
             view.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "SettingsSectionReading")
-                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                .ExecuteBoundCommand();
             Dispatcher.UIThread.RunJobs();
             var compact = Check(view, "CompactDanmuDisplayCheckBox");
             var messages = Check(view, "CompactDanmuWrapCheckBox");

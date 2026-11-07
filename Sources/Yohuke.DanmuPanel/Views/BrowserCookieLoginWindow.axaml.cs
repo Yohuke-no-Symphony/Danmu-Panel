@@ -6,6 +6,7 @@ using Yohuke.DanmuPanel.Models.BrowserLogin;
 using Yohuke.DanmuPanel.Models.Logging;
 using Yohuke.DanmuPanel.Services;
 using Yohuke.DanmuPanel.Windowing;
+using Yohuke.DanmuPanel.ViewModels;
 
 namespace Yohuke.DanmuPanel.Views;
 
@@ -19,11 +20,7 @@ public partial class BrowserCookieLoginWindow : Window
     private readonly Func<NativeWebView> createWebView;
     private NativeWebView? webView;
     private bool isClosed;
-    private bool isCapturing;
-    private string statusKey = "UI.BrowserCookieLoginWindow.SignInHint";
-    private object[] statusArguments = [];
-    private string? rawStatus;
-    private bool browserInitializationFailed;
+    public BrowserCookieLoginViewModel Model { get; }
 
     /// <summary>
     /// 初始化内嵌浏览器登录窗口。
@@ -45,7 +42,11 @@ public partial class BrowserCookieLoginWindow : Window
     {
         this.platform = platform;
         this.createWebView = createWebView;
+        Model = new(() => loginService.GetPlatformName(platform), () => webView?.GoBack(),
+            () => webView?.GoForward(), () => webView?.Refresh(), () => Close(null),
+            () => CaptureCookiesAsync(ReadBrowserCookiesAsync));
         InitializeComponent();
+        DataContext = Model;
         WindowChrome.AttachFrame(this);
         Opened += BrowserCookieLoginWindow_OnOpened;
         Closed += BrowserCookieLoginWindow_OnClosed;
@@ -55,14 +56,7 @@ public partial class BrowserCookieLoginWindow : Window
 
     private void ConfigureShell()
     {
-        var platformName = loginService.GetPlatformName(platform);
-
-        Title = Localization.Format("UI.BrowserCookieLoginWindow.PlatformTitle", platformName);
-        HeaderText.Text = Title;
-        StatusText.Text = rawStatus ?? RenderStatus();
-        WebViewPlaceholderText.Text = Localization.Get(browserInitializationFailed
-            ? "UI.BrowserCookieLoginWindow.InitializationFailed"
-            : "UI.BrowserCookieLoginWindow.PreparingBrowser");
+        Model.RefreshLocalization();
     }
 
     private void OnLanguageChanged(object? sender, EventArgs e)
@@ -72,16 +66,7 @@ public partial class BrowserCookieLoginWindow : Window
 
     private void SetLocalizedStatus(string key, params object[] arguments)
     {
-        statusKey = key;
-        statusArguments = arguments;
-        rawStatus = null;
-        StatusText.Text = RenderStatus();
-    }
-
-    private string RenderStatus()
-    {
-        return Localization.Format(statusKey, statusArguments.Select(argument =>
-            argument is Func<string> provider ? provider() : argument).ToArray());
+        Model.SetLocalizedStatus(key, arguments);
     }
 
     private async void BrowserCookieLoginWindow_OnOpened(object? sender, EventArgs e)
@@ -136,17 +121,16 @@ public partial class BrowserCookieLoginWindow : Window
             webView.NavigationCompleted += WebView_OnNavigationCompleted;
             webView.Source = loginUri;
             WebViewHost.Child = webView;
-            WebViewPlaceholderText.IsVisible = false;
+            Model.IsPlaceholderVisible = false;
             StartupLog.Append(Localization.Format("UI.BrowserCookieLoginWindow.BrowserCreated", platform));
         }
         catch (Exception exception)
         {
             ReleaseBrowser();
-            browserInitializationFailed = true;
+            Model.BrowserInitializationFailed = true;
             SetLocalizedStatus("UI.BrowserCookieLoginWindow.InitializationFailedWithDetail", new Func<string>(() => LocalizedExceptionText.Get(exception)));
-            WebViewPlaceholderText.Text = Localization.Get("UI.BrowserCookieLoginWindow.InitializationFailed");
             WebViewHost.Child = WebViewPlaceholderText;
-            WebViewPlaceholderText.IsVisible = true;
+            Model.IsPlaceholderVisible = true;
             StartupLog.Append(Localization.Format("UI.BrowserCookieLoginWindow.InitializeLogFailed", platform), AppLogLevel.ERROR, Localization.Get("UI.BrowserCookieLoginWindow.LogSource"), exception);
         }
     }
@@ -190,45 +174,18 @@ public partial class BrowserCookieLoginWindow : Window
     {
         if (!isClosed)
         {
-            rawStatus = webView?.Source.ToString() ?? loginService.GetLoginUri(platform).ToString();
-            StatusText.Text = rawStatus;
+            Model.RawStatus = webView?.Source.ToString() ?? loginService.GetLoginUri(platform).ToString();
         }
-    }
-
-    private void Back_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        webView?.GoBack();
-    }
-
-    private void Forward_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        webView?.GoForward();
-    }
-
-    private void Refresh_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        webView?.Refresh();
-    }
-
-    private void Cancel_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        Close(null);
-    }
-
-    private async void Capture_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        await CaptureCookiesAsync(ReadBrowserCookiesAsync);
     }
 
     internal async Task CaptureCookiesAsync(Func<Task<IEnumerable<Cookie>>> readCookies)
     {
-        if (isClosed || isCapturing)
+        if (isClosed || Model.IsCapturing)
         {
             return;
         }
 
-        isCapturing = true;
-        CaptureButton.IsEnabled = false;
+        Model.IsCapturing = true;
 
         try
         {
@@ -252,12 +209,8 @@ public partial class BrowserCookieLoginWindow : Window
         }
         finally
         {
-            isCapturing = false;
+            Model.IsCapturing = false;
 
-            if (!isClosed)
-            {
-                CaptureButton.IsEnabled = true;
-            }
         }
     }
 

@@ -1,0 +1,15 @@
+<DockPanel xmlns="https://github.com/avaloniaui"
+           xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+           xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
+           xmlns:vm="using:Yohuke.DanmuPanel.ViewModels"
+           x:Class="Yohuke.DanmuPanel.Views.Components.SkeletonIdentitySurface"
+           LastChildFill="True" VerticalAlignment="Center" Classes="danmuFeedIdentity">
+    <TextBlock DockPanel.Dock="Right" Text="00:00:00" Classes="danmuFeedMeta" Opacity="0" VerticalAlignment="Center"
+               components:SkeletonSlot.WidthRatio="0.9" components:SkeletonSlot.Alignment="Right" components:SkeletonSlot.Order="2" />
+    <Grid ColumnDefinitions="Auto,*" HorizontalAlignment="Stretch">
+        <components:UserAvatarView
+            ShowAvatar="{Binding $parent[components:MessageFeedSurface].((vm:FeedViewModel)DataContext).ShowUserAvatars, FallbackValue=True}" />
+        <TextBlock Grid.Column="1" Text="　" Classes="danmuFeedUser" Opacity="0" VerticalAlignment="Center"
+                   components:SkeletonSlot.WidthRatio="0.78" components:SkeletonSlot.Order="1" />
+    </Grid>
+</DockPanel>

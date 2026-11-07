@@ -1,0 +1,13 @@
+<Grid xmlns="https://github.com/avaloniaui"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
+      x:Class="Yohuke.DanmuPanel.Views.Components.MessageFeedColumnLayout"
+      x:DataType="components:MessageFeedColumnLayout" x:Name="Root"
+      ColumnDefinitions="Auto,2*,Auto,3*" ColumnSpacing="0" ClipToBounds="True" Classes="danmuFeedLayout">
+    <components:MessageColumnSplitter x:Name="ColumnSplitter" Grid.Column="2"
+                                      IsVisible="{Binding CanResize, ElementName=Root}"
+                                      AutomationProperties.Name="{Loc Key=Panel.ResizeColumns}"
+                                      ToolTip.Tip="{Loc Key=Panel.ResizeColumns}" />
+    <Border Grid.Column="2" MinWidth="6" Classes="messageColumnSplitterSpace"
+            IsVisible="{Binding !CanResize, ElementName=Root}" />
+</Grid>

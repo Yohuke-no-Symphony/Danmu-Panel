@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Yohuke.DanmuPanel.Views.Components.UserAvatarView"
+             VerticalAlignment="Center" Classes="messageUserAvatar">
+    <Grid Background="Transparent">
+        <Ellipse x:Name="AvatarCircle" Fill="{DynamicResource AppAvatarBrush}" />
+        <LucideIcon x:Name="AvatarPlaceholder" Kind="UserRound" Width="12" Height="12"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Foreground="{DynamicResource AppAvatarTextBrush}" />
+    </Grid>
+</UserControl>

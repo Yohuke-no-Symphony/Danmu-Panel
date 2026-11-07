@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Workspace"
+             x:Class="Yohuke.DanmuPanel.Views.ShellLayoutNameSurface" x:DataType="vm:ShellLayoutNameViewModel">
+    <StackPanel Margin="20">
+        <TextBox x:Name="LayoutNameInput" Text="{Binding Name, Mode=TwoWay}" Watermark="{Loc Key=Shell.Layout.Name}" Margin="0,0,0,16" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Content="{Loc Key=Shell.Cancel}" Command="{Binding CancelCommand}" IsCancel="True" />
+            <Button Content="{Loc Key=Shell.Save}" Command="{Binding SaveCommand}" IsDefault="True" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

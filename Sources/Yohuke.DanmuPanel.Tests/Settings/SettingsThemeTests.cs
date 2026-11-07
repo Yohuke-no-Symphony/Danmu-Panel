@@ -11,6 +11,7 @@ using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Services;
 using Yohuke.DanmuPanel.Tests.Messages;
 using Yohuke.DanmuPanel.Views.Settings;
+using Yohuke.DanmuPanel.ViewModels.Settings;
 using Xunit;
 
 namespace Yohuke.DanmuPanel.Tests.Settings;
@@ -38,7 +39,7 @@ public sealed class SettingsThemeTests
             window.Show();
             var sectionButton = view.GetVisualDescendants().OfType<Button>()
                 .Single(button => button.Name == "SettingsSection" + section);
-            sectionButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            sectionButton.ExecuteBoundCommand();
             Pump(window);
             var choices = view.GetVisualDescendants().OfType<ComboBox>().ToArray();
             Assert.Equal(expectedChoices, choices.Length);
@@ -50,6 +51,7 @@ public sealed class SettingsThemeTests
                 var expected = Assert.IsAssignableFrom<ISolidColorBrush>(window.Foreground).Color;
                 foreach (var choice in choices)
                 {
+                    Assert.Same(choice.SelectedItem, choice.SelectionBoxItem);
                     AssertChoiceText(choice, expected);
                     choice.IsDropDownOpen = true;
                     Pump(window);
@@ -83,12 +85,12 @@ public sealed class SettingsThemeTests
     {
         var labels = choice.GetVisualDescendants().OfType<TextBlock>()
             .Where(label => !string.IsNullOrWhiteSpace(label.Text)).ToArray();
-        if (labels.Length == 0 && choice.SelectedItem is ComboBoxItem { Content: TextBlock renderedLabel })
-        {
-            labels = [renderedLabel];
-        }
         Assert.NotEmpty(labels);
         Assert.All(labels, label => Assert.Equal(expected, ((ISolidColorBrush)label.Foreground!).Color));
+        if (choice.SelectedItem is SettingsChoiceOption option)
+        {
+            Assert.Contains(labels, label => label.Text == Localization.Get(option.Key));
+        }
     }
 
     private static void Pump(Window window)

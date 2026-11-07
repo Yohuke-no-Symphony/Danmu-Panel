@@ -342,7 +342,7 @@ public sealed class DanmuRegexSettingsTests
     {
         window.Show();
         view.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "SettingsSectionBlocking")
-            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            .ExecuteBoundCommand();
         window.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
     }

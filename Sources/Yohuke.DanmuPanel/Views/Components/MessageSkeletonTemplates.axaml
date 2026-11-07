@@ -1,0 +1,54 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:vm="using:Yohuke.DanmuPanel.ViewModels"
+                    xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
+                    x:Class="Yohuke.DanmuPanel.Views.Components.MessageSkeletonTemplates">
+    <DataTemplate x:Key="Danmu">
+        <Border BorderBrush="Transparent" Background="Transparent">
+            <components:MessageFeedColumnLayout Kind="Danmu" CanResize="False">
+                <Grid Classes="danmuMedalSlot"
+                      IsVisible="{Binding $parent[components:MessageFeedSurface].((vm:FeedViewModel)DataContext).ShowFanMedals, FallbackValue=True}">
+                    <Border Classes="danmuMedalBadge" Opacity="0" components:SkeletonSlot.WidthRatio="1"
+                            components:SkeletonSlot.HeightRatio="1">
+                        <TextBlock Text="　" Opacity="0" VerticalAlignment="Center" Classes="danmuMedalText" />
+                    </Border>
+                </Grid>
+                <components:SkeletonIdentitySurface Grid.Column="1" />
+                <components:SkeletonBodySurface Grid.Column="3" />
+            </components:MessageFeedColumnLayout>
+        </Border>
+    </DataTemplate>
+    <DataTemplate x:Key="SuperChat">
+        <Border Classes="messageCard scFeedCard" BorderBrush="Transparent" Background="Transparent"
+                BorderThickness="{DynamicResource MessageCardBorderThickness}">
+            <Grid RowDefinitions="Auto,Auto" Classes="scFeedLayout">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <components:SkeletonIdentitySurface />
+                    <TextBlock Grid.Column="1" Text="￥100" Opacity="0" VerticalAlignment="Center"
+                               Classes="scFeedPrice" components:SkeletonSlot.WidthRatio="0.9"
+                               components:SkeletonSlot.Order="4"
+                               components:SkeletonSlot.Alignment="Right" />
+                </Grid>
+                <components:SkeletonBodySurface Grid.Row="1" />
+            </Grid>
+        </Border>
+    </DataTemplate>
+    <DataTemplate x:Key="Gift">
+        <Border Classes="messageCard" BorderBrush="Transparent" Background="Transparent"
+                BorderThickness="{DynamicResource MessageCardBorderThickness}">
+            <components:MessageFeedColumnLayout Kind="Gift" CanResize="False">
+                <components:SkeletonIdentitySurface Grid.Column="1" />
+                <components:SkeletonBodySurface Grid.Column="3" />
+            </components:MessageFeedColumnLayout>
+        </Border>
+    </DataTemplate>
+    <DataTemplate x:Key="Guard">
+        <Border Classes="messageCard" BorderBrush="Transparent" Background="Transparent"
+                BorderThickness="{DynamicResource MessageCardBorderThickness}">
+            <components:MessageFeedColumnLayout Kind="Guard" CanResize="False">
+                <components:SkeletonIdentitySurface Grid.Column="1" />
+                <components:SkeletonBodySurface Grid.Column="3" />
+            </components:MessageFeedColumnLayout>
+        </Border>
+    </DataTemplate>
+</ResourceDictionary>

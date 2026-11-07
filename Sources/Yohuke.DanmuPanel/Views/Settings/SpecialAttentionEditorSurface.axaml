@@ -1,15 +1,17 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Settings"
+             xmlns:settings="using:Yohuke.DanmuPanel.Views.Settings"
              x:Class="Yohuke.DanmuPanel.Views.Settings.SpecialAttentionEditorSurface"
-             x:CompileBindings="False">
+             x:DataType="vm:SpecialAttentionEditorViewModel" x:Name="Root">
     <StackPanel Spacing="12">
         <Grid ColumnDefinitions="180,*" ColumnSpacing="14">
             <TextBlock Text="{Loc Key=SpecialAttention.UserNameColor}" VerticalAlignment="Center" />
-            <ContentControl x:Name="SpecialAttentionUserNameColorInputHost" Grid.Column="1" />
+            <ContentControl x:Name="SpecialAttentionUserNameColorInputHost" Grid.Column="1" Content="{Binding #Root.UserNameColorInput}" />
         </Grid>
         <Grid ColumnDefinitions="180,*" ColumnSpacing="14">
             <TextBlock Text="{Loc Key=SpecialAttention.ContentColor}" VerticalAlignment="Center" />
-            <ContentControl x:Name="SpecialAttentionContentColorInputHost" Grid.Column="1" />
+            <ContentControl x:Name="SpecialAttentionContentColorInputHost" Grid.Column="1" Content="{Binding #Root.ContentColorInput}" />
         </Grid>
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
@@ -17,10 +19,16 @@
                 <TextBlock Text="{Binding Users.Count}" Classes="muted" VerticalAlignment="Center" />
             </StackPanel>
             <Button x:Name="OpenSpecialAttentionSearchButton" Grid.Column="1"
-                    Content="{Loc Key=SpecialAttention.OpenSearch}" />
+                    Content="{Loc Key=SpecialAttention.OpenSearch}" Command="{Binding #Root.OpenSearchCommand}" />
         </Grid>
         <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled">
-            <ItemsControl x:Name="SpecialAttentionUsers" ItemsSource="{Binding Users}" />
+            <ItemsControl x:Name="SpecialAttentionUsers" ItemsSource="{Binding UserRows}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SpecialAttentionUserRowViewModel">
+                        <settings:SpecialAttentionUserRowSurface />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </ScrollViewer>
     </StackPanel>
 </UserControl>

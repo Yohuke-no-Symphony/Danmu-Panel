@@ -1,14 +1,14 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="Yohuke.DanmuPanel.Views.WorkspaceEditorSurface" x:CompileBindings="False">
-    <Border Background="{DynamicResource AppCardBrush}" ClipToBounds="True">
+             x:Class="Yohuke.DanmuPanel.Views.WorkspaceEditorSurface" xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Workspace" xmlns:state="using:Yohuke.DanmuPanel.Models.State" x:DataType="vm:WorkspaceEditorViewModel">
+    <Border IsEnabled="{Binding !IsSaving}" Background="{DynamicResource AppCardBrush}" ClipToBounds="True">
         <Grid RowDefinitions="Auto,*,Auto">
             <Border Classes="settingsDialogHeader">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                     <StackPanel Spacing="4">
-                        <TextBlock x:Name="Heading" FontSize="20" FontWeight="SemiBold" />
-                        <TextBlock x:Name="Subtitle" Classes="muted" TextWrapping="Wrap" />
+                        <TextBlock x:Name="Heading" Text="{Binding Heading}" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock x:Name="Subtitle" Text="{Binding Subtitle}" Classes="muted" TextWrapping="Wrap" />
                     </StackPanel>
-                    <Button x:Name="SaveButton" Grid.Column="1" Classes="primaryButton">
+                    <Button x:Name="SaveButton" Command="{Binding SaveCommand}" Grid.Column="1" Classes="primaryButton">
                         <StackPanel Orientation="Horizontal" Spacing="6"><LucideIcon Kind="Save" /><TextBlock Text="{Loc Key=Panel.Save}" /></StackPanel>
                     </Button>
                 </Grid>
@@ -20,17 +20,17 @@
                             <StackPanel Spacing="10">
                                 <TextBlock Text="{Loc Key=Panel.Name}" Classes="sectionTitle" />
                                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                                    <TextBox x:Name="WorkspaceNameInput" Watermark="{Loc Key=Panel.Name}" />
-                                    <Button x:Name="ExportButton" Grid.Column="1" Classes="iconButton" ToolTip.Tip="{Loc Key=Workspace.Export}" AutomationProperties.Name="{Loc Key=Workspace.Export}"><LucideIcon Kind="FileDown" /></Button>
-                                    <Button x:Name="DeleteWorkspaceButton" Grid.Column="2" Classes="iconButton" ToolTip.Tip="{Loc Key=Panel.Delete}" AutomationProperties.Name="{Loc Key=Panel.Delete}"><LucideIcon Kind="Trash2" /></Button>
+                                    <TextBox x:Name="WorkspaceNameInput" Text="{Binding Name, Mode=TwoWay}" Watermark="{Loc Key=Panel.Name}" />
+                                    <Button x:Name="ExportButton" Command="{Binding ExportCommand}" Grid.Column="1" Classes="iconButton" ToolTip.Tip="{Loc Key=Workspace.Export}" AutomationProperties.Name="{Loc Key=Workspace.Export}"><LucideIcon Kind="FileDown" /></Button>
+                                    <Button x:Name="DeleteWorkspaceButton" Command="{Binding DeleteWorkspaceCommand}" Grid.Column="2" Classes="iconButton" ToolTip.Tip="{Loc Key=Panel.Delete}" AutomationProperties.Name="{Loc Key=Panel.Delete}"><LucideIcon Kind="Trash2" /></Button>
                                 </Grid>
                             </StackPanel>
                         </Border>
                         <Border Classes="panel" Padding="14">
                             <StackPanel Spacing="10">
                                 <TextBlock Text="{Loc Key=Panel.Account}" Classes="sectionTitle" />
-                                <ComboBox x:Name="WorkspaceAccountInput" HorizontalAlignment="Stretch">
-                                    <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate>
+                                <ComboBox x:Name="WorkspaceAccountInput" ItemsSource="{Binding AccountChoices}" SelectedItem="{Binding SelectedAccount, Mode=TwoWay}" HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate><DataTemplate DataType="state:AccountChoice"><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate>
                                 </ComboBox>
                             </StackPanel>
                         </Border>
@@ -40,16 +40,16 @@
                                 <TextBlock Text="{Loc Key=Workspace.RoomIdReadOnly}" Classes="muted" TextWrapping="Wrap" />
                                 <ItemsControl ItemsSource="{Binding RoomEdits}">
                                     <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
+                                        <DataTemplate DataType="vm:WorkspaceRoomEditorViewModel">
                                             <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource AppBorderBrush}" Padding="0,8">
                                                 <Grid ColumnDefinitions="*,130,Auto" RowDefinitions="Auto,Auto" RowSpacing="8" ColumnSpacing="8">
-                                                    <TextBox Text="{Binding Name}" Watermark="{Loc Key=Panel.Name}" />
+                                                    <TextBox Text="{Binding Name, Mode=TwoWay}" Watermark="{Loc Key=Panel.Name}" />
                                                     <TextBox Grid.Column="1" Text="{Binding State.RoomId}" IsReadOnly="True" Watermark="{Loc Key=Panel.RoomId}" />
-                                                    <Button Grid.Column="2" Classes="iconButton" Click="DeleteRoom_OnClick" ToolTip.Tip="{Loc Key=Panel.Delete}" AutomationProperties.Name="{Loc Key=Panel.Delete}"><LucideIcon Kind="Trash2" /></Button>
-                                                    <ComboBox Grid.Row="1" ItemsSource="{Binding AccountChoices}" SelectedItem="{Binding SelectedAccount}" HorizontalAlignment="Stretch">
-                                                        <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate>
+                                                    <Button Grid.Column="2" Classes="iconButton" Command="{Binding $parent[UserControl].((vm:WorkspaceEditorViewModel)DataContext).DeleteRoomCommand}" CommandParameter="{Binding}" ToolTip.Tip="{Loc Key=Panel.Delete}" AutomationProperties.Name="{Loc Key=Panel.Delete}"><LucideIcon Kind="Trash2" /></Button>
+                                                    <ComboBox Grid.Row="1" ItemsSource="{Binding AccountChoices}" SelectedItem="{Binding SelectedAccount, Mode=TwoWay}" HorizontalAlignment="Stretch">
+                                                        <ComboBox.ItemTemplate><DataTemplate DataType="state:AccountChoice"><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate>
                                                     </ComboBox>
-                                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding OwnerUid}" Watermark="{Loc Key=Workspace.OwnerUid}" ToolTip.Tip="{Loc Key=Workspace.OwnerUid}" />
+                                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding OwnerUid, Mode=TwoWay}" Watermark="{Loc Key=Workspace.OwnerUid}" ToolTip.Tip="{Loc Key=Workspace.OwnerUid}" />
                                                 </Grid>
                                             </Border>
                                         </DataTemplate>
@@ -61,8 +61,8 @@
                 </ScrollViewer>
             </Border>
             <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="24,10,24,18">
-                <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Foreground="{DynamicResource AppErrorBrush}" />
-                <Button x:Name="CancelButton" Grid.Column="1" Content="{Loc Key=Panel.Cancel}" />
+                <TextBlock x:Name="ErrorText" Text="{Binding Error}" TextWrapping="Wrap" Foreground="{DynamicResource AppErrorBrush}" />
+                <Button x:Name="CancelButton" IsVisible="{Binding IsCreating}" Command="{Binding CancelCommand}" Grid.Column="1" Content="{Loc Key=Panel.Cancel}" />
             </Grid>
         </Grid>
     </Border>

@@ -259,6 +259,94 @@ public sealed class UserAvatarViewTests
         }
     }
 
+    /// <summary>绑定更换头像服务时解绑旧订阅，并拒绝旧服务忽略取消后返回的图片。</summary>
+    [AvaloniaFact]
+    public async Task ReplacingBoundServiceCancelsPreviousLoadAndTransfersSubscriptions()
+    {
+        using var directory = new MessageStoreTestDirectory();
+        var previousCompletion = NewCompletion();
+        var previous = new ControlledUserAvatarService { Resolve = (_, _) => previousCompletion.Task };
+        var currentPath = WriteImage(directory, "current-service.png");
+        var current = new ControlledUserAvatarService { Resolve = (_, _) => Task.FromResult(currentPath) };
+        var avatar = new UserAvatarView { AvatarService = previous, UserUid = 1, Width = 20, Height = 20 };
+        var window = new Window { Content = avatar, Width = 200, Height = 100 };
+        try
+        {
+            window.Show();
+            Pump(window);
+            var pending = avatar.PendingLoad;
+            avatar.AvatarService = current;
+            await WaitUntilAsync(() => avatar.CurrentAvatarPath == currentPath, window);
+            previousCompletion.SetResult(WriteImage(directory, "previous-service.png"));
+            await pending;
+            Pump(window);
+
+            Assert.Equal(0, previous.Subscribers);
+            Assert.Equal(1, current.Subscribers);
+            Assert.Equal(currentPath, avatar.CurrentAvatarPath);
+            previous.NotifyChanged(1);
+            Pump(window);
+            Assert.Single(current.RequestedUsers);
+        }
+        finally
+        {
+            window.Close();
+        }
+        Assert.Equal(0, current.Subscribers);
+    }
+
+    /// <summary>损坏图片失效请求迟到时，已清除或替换的服务不能触发旧重试。</summary>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ChangingServiceDuringInvalidationCannotRetryPreviousRequest(bool replace)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        Directory.CreateDirectory(directory.Path);
+        var brokenPath = Path.Combine(directory.Path, "broken-avatar.png");
+        await File.WriteAllTextAsync(brokenPath, "invalid image");
+        var invalidationStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var invalidationCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var previous = new ControlledUserAvatarService
+        {
+            Resolve = (_, _) => Task.FromResult(brokenPath),
+            OnInvalidateAsync = (_, _, _) =>
+            {
+                invalidationStarted.TrySetResult();
+                return invalidationCompleted.Task;
+            }
+        };
+        var currentPath = WriteImage(directory, "replacement-avatar.png");
+        var current = new ControlledUserAvatarService { Resolve = (_, _) => Task.FromResult(currentPath) };
+        var avatar = new UserAvatarView(previous) { UserUid = 1, Width = 20, Height = 20 };
+        var window = new Window { Content = avatar, Width = 200, Height = 100 };
+        try
+        {
+            window.Show();
+            await WaitUntilAsync(() => invalidationStarted.Task.IsCompleted, window);
+            var previousRequest = avatar.PendingLoad;
+            avatar.AvatarService = replace ? current : null;
+            invalidationCompleted.SetResult();
+            await previousRequest;
+            if (replace)
+            {
+                await WaitUntilAsync(() => avatar.CurrentAvatarPath == currentPath, window);
+                Assert.Single(current.RequestedUsers);
+            }
+            else
+            {
+                Assert.Null(avatar.AvatarImage);
+            }
+            Assert.Single(previous.RequestedUsers);
+            Assert.Equal(0, previous.Subscribers);
+        }
+        finally
+        {
+            invalidationCompleted.TrySetResult();
+            window.Close();
+        }
+    }
+
     private static TaskCompletionSource<string> NewCompletion()
     {
         return new(TaskCreationOptions.RunContinuationsAsynchronously);

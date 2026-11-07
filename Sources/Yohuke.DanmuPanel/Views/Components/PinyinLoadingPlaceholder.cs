@@ -23,6 +23,14 @@ public sealed class PinyinLoadingPlaceholder : TemplatedControl
     public static readonly StyledProperty<double> LengthProperty =
         AvaloniaProperty.Register<PinyinLoadingPlaceholder, double>(nameof(Length), 6,
             validate: length => double.IsFinite(length) && length > 0);
+    public static readonly StyledProperty<double> LineSpacingProperty =
+        TextBlock.LineSpacingProperty.AddOwner<PinyinLoadingPlaceholder>();
+
+    public double LineSpacing
+    {
+        get => GetValue(LineSpacingProperty);
+        set => SetValue(LineSpacingProperty, value);
+    }
 
     public double Length
     {

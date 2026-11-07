@@ -3,7 +3,8 @@ using Yohuke.DanmuPanel.Models.Translation;
 
 namespace Yohuke.DanmuPanel.Views.Settings;
 
-internal sealed class GlossaryRow : ObservableObject
+/// <summary>在同一原词行中编辑多种目标语言的译法。</summary>
+public sealed class GlossaryRow : ObservableObject
 {
     private readonly List<GlossaryEntry> translations;
     private string source;

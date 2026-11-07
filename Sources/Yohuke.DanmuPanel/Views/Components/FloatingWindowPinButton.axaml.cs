@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
-using Avalonia.Automation;
+using CommunityToolkit.Mvvm.Input;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Layouts;
 using Yohuke.DanmuPanel.Windowing;
@@ -14,12 +13,24 @@ namespace Yohuke.DanmuPanel.Views.Components;
 public partial class FloatingWindowPinButton : UserControl
 {
     private Window? window;
+    private bool isIndependentlyPinned;
+    private string pinToolTip = "";
+
+    public static readonly DirectProperty<FloatingWindowPinButton, bool> IsIndependentlyPinnedProperty =
+        AvaloniaProperty.RegisterDirect<FloatingWindowPinButton, bool>(nameof(IsIndependentlyPinned), control => control.IsIndependentlyPinned);
+    public static readonly DirectProperty<FloatingWindowPinButton, string> PinToolTipProperty =
+        AvaloniaProperty.RegisterDirect<FloatingWindowPinButton, string>(nameof(PinToolTip), control => control.PinToolTip);
+
+    public bool IsIndependentlyPinned => isIndependentlyPinned;
+    public string PinToolTip => pinToolTip;
+    public IRelayCommand ToggleCommand { get; }
 
     /// <summary>
     /// 初始化浮窗置顶按钮。
     /// </summary>
     public FloatingWindowPinButton()
     {
+        ToggleCommand = new RelayCommand(ToggleTopmost);
         InitializeComponent();
     }
 
@@ -52,7 +63,7 @@ public partial class FloatingWindowPinButton : UserControl
         base.OnDetachedFromVisualTree(e);
     }
 
-    private void Pin_OnClick(object? sender, RoutedEventArgs e)
+    private void ToggleTopmost()
     {
         if (window is not null)
         {
@@ -77,17 +88,14 @@ public partial class FloatingWindowPinButton : UserControl
             return;
         }
 
-        var independentlyTopmost = WorkbenchWindowTopmost.GetIsIndependentlyTopmost(window);
-        WindowTopmostButton.Classes.Set("selected", independentlyTopmost);
-        PinOutlineIcon.IsVisible = !independentlyTopmost;
-        PinSolidIcon.IsVisible = independentlyTopmost;
-        var tip = Localization.Get(independentlyTopmost
+        SetAndRaise(IsIndependentlyPinnedProperty, ref isIndependentlyPinned,
+            WorkbenchWindowTopmost.GetIsIndependentlyTopmost(window));
+        var tip = Localization.Get(IsIndependentlyPinned
             ? "UI.FloatingWindowPinButton.UnpinIndependently"
             : window.Topmost
                 ? "UI.FloatingWindowPinButton.PinWhileFollowingOwner"
                 : "UI.FloatingWindowPinButton.PinIndependently");
-        ToolTip.SetTip(WindowTopmostButton, tip);
-        AutomationProperties.SetName(WindowTopmostButton, tip);
+        SetAndRaise(PinToolTipProperty, ref pinToolTip, tip);
     }
 
     private void OnLanguageChanged(object? sender, EventArgs e)

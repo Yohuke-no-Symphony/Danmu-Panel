@@ -1,0 +1,130 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:settings="using:Yohuke.DanmuPanel.Views.Settings"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Settings"
+             x:Class="Yohuke.DanmuPanel.Views.Settings.SettingsTranslationPage"
+             x:Name="Root"
+             x:DataType="vm:SettingsTranslationViewModel"
+             x:CompileBindings="True">
+    <UserControl.Resources>
+        <DataTemplate x:Key="SettingsChoiceTemplate" x:DataType="vm:SettingsChoiceOption">
+            <TextBlock Text="{Binding Text}" />
+        </DataTemplate>
+    </UserControl.Resources>
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="14">
+            <settings:SettingsCard Title="{Loc Key=Settings.Translation}">
+                <StackPanel Spacing="14">
+                    <CheckBox Content="{Loc Key=Settings.TranslationEnabled}" IsChecked="{Binding Enabled, Mode=TwoWay}"/>
+                    <settings:SettingsRow Label="{Loc Key=Settings.BaseUrl}" ToolTip.Tip="{Loc Key=Settings.BaseUrlHelp}">
+                        <StackPanel Spacing="14">
+                            <ComboBox x:Name="TranslationProvider"
+                                      ItemsSource="{Binding Providers}"
+                                      SelectedItem="{Binding SelectedProvider, Mode=TwoWay}"
+                                      HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="settings:TranslationProviderOption">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="{Binding Name}" IsVisible="{Binding IsPreset}"/>
+                                            <TextBlock Text="{Binding BaseUrl}" FontSize="11" Opacity="0.7" IsVisible="{Binding IsPreset}"/>
+                                            <TextBlock Text="{Loc Key=Settings.CustomProvider}" IsVisible="{Binding IsCustom}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBox x:Name="TranslationCustomBaseUrl"
+                                     Text="{Binding BaseUrl, Mode=TwoWay}"
+                                     Watermark="https://api.example.com/v1"
+                                     IsVisible="{Binding IsCustomProvider}" />
+                        </StackPanel>
+                    </settings:SettingsRow>
+                    <settings:SettingsRow Label="{Loc Key=Settings.ApiKey}">
+                        <TextBox Text="{Binding ApiKey, Mode=TwoWay}" PasswordChar="●"/>
+                    </settings:SettingsRow>
+                    <settings:SettingsRow Label="{Loc Key=Settings.Model}">
+                        <TextBox Text="{Binding Model, Mode=TwoWay}"/>
+                    </settings:SettingsRow>
+                    <settings:SettingsRow Label="{Loc Key=Settings.TargetLanguage}">
+                        <ComboBox x:Name="TranslationTargetLanguage"
+                                  ItemsSource="{Binding Languages}"
+                                  SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="settings:TranslationLanguageOption">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="{Binding DisplayName}"/>
+                                        <TextBlock Text="{Binding DisplayCode}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </settings:SettingsRow>
+                </StackPanel>
+            </settings:SettingsCard>
+            <settings:SettingsCard Title="{Loc Key=Settings.DisplayMode}">
+                <StackPanel Spacing="14">
+                    <settings:SettingsRow Label="{Loc Key=Settings.DisplayMode}">
+                        <ComboBox SelectedIndex="{Binding DisplayMode, Mode=TwoWay}" HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding DisplayModeOptions}" ItemTemplate="{StaticResource SettingsChoiceTemplate}" />
+                    </settings:SettingsRow>
+                    <settings:SettingsRow Label="{Loc Key=Settings.Backlog}" ToolTip.Tip="{Loc Key=Settings.BacklogHelp}">
+                        <ComboBox SelectedIndex="{Binding BacklogMode, Mode=TwoWay}" HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding BacklogModeOptions}" ItemTemplate="{StaticResource SettingsChoiceTemplate}" />
+                    </settings:SettingsRow>
+                </StackPanel>
+            </settings:SettingsCard>
+            <settings:SettingsCard Title="{Loc Key=Settings.ExtraPrompt}">
+                <TextBox Text="{Binding ExtraPrompt, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100"/>
+            </settings:SettingsCard>
+            <settings:SettingsCard>
+                <StackPanel Spacing="14">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <TextBlock Text="{Loc Key=Settings.Glossary}" Classes="sectionTitle" TextWrapping="Wrap"/>
+                        <Button x:Name="AddGlossaryTerm"
+                                Grid.Column="1"
+                                Classes="iconButton"
+                                Command="{Binding AddGlossaryTermCommand}"
+                                ToolTip.Tip="{Loc Key=Settings.AddTerm}"
+                                AutomationProperties.Name="{Loc Key=Settings.AddTerm}">
+                            <LucideIcon Kind="Plus"/>
+                        </Button>
+                        <Button x:Name="RemoveGlossaryTerm"
+                                Grid.Column="2"
+                                Classes="iconButton"
+                                Command="{Binding RemoveGlossaryTermCommand}"
+                                ToolTip.Tip="{Loc Key=Settings.RemoveTerm}"
+                                AutomationProperties.Name="{Loc Key=Settings.RemoveTerm}">
+                            <LucideIcon Kind="Trash2"/>
+                        </Button>
+                    </Grid>
+                    <DataGrid x:Name="GlossaryGrid"
+                              ItemsSource="{Binding Glossary}"
+                              SelectedItem="{Binding SelectedGlossary, Mode=TwoWay}"
+                              AutoGenerateColumns="False"
+                              CanUserResizeColumns="True"
+                              MinHeight="180"
+                              MaxHeight="260"
+                              GridLinesVisibility="Horizontal"
+                              LoadingRow="Glossary_OnLoadingRow">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn x:DataType="settings:GlossaryRow" Binding="{Binding Source, Mode=TwoWay}" Width="*">
+                                <DataGridTextColumn.Header>
+                                    <TextBlock Text="{Loc Key=Settings.TermSource}" TextWrapping="Wrap"/>
+                                </DataGridTextColumn.Header>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn x:DataType="settings:GlossaryRow" Binding="{Binding Target, Mode=TwoWay}" Width="*">
+                                <DataGridTextColumn.Header>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="{Loc Key=Settings.TermTarget}" TextWrapping="Wrap"/>
+                                        <TextBlock Text="{Binding ((vm:SettingsTranslationViewModel)DataContext).GlossaryLanguage, ElementName=Root}"
+                                                   Opacity="0.7" />
+                                    </StackPanel>
+                                </DataGridTextColumn.Header>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </settings:SettingsCard>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -59,7 +59,7 @@ public sealed class UserAvatarSettingsTests
         {
             window.Show();
             view.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "SettingsSectionReading")
-                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                .ExecuteBoundCommand();
             Dispatcher.UIThread.RunJobs();
             window.UpdateLayout();
             var check = Assert.Single(view.GetVisualDescendants().OfType<CheckBox>(),

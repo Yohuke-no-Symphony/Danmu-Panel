@@ -1,0 +1,143 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="using:Yohuke.DanmuPanel.Views"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels"
+             x:Class="Yohuke.DanmuPanel.Views.Components.MessageFeedTemplates"
+             x:DataType="views:MessageFeedView">
+        <DataTemplate x:Key="DanmuHeaderActions" x:DataType="views:MessageFeedView">
+            <StackPanel Orientation="Horizontal">
+                <Button Name="ClearFeedButton" Classes="iconButton dockChromeButton"
+                        ToolTip.Tip="{Loc Key=Panel.ClearFeed}" AutomationProperties.Name="{Loc Key=Panel.ClearFeed}"
+                        Command="{Binding Header.ClearCommand}" IsEnabled="{Binding Model.HasSelectedRoom}">
+                    <LucideIcon Kind="Trash2" Size="16" />
+                </Button>
+                <Button Name="BackToLatestButton" Classes="iconButton dockChromeButton"
+                        ToolTip.Tip="{Loc Key=Panel.BackToLatest}" AutomationProperties.Name="{Loc Key=Panel.BackToLatest}"
+                        Command="{Binding Header.BackToLatestCommand}">
+                    <LucideIcon Kind="ArrowDownToLine" Size="16" />
+                </Button>
+            </StackPanel>
+        </DataTemplate>
+        <DataTemplate x:Key="CardHeaderActions" x:DataType="views:MessageFeedView">
+            <StackPanel Orientation="Horizontal">
+                <Button Name="ClearFeedButton" Classes="iconButton dockChromeButton"
+                        ToolTip.Tip="{Loc Key=Panel.ClearFeed}" AutomationProperties.Name="{Loc Key=Panel.ClearFeed}"
+                        Command="{Binding Header.ClearCommand}" IsEnabled="{Binding Model.HasSelectedRoom}">
+                    <LucideIcon Kind="Trash2" Size="16" />
+                </Button>
+                <Button Name="MarkAllReadButton" Classes="iconButton dockChromeButton"
+                        ToolTip.Tip="{Loc Key=Panel.MarkAllRead}" AutomationProperties.Name="{Loc Key=Panel.MarkAllRead}"
+                        Command="{Binding Header.MarkAllReadCommand}" IsEnabled="{Binding Model.HasUnreadMessages}">
+                    <LucideIcon Kind="CheckCheck" Size="16" />
+                </Button>
+                <Button Name="BackToTopButton" Classes="iconButton dockChromeButton"
+                        ToolTip.Tip="{Loc Key=Panel.BackToTop}" AutomationProperties.Name="{Loc Key=Panel.BackToTop}"
+                        Command="{Binding Header.BackToTopCommand}" IsEnabled="{Binding Model.HasSelectedRoom}">
+                    <LucideIcon Kind="ArrowUpToLine" Size="16" />
+                </Button>
+                <Button Name="BackToLatestButton" Classes="iconButton dockChromeButton"
+                        ToolTip.Tip="{Loc Key=Panel.BackToLatest}" AutomationProperties.Name="{Loc Key=Panel.BackToLatest}"
+                        Command="{Binding Header.BackToLatestCommand}">
+                    <LucideIcon Kind="ArrowDownToLine" Size="16" />
+                </Button>
+            </StackPanel>
+        </DataTemplate>
+        <DataTemplate x:Key="UnreadBadge" x:DataType="views:MessageFeedView">
+            <Border Classes="panelUnreadBadge" IsHitTestVisible="False" IsVisible="{Binding Model.HasUnreadMessages}">
+                <TextBlock Text="{Binding Model.UnreadCount}" FontSize="{Binding Header.BadgeFontSize}" />
+            </Border>
+        </DataTemplate>
+        <DataTemplate x:Key="ReadTabs" x:DataType="views:MessageFeedView">
+            <TabStrip Name="MessageReadTabs" Classes="messageReadTabs"
+                      SelectedIndex="{Binding Model.SelectedReadTabIndex, Mode=OneWay}" SelectionChanged="ReadTabs_OnSelectionChanged">
+                <TabStripItem Name="UnreadMessagesTab" Content="{Loc Key=Panel.Unread}" />
+                <TabStripItem Name="ReadMessagesTab" Content="{Loc Key=Panel.Read}" />
+            </TabStrip>
+        </DataTemplate>
+        <DataTemplate x:Key="DanmuPanelMenu" x:DataType="vm:MessageFeedHeaderViewModel">
+            <views:LocalizedContextMenu>
+                <MenuItem Header="{Loc Key=Panel.MoreHistory}" Command="{Binding LoadMoreCommand}">
+                    <MenuItem.Icon><LucideIcon Kind="History" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.BackToLatest}" Command="{Binding BackToLatestCommand}">
+                    <MenuItem.Icon><LucideIcon Kind="ArrowDownToLine" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+            </views:LocalizedContextMenu>
+        </DataTemplate>
+        <DataTemplate x:Key="CardPanelMenu" x:DataType="vm:MessageFeedHeaderViewModel">
+            <views:LocalizedContextMenu>
+                <MenuItem Header="{Loc Key=Panel.MoreHistory}" Command="{Binding LoadMoreCommand}">
+                    <MenuItem.Icon><LucideIcon Kind="History" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.BackToTop}" Command="{Binding BackToTopCommand}">
+                    <MenuItem.Icon><LucideIcon Kind="ArrowUpToLine" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.BackToLatest}" Command="{Binding BackToLatestCommand}">
+                    <MenuItem.Icon><LucideIcon Kind="ArrowDownToLine" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+            </views:LocalizedContextMenu>
+        </DataTemplate>
+        <DataTemplate x:Key="DanmuRowMenu" x:DataType="vm:MessageFeedMenuViewModel">
+            <views:LocalizedContextMenu>
+                <MenuItem Header="{Binding ActivationHeader}" Command="{Binding ActivateCommand}" IsEnabled="{Binding CanActivate}">
+                    <MenuItem.Icon><LucideIcon Kind="{Binding ActivationIcon}" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.CopyText}" Command="{Binding CopyCommand}">
+                    <MenuItem.Icon><LucideIcon Kind="Copy" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Name="RetryTranslationMenuItem" Header="{Loc Key=Panel.RetryTranslation}" Command="{Binding RetryCommand}" IsEnabled="{Binding CanRetryTranslation}">
+                    <MenuItem.Icon><LucideIcon Kind="Languages" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Name="ToggleSpecialAttentionMenuItem" Header="{Binding AttentionHeader}" Command="{Binding ToggleAttentionCommand}" IsEnabled="{Binding CanToggleAttention}">
+                    <MenuItem.Icon><LucideIcon Kind="Star" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="{Loc Key=Panel.MoreHistory}" Command="{Binding Header.LoadMoreCommand}">
+                    <MenuItem.Icon><LucideIcon Kind="History" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.BackToLatest}" Command="{Binding Header.BackToLatestCommand}">
+                    <MenuItem.Icon><LucideIcon Kind="ArrowDownToLine" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+            </views:LocalizedContextMenu>
+        </DataTemplate>
+        <DataTemplate x:Key="SuperChatRowMenu" x:DataType="vm:MessageFeedMenuViewModel">
+            <views:LocalizedContextMenu>
+                <MenuItem Header="{Binding ActivationHeader}" Command="{Binding ActivateCommand}" IsEnabled="{Binding CanActivate}">
+                    <MenuItem.Icon><LucideIcon Kind="{Binding ActivationIcon}" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.CopyText}" Command="{Binding CopyCommand}">
+                    <MenuItem.Icon><LucideIcon Kind="Copy" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Name="RetryTranslationMenuItem" Header="{Loc Key=Panel.RetryTranslation}" Command="{Binding RetryCommand}" IsEnabled="{Binding CanRetryTranslation}">
+                    <MenuItem.Icon><LucideIcon Kind="Languages" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="{Loc Key=Panel.MoreHistory}" Command="{Binding Header.LoadMoreCommand}">
+                    <MenuItem.Icon><LucideIcon Kind="History" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.BackToTop}" Command="{Binding Header.BackToTopCommand}">
+                    <MenuItem.Icon><LucideIcon Kind="ArrowUpToLine" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.BackToLatest}" Command="{Binding Header.BackToLatestCommand}">
+                    <MenuItem.Icon><LucideIcon Kind="ArrowDownToLine" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+            </views:LocalizedContextMenu>
+        </DataTemplate>
+        <DataTemplate x:Key="CardRowMenu" x:DataType="vm:MessageFeedMenuViewModel">
+            <views:LocalizedContextMenu>
+                <MenuItem Header="{Binding ActivationHeader}" Command="{Binding ActivateCommand}" IsEnabled="{Binding CanActivate}">
+                    <MenuItem.Icon><LucideIcon Kind="{Binding ActivationIcon}" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="{Loc Key=Panel.MoreHistory}" Command="{Binding Header.LoadMoreCommand}">
+                    <MenuItem.Icon><LucideIcon Kind="History" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.BackToTop}" Command="{Binding Header.BackToTopCommand}">
+                    <MenuItem.Icon><LucideIcon Kind="ArrowUpToLine" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.BackToLatest}" Command="{Binding Header.BackToLatestCommand}">
+                    <MenuItem.Icon><LucideIcon Kind="ArrowDownToLine" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+            </views:LocalizedContextMenu>
+        </DataTemplate>
+</ResourceDictionary>

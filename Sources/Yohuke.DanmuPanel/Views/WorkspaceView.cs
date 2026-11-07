@@ -24,17 +24,12 @@ public sealed class WorkspaceView : UserControl, IDisposable
     private readonly IRoomAvatarService avatars;
     private readonly WorkspaceShareService sharing = new();
     private readonly HashSet<WorkspaceState> observedWorkspaces = [];
-    private readonly TextBlock roomTitle = new();
-    private readonly Border statusLight = new();
-    private readonly TextBlock roomNumber = new();
-    private readonly TextBlock listenText = new();
-    private readonly LucideIcon listenIcon = new() { Size = 16 };
-    private readonly Button listen;
     private WorkspaceEditorWindow? editor;
     private bool openingEditor;
     private bool disposed;
 
-    public ObservableCollection<WorkspaceTreeItemViewModel> Workspaces { get; } = [];
+    public WorkspacePanelViewModel Model { get; }
+    public ObservableCollection<WorkspaceTreeItemViewModel> Workspaces => Model.Workspaces;
     public Control Toolbar { get; }
     public WorkspaceState? SelectedWorkspace { get; private set; }
     public RoomTabState? SelectedRoom { get; private set; }
@@ -48,24 +43,22 @@ public sealed class WorkspaceView : UserControl, IDisposable
         this.reportError = reportError;
         avatars = avatarService ?? runtime.Avatars;
         AttachedToVisualTree += (_, _) => LoadAvatars();
-        Content = new WorkspaceSidebarSurface { DataContext = this };
-        DataContext = this;
-        listen = Ui.Button("Panel.StartListening", ToggleListeningAsync, reportError);
-        listen.Classes.Add("listenToggleButton");
-        listen.Height = 32;
-        listen.MinHeight = 32;
-        listen.Padding = new(10, 4);
-        listen.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { listenIcon, listenText } };
-        statusLight.Classes.Add("listenStatusLight");
-        roomNumber.Classes.Add("muted");
-        roomTitle.FontWeight = Avalonia.Media.FontWeight.SemiBold;
-        roomTitle.MaxWidth = 240;
-        roomTitle.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis;
-        Toolbar = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center,
-            Children = { statusLight, roomTitle, roomNumber, listen }
-        };
+        Model = new(AddWorkspaceAsync, ImportFromPickerAsync, ToggleListeningAsync,
+            item => SelectAsync(item.State), item => AddRoomAsync(item.State), item => EditWorkspaceAsync(item.State),
+            async item =>
+            {
+                await DeleteWorkspaceAsync(item.State);
+            }, item => ExportAsync(item.State),
+            item => MoveWorkspaceAsync(item.State, -1), item => MoveWorkspaceAsync(item.State, 1),
+            item => SelectAsync(item.Workspace, item.State), item => MoveRoomAsync(item.Workspace, item.State, -1),
+            item => MoveRoomAsync(item.Workspace, item.State, 1),
+            async item =>
+            {
+                await DeleteRoomAsync(item.Workspace, item.State);
+            }, reportError);
+        Content = new WorkspaceSidebarSurface { DataContext = Model };
+        DataContext = Model;
+        Toolbar = new WorkspaceToolbarSurface { DataContext = Model };
         SelectedWorkspace = runtime.Configuration.Workspaces.FirstOrDefault(value => value.Id == runtime.Configuration.Settings.SelectedWorkspaceId)
             ?? runtime.Configuration.Workspaces.FirstOrDefault();
         SelectedRoom = SelectedWorkspace?.Rooms.FirstOrDefault(value => value.Id == SelectedWorkspace.SelectedRoomId)
@@ -386,51 +379,12 @@ public sealed class WorkspaceView : UserControl, IDisposable
         }
     }
 
-    internal void AddWorkspace_OnClick(object? sender, RoutedEventArgs e) => Execute(AddWorkspaceAsync);
-    internal void Import_OnClick(object? sender, RoutedEventArgs e) => Execute(ImportFromPickerAsync);
-    internal void SelectWorkspace_OnClick(object? sender, RoutedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is WorkspaceTreeItemViewModel item)
-        {
-            Execute(() => SelectAsync(item.State));
-        }
-    }
     internal void Workspace_OnDoubleTapped(object? sender, TappedEventArgs e)
     {
         if ((sender as Control)?.DataContext is WorkspaceTreeItemViewModel item)
         {
             item.State.IsExpanded = !item.State.IsExpanded;
             Execute(() => runtime.ConfigurationStore.SaveAsync(runtime.Configuration));
-        }
-    }
-    internal void SelectRoom_OnClick(object? sender, RoutedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is RoomTreeItemViewModel item)
-        {
-            Execute(() => SelectAsync(item.Workspace, item.State));
-        }
-    }
-    internal void AddRoom_OnClick(object? sender, RoutedEventArgs e) => WithWorkspace(sender, AddRoomAsync);
-    internal void EditWorkspace_OnClick(object? sender, RoutedEventArgs e) => WithWorkspace(sender, EditWorkspaceAsync);
-    internal void DeleteWorkspace_OnClick(object? sender, RoutedEventArgs e) => WithWorkspace(sender, async workspace => { await DeleteWorkspaceAsync(workspace); });
-    internal void Export_OnClick(object? sender, RoutedEventArgs e) => WithWorkspace(sender, ExportAsync);
-    internal void WorkspaceUp_OnClick(object? sender, RoutedEventArgs e) => WithWorkspace(sender, workspace => MoveWorkspaceAsync(workspace, -1));
-    internal void WorkspaceDown_OnClick(object? sender, RoutedEventArgs e) => WithWorkspace(sender, workspace => MoveWorkspaceAsync(workspace, 1));
-    internal void RoomUp_OnClick(object? sender, RoutedEventArgs e) => WithRoom(sender, item => MoveRoomAsync(item.Workspace, item.State, -1));
-    internal void RoomDown_OnClick(object? sender, RoutedEventArgs e) => WithRoom(sender, item => MoveRoomAsync(item.Workspace, item.State, 1));
-    internal void DeleteRoom_OnClick(object? sender, RoutedEventArgs e) => WithRoom(sender, async item => { await DeleteRoomAsync(item.Workspace, item.State); });
-    private void WithWorkspace(object? sender, Func<WorkspaceState, Task> action)
-    {
-        if ((sender as Control)?.DataContext is WorkspaceTreeItemViewModel item)
-        {
-            Execute(() => action(item.State));
-        }
-    }
-    private void WithRoom(object? sender, Func<RoomTreeItemViewModel, Task> action)
-    {
-        if ((sender as Control)?.DataContext is RoomTreeItemViewModel item)
-        {
-            Execute(() => action(item));
         }
     }
     private void OnWorkspacesChanged(object? sender, NotifyCollectionChangedEventArgs args) => RefreshTree();
@@ -441,17 +395,12 @@ public sealed class WorkspaceView : UserControl, IDisposable
     private void UpdateToolbar()
     {
         var room = SelectedRoom;
-        roomTitle.Text = room is null ? Localization.Get("Panel.SelectRoom") : room.Name;
-        roomNumber.Text = room?.RoomId ?? "";
-        var listening = room is not null && runtime.IsListening(room) && runtime.GetStatus(room) != "Panel.ListenerFailed";
-        ToolTip.SetTip(statusLight, Localization.Get(runtime.GetStatus(room)));
-        ToolTip.SetTip(listen, Localization.Get(runtime.GetStatus(room)));
-        statusLight.Classes.Set("listening", listening);
-        statusLight.Classes.Set("idle", !listening);
-        listen.Classes.Set("listening", listening);
-        listen.Classes.Set("idle", !listening);
-        listenIcon.Kind = room is not null && runtime.IsListening(room) ? LucideIconKind.CircleStop : LucideIconKind.Radio;
-        listenText.Text = Localization.Get(room is not null && runtime.IsListening(room) ? "Panel.StopListening" : "Panel.StartListening");
-        listen.IsEnabled = room is not null;
+        Model.RoomTitle = room is null ? Localization.Get("Panel.SelectRoom") : room.Name;
+        Model.RoomNumber = room?.RoomId ?? "";
+        Model.ConnectionStatus = Localization.Get(runtime.GetStatus(room));
+        Model.IsListening = room is not null && runtime.IsListening(room) && runtime.GetStatus(room) != "Panel.ListenerFailed";
+        Model.ListenIcon = room is not null && runtime.IsListening(room) ? LucideIconKind.CircleStop : LucideIconKind.Radio;
+        Model.ListenText = Localization.Get(room is not null && runtime.IsListening(room) ? "Panel.StopListening" : "Panel.StartListening");
+        Model.HasRoom = room is not null;
     }
 }

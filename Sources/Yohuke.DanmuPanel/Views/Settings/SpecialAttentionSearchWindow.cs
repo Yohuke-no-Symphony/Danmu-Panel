@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Controls.Templates;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.ViewModels.Settings;
 using Yohuke.DanmuPanel.Windowing;
@@ -10,7 +9,7 @@ internal sealed class SpecialAttentionSearchWindow : Window
 {
     internal SpecialAttentionEditorViewModel Model { get; }
 
-    internal SpecialAttentionSearchWindow(SpecialAttentionEditorViewModel model, IDataTemplate resultTemplate)
+    internal SpecialAttentionSearchWindow(SpecialAttentionEditorViewModel model)
     {
         Model = model;
         Width = 680;
@@ -21,7 +20,6 @@ internal sealed class SpecialAttentionSearchWindow : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Bind(TitleProperty, Localization.Observe("SpecialAttention.FindUsers"));
         var surface = new SpecialAttentionSearchSurface { DataContext = model };
-        surface.FindControl<ItemsControl>("SpecialAttentionSearchResults")!.ItemTemplate = resultTemplate;
         surface.FindControl<Button>("CloseSpecialAttentionSearchButton")!.Click += (_, _) => Close();
         Content = surface;
         Closed += (_, _) => Model.CancelSearch();

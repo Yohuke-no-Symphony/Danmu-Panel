@@ -1,7 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Yohuke.DanmuPanel.Views.Settings.AccountSettingsRowSurface"
-             x:CompileBindings="False">
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Settings"
+             x:DataType="vm:AccountSettingsRowViewModel">
     <UserControl.Styles>
         <Style Selector="Ellipse.accountValidity">
             <Setter Property="Width" Value="10" />
@@ -19,6 +20,13 @@
             <Setter Property="Fill" Value="{DynamicResource AppWarningBrush}" />
         </Style>
     </UserControl.Styles>
+    <UserControl.ContextMenu>
+        <ContextMenu>
+            <MenuItem Header="{Loc Key=Panel.EditAccountCookie}" Command="{Binding EditCookieCommand}"><MenuItem.Icon><LucideIcon Kind="Pencil" /></MenuItem.Icon></MenuItem>
+            <Separator />
+            <MenuItem Header="{Loc Key=Panel.AddAccountManually}" Command="{Binding AddManuallyCommand}"><MenuItem.Icon><LucideIcon Kind="UserPlus" /></MenuItem.Icon></MenuItem>
+        </ContextMenu>
+    </UserControl.ContextMenu>
     <Border BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0,0,0,1" Padding="0,10">
         <Grid x:Name="AccountRowLayout" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto"
               ColumnSpacing="8" RowSpacing="4">
@@ -27,31 +35,31 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" MaxWidth="220" />
                 </Grid.ColumnDefinitions>
-                <Ellipse x:Name="AccountValidity" Classes="accountValidity" />
-                <TextBox x:Name="AccountNameEditor" Grid.Column="1" MinWidth="0" MaxWidth="220"
+                <Ellipse x:Name="AccountValidity" Classes="accountValidity" Classes.valid="{Binding IsValid}" Classes.invalid="{Binding IsInvalid}" Classes.uncertain="{Binding IsUncertain}" ToolTip.Tip="{Binding Profile}" AutomationProperties.Name="{Binding Profile}" />
+                <TextBox x:Name="AccountNameEditor" Text="{Binding Name, Mode=TwoWay}" Grid.Column="1" MinWidth="0" MaxWidth="220"
                          Height="{StaticResource WorkbenchControlHeight}" VerticalAlignment="Center"
                          Watermark="{Loc Key=Panel.Name}" AutomationProperties.Name="{Loc Key=Panel.Name}" />
             </Grid>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <Button x:Name="AccountBrowserLogin" Classes="iconButton"
+                <Button x:Name="AccountBrowserLogin" Command="{Binding LoginCommand}" Classes="iconButton"
                         ToolTip.Tip="{Loc Key=Panel.BrowserLogin}" AutomationProperties.Name="{Loc Key=Panel.BrowserLogin}">
                     <LucideIcon Kind="LogIn" />
                 </Button>
-                <RadioButton x:Name="DefaultAccountToggle" Classes="iconButton"
-                             Theme="{StaticResource {x:Type ToggleButton}}" GroupName="DefaultAccount"
+                <RadioButton x:Name="DefaultAccountToggle" Command="{Binding SetDefaultCommand}" Classes="iconButton"
+                             Theme="{StaticResource {x:Type ToggleButton}}" GroupName="DefaultAccount" IsChecked="{Binding IsDefault, Mode=OneWay}"
                              ToolTip.Tip="{Loc Key=Panel.DefaultAccount}" AutomationProperties.Name="{Loc Key=Panel.DefaultAccount}">
                     <LucideIcon Kind="BadgeCheck" />
                 </RadioButton>
-                <Button x:Name="AccountValidate" Classes="iconButton"
+                <Button x:Name="AccountValidate" Command="{Binding ValidateCommand}" Classes="iconButton"
                         ToolTip.Tip="{Loc Key=Panel.ValidateAccount}" AutomationProperties.Name="{Loc Key=Panel.ValidateAccount}">
                     <LucideIcon Kind="RefreshCw" />
                 </Button>
-                <Button x:Name="AccountDelete" Classes="iconButton"
+                <Button x:Name="AccountDelete" Command="{Binding DeleteCommand}" Classes="iconButton"
                         ToolTip.Tip="{Loc Key=Panel.Delete}" AutomationProperties.Name="{Loc Key=Panel.Delete}">
                     <LucideIcon Kind="Trash2" />
                 </Button>
             </StackPanel>
-            <TextBlock x:Name="AccountProfile" Grid.Row="1" Grid.ColumnSpan="2" Margin="18,0,0,0"
+            <TextBlock x:Name="AccountProfile" Text="{Binding Profile}" ToolTip.Tip="{Binding Profile}" Grid.Row="1" Grid.ColumnSpan="2" Margin="18,0,0,0"
                        Classes="muted" TextTrimming="CharacterEllipsis" />
         </Grid>
     </Border>

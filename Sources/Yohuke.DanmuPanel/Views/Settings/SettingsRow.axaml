@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:settings="using:Yohuke.DanmuPanel.Views.Settings"
+             x:Class="Yohuke.DanmuPanel.Views.Settings.SettingsRow"
+             x:Name="Root"
+             x:DataType="settings:SettingsRow"
+             x:CompileBindings="True">
+    <UserControl.Content>
+        <Grid ColumnDefinitions="180,*" ColumnSpacing="14">
+            <TextBlock Text="{Binding Label, ElementName=Root}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+            <ContentPresenter Grid.Column="1" Content="{Binding Editor, ElementName=Root}" HorizontalContentAlignment="Stretch"/>
+        </Grid>
+    </UserControl.Content>
+</UserControl>

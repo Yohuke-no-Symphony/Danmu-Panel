@@ -1,13 +1,6 @@
-using System.Collections.ObjectModel;
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Templates;
-using Avalonia.Data;
-using Avalonia.Layout;
-using Avalonia.Controls.Primitives;
-using Avalonia.Automation;
-using Lucide.Avalonia;
-using Avalonia.Media;
 using Avalonia.Styling;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.Appearance;
@@ -18,66 +11,28 @@ using Yohuke.DanmuPanel.Services;
 using Yohuke.DanmuPanel.Services.Appearance;
 using Yohuke.DanmuPanel.Services.Messages;
 using Yohuke.DanmuPanel.Services.Settings;
-using Yohuke.DanmuPanel.Services.Translation;
-using Yohuke.DanmuPanel.Services.Updates;
+using Yohuke.DanmuPanel.ViewModels.Settings;
 
 namespace Yohuke.DanmuPanel.Views.Settings;
 
-/// <summary>阅读台的外观、阅读、翻译、账号、数据和更新设置。</summary>
+/// <summary>协调设置页面草稿、即时偏好及设置导入导出。</summary>
 public sealed class SettingsView : UserControl
 {
     private readonly SettingsDialogSurface surface = new();
+    private readonly SettingsTranslationPage translationPage;
+    private readonly IReadOnlyDictionary<string, Control> pages;
     private readonly ColorSchemeEditor colorSchemeEditor;
-    internal SpecialAttentionEditor SpecialAttentionEditor { get; }
-    internal DanmuRegexEditor DanmuRegexEditor { get; }
     private readonly PanelRuntime runtime;
     private readonly SettingsShareService sharing = new();
     private readonly ISettingsTransferDialogs transferDialogs;
     private readonly Control accountsView;
-    private readonly TextBlock status;
-    private readonly List<Button> sectionButtons = [];
-    private readonly CheckBox enabled;
-    private readonly ComboBox provider;
-    private readonly TextBox baseUrl;
-    private readonly TextBox apiKey;
-    private readonly TextBox model;
-    private readonly ComboBox targetLanguage;
-    private readonly TextBox extraPrompt;
-    private readonly ComboBox displayMode;
-    private readonly ComboBox backlogMode;
-    private readonly NumericUpDown giftMinimum;
-    private readonly ComboBox giftResetPolicy;
-    private readonly Dictionary<MessageKind, (ComboBox Unread, ComboBox Read)> messageSortChoices = [];
-    private readonly CheckBox userPinyin;
-    private readonly CheckBox giftPinyin;
-    private readonly CheckBox danmuPinyin;
-    private readonly CheckBox superChatPinyin;
-    private readonly ComboBox pinyinLayout;
-    private readonly NumericUpDown messageTextScale;
-    private readonly NumericUpDown superChatBorderThickness;
-    private readonly NumericUpDown giftBorderThickness;
-    private readonly NumericUpDown guardBorderThickness;
-    private readonly NumericUpDown messageRetentionCount;
-    private readonly CheckBox showUserAvatars;
-    private readonly CheckBox showFanMedals;
-    private readonly CheckBox compactDisplay;
-    private readonly CheckBox compactDanmuWrap;
-    private readonly CheckBox compactSuperChatWrap;
-    private readonly CheckBox autoScrollLongMessages;
-    private readonly CheckBox hideEmoticonDanmu;
-    private readonly CheckBox windowMenuOnMac;
-    private readonly ObservableCollection<GlossaryRow> glossary;
-    private readonly TextBlock glossaryLanguage;
-    private readonly DataGrid glossaryGrid;
-    private readonly Button save;
-    private bool operating;
 
+    internal SettingsDialogViewModel Model { get; }
+    internal SpecialAttentionEditor SpecialAttentionEditor { get; }
+    internal DanmuRegexEditor DanmuRegexEditor { get; }
     internal Task PendingMenuPreferenceSave { get; private set; } = Task.CompletedTask;
     internal Task PendingUpdatePreferenceSave { get; private set; } = Task.CompletedTask;
     internal Task PendingSettingsTransfer { get; private set; } = Task.CompletedTask;
-
-    private string SelectedBaseUrl => ((TranslationProviderOption)provider.SelectedItem!).BaseUrl ?? baseUrl.Text?.Trim() ?? "";
-    private string SelectedTargetLanguage => ((TranslationLanguageOption)targetLanguage.SelectedItem!).Code;
 
     public event Action? Saved;
     public event Action<bool>? ClearRequested;
@@ -101,12 +56,18 @@ public sealed class SettingsView : UserControl
         ISettingsTransferDialogs? transferDialogs = null, IBilibiliUserSearchService? userSearch = null,
         IUserAvatarService? userAvatars = null)
     {
-        Content = surface;
-        status = surface.FindControl<TextBlock>("SaveStatus")!;
         this.runtime = runtime;
         this.transferDialogs = transferDialogs ?? new SettingsTransferDialogs();
         this.accountsView = accountsView;
         var settings = runtime.Configuration.Settings;
+        Model = new(settings, supportsNativeMenus, async () =>
+            {
+                await SaveAsync();
+            },
+            () => PendingSettingsTransfer = ImportSettingsAsync(),
+            () => PendingSettingsTransfer = ExportSettingsAsync(),
+            all => ClearRequested?.Invoke(all), ClearCacheAsync,
+            () => CheckForUpdatesRequested?.Invoke());
         colorSchemeEditor = new(settings, runtime.Colors,
             new HashSet<string>(StringComparer.Ordinal)
             {
@@ -116,144 +77,28 @@ public sealed class SettingsView : UserControl
             colorSchemeEditor.GetInput(ColorSettingCatalog.SPECIAL_ATTENTION_USER_NAME_BRUSH),
             colorSchemeEditor.GetInput(ColorSettingCatalog.SPECIAL_ATTENTION_CONTENT_BRUSH), userSearch, userAvatars);
         DanmuRegexEditor = new(settings.DanmuRegexFilter);
-        superChatBorderThickness = CreateBorderThicknessInput("SuperChatBorderThicknessInput", settings.MessageBorders.SuperChat);
-        giftBorderThickness = CreateBorderThicknessInput("GiftBorderThicknessInput", settings.MessageBorders.Gift);
-        guardBorderThickness = CreateBorderThicknessInput("GuardBorderThicknessInput", settings.MessageBorders.Guard);
-        windowMenuOnMac = Check("Settings.Appearance.WindowMenuOnMac", settings.UseWindowMenuOnMac);
-        windowMenuOnMac.Name = "UseWindowMenuOnMacCheckBox";
-        windowMenuOnMac.IsVisible = supportsNativeMenus;
-        windowMenuOnMac.IsCheckedChanged += (_, _) =>
+        translationPage = new() { DataContext = Model.Translation };
+        pages = new Dictionary<string, Control>(StringComparer.Ordinal)
         {
-            settings.UseWindowMenuOnMac = windowMenuOnMac.IsChecked == true;
-            WindowMenuOnMacChanged?.Invoke(settings.UseWindowMenuOnMac);
-            PendingMenuPreferenceSave = SavePreferenceAsync();
+            ["Appearance"] = new SettingsAppearancePage { DataContext = Model.Appearance, ColorEditor = colorSchemeEditor },
+            ["Reading"] = new SettingsReadingPage { DataContext = Model.Reading },
+            ["Blocking"] = new SettingsBlockingPage { DataContext = Model, Editor = DanmuRegexEditor },
+            ["SpecialAttention"] = new SettingsSpecialAttentionPage { DataContext = Model, Editor = SpecialAttentionEditor },
+            ["Translation"] = translationPage,
+            ["Accounts"] = new SettingsAccountsPage { DataContext = Model, Editor = accountsView },
+            ["Data"] = new SettingsDataPage { DataContext = Model },
+            ["Updates"] = new SettingsUpdatesPage { DataContext = Model }
         };
-        var translation = TranslationRequestFactory.Snapshot(settings.Translation);
-        enabled = Check("Settings.TranslationEnabled", translation.Enabled);
-        baseUrl = new() { Name = "TranslationCustomBaseUrl", Text = translation.BaseUrl, Watermark = "https://api.example.com/v1" };
-        provider = CreateProviderSelector(translation.BaseUrl);
-        apiKey = new() { Text = translation.ApiKey, PasswordChar = '●' };
-        model = new() { Text = translation.Model };
-        targetLanguage = CreateTargetLanguageSelector(translation.TargetLanguage);
-        extraPrompt = new() { Text = translation.ExtraSystemPrompt, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 100 };
-        displayMode = Choices(["Settings.Bilingual", "Settings.TranslationOnly"], (int)translation.DisplayMode);
-        backlogMode = Choices(["Settings.Realtime", "Settings.AllMessages"], (int)translation.BacklogMode);
-        giftMinimum = new() { Value = settings.Reading.GiftAutoPinMinimum, Minimum = 0, Maximum = 1000000000, Increment = 1, FormatString = "0.##" };
-        giftResetPolicy = Choices(["Settings.ComboOnce", "Settings.ComboNewQuantity", "Settings.ComboNewValue"], (int)settings.Reading.GiftReadResetPolicy);
-        foreach (var kind in new[] { MessageKind.SuperChat, MessageKind.Gift, MessageKind.Guard })
-        {
-            var sorting = settings.MessageSorting.GetPanel(kind);
-            var unread = Choices(["Settings.SortOldestFirst", "Settings.SortNewestFirst"], (int)sorting.Unread);
-            unread.Name = kind + "UnreadSortOrderComboBox";
-            var read = Choices(["Settings.SortOldestFirst", "Settings.SortNewestFirst"], (int)sorting.Read);
-            read.Name = kind + "ReadSortOrderComboBox";
-            messageSortChoices.Add(kind, (unread, read));
-        }
-        userPinyin = Check("Settings.UserPinyin", settings.ShowUserPinyin);
-        giftPinyin = Check("Settings.GiftPinyin", settings.ShowGiftPinyin);
-        danmuPinyin = Check("Settings.DanmuPinyin", settings.ShowDanmuPinyin);
-        danmuPinyin.Name = "ShowDanmuPinyinCheckBox";
-        superChatPinyin = Check("Settings.SuperChatPinyin", settings.ShowSuperChatPinyin);
-        superChatPinyin.Name = "ShowSuperChatPinyinCheckBox";
-        pinyinLayout = Choices(["Settings.PinyinRuby", "Settings.PinyinSeparateLine"], (int)settings.PinyinLayout);
-        pinyinLayout.Name = "PinyinLayoutComboBox";
-        messageTextScale = new()
-        {
-            Name = "MessageTextScaleInput",
-            Minimum = 50,
-            Maximum = 200,
-            Increment = 10,
-            Value = (decimal)settings.MessageTextScale * 100,
-            FormatString = "0"
-        };
-        messageRetentionCount = new()
-        {
-            Name = "MessageRetentionCountInput",
-            Minimum = 1,
-            Maximum = PanelSettings.MAX_MESSAGE_RETENTION_COUNT,
-            Increment = 1,
-            Value = settings.MessageRetentionCount,
-            FormatString = "0"
-        };
-        showUserAvatars = Check("Settings.ShowUserAvatars", settings.ShowUserAvatars);
-        showUserAvatars.Name = "ShowUserAvatarsCheckBox";
-        showFanMedals = Check("Settings.ShowFanMedals", settings.ShowFanMedals);
-        showFanMedals.Name = "ShowFanMedalsCheckBox";
-        compactDisplay = Check("Settings.CompactDisplay", settings.CompactDanmuDisplay);
-        compactDisplay.Name = "CompactDanmuDisplayCheckBox";
-        compactDanmuWrap = Check("Settings.CompactMessageWrap", settings.CompactDanmuWrap);
-        compactDanmuWrap.Name = "CompactDanmuWrapCheckBox";
-        compactSuperChatWrap = Check("Settings.CompactSuperChatWrap", settings.CompactSuperChatWrap);
-        compactSuperChatWrap.Name = "CompactSuperChatWrapCheckBox";
-        autoScrollLongMessages = Check("Settings.AutoScrollLongMessages", settings.AutoScrollLongMessages);
-        autoScrollLongMessages.Name = "AutoScrollLongMessagesCheckBox";
-        hideEmoticonDanmu = Check("Settings.HideEmoticonDanmu", settings.HideEmoticonDanmu);
-        hideEmoticonDanmu.Name = "HideEmoticonDanmuCheckBox";
-        compactDanmuWrap.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
-        compactSuperChatWrap.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
-        autoScrollLongMessages.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
-        glossary = new(translation.Glossary.GroupBy(entry => entry.Source.Trim(), StringComparer.Ordinal)
-            .Select(entries => new GlossaryRow(entries.Key, SelectedTargetLanguage, entries)));
-        glossaryLanguage = new() { Text = $"({SelectedTargetLanguage})", Opacity = 0.7 };
-        glossaryGrid = new()
-        {
-            ItemsSource = glossary,
-            AutoGenerateColumns = false,
-            CanUserResizeColumns = true,
-            MinHeight = 180,
-            MaxHeight = 260,
-            GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
-            Columns =
-            {
-                new DataGridTextColumn { Header = Label("Settings.TermSource"), Binding = new Binding(nameof(GlossaryRow.Source)) { Mode = BindingMode.TwoWay }, Width = new(1, DataGridLengthUnitType.Star) },
-                new DataGridTextColumn
-                {
-                    Header = new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 6,
-                        Children = { Label("Settings.TermTarget"), glossaryLanguage }
-                    },
-                    Binding = new Binding(nameof(GlossaryRow.Target)) { Mode = BindingMode.TwoWay },
-                    Width = new(1, DataGridLengthUnitType.Star)
-                }
-            }
-        };
-        targetLanguage.SelectionChanged += (_, _) => SelectGlossaryLanguage();
-        AddSection("Settings.Appearance", "Settings.AppearanceDescription", BuildAppearance());
-        AddSection("Settings.Reading", "Settings.ReadingDescription", Stack(
-            Card("Settings.MessageDisplay",
-                WithHint(Row("Settings.MessageRetentionCount", messageRetentionCount), "Settings.MessageRetentionCountHelp"),
-                WithHint(Row("Settings.MessageTextScale", messageTextScale), "Settings.MessageTextScaleHelp"),
-                WithHint(showUserAvatars, "Settings.ShowUserAvatarsHelp"),
-                WithHint(showFanMedals, "Settings.ShowFanMedalsHelp"),
-                WithHint(hideEmoticonDanmu, "Settings.HideEmoticonDanmuHelp"), compactDisplay,
-                new StackPanel
-                {
-                    Margin = new Thickness(24, 0, 0, 0), Spacing = 8,
-                    Children =
-                    {
-                        compactDanmuWrap, compactSuperChatWrap,
-                        WithHint(autoScrollLongMessages, "Settings.AutoScrollLongMessagesHelp")
-                    }
-                }),
-            Card("Settings.Reading", Row("Settings.GiftMinimum", giftMinimum), Row("Settings.ComboPolicy", giftResetPolicy)),
-            BuildMessageSorting(),
-            Card("Settings.Pinyin",
-                WithHint(userPinyin, "Settings.PinyinHelp"),
-                WithHint(giftPinyin, "Settings.PinyinHelp"),
-                WithHint(danmuPinyin, "Settings.PinyinHelp"),
-                WithHint(superChatPinyin, "Settings.PinyinHelp"),
-                WithHint(Row("Settings.PinyinLayout", pinyinLayout), "Settings.PinyinHelp", "Settings.PinyinScrollHelp"))));
-        AddSection("Settings.Blocking", "Settings.BlockingDescription", Card("Settings.DanmuRegexFilter", DanmuRegexEditor));
-        AddSection("Settings.SpecialAttention", "Settings.SpecialAttentionDescription", Card("SpecialAttention.Title", SpecialAttentionEditor));
-        AddSection("Settings.Translation", "Settings.TranslationDescription", BuildTranslation());
-        AddSection("Settings.Accounts", "Settings.AccountsDescription", accountsView);
-        AddSection("Settings.Data", "Settings.DataDescription", BuildData());
-        AddSection("Settings.Updates", "Settings.UpdatesDescription", BuildUpdates());
-        save = surface.FindControl<Button>("SaveSettingsButton")!;
-        save.Click += async (_, _) => await SaveAsync();
-
+        Model.Translation.CommitEditsRequested += translationPage.CommitEdits;
+        Model.Translation.TermAdded += translationPage.ScrollToTerm;
+        Model.PropertyChanged += OnModelChanged;
+        Model.Appearance.PropertyChanged += OnAppearanceChanged;
+        colorSchemeEditor.Changed += ApplyAppearance;
+        surface.DataContext = Model;
+        surface.PageContent = pages[Model.SelectedSection];
+        Content = surface;
+        AttachedToVisualTree += OnAttached;
+        DetachedFromVisualTree += OnDetached;
     }
 
     /// <summary>校验并保存设置；失败保留窗口及输入内容。</summary>
@@ -418,17 +263,20 @@ public sealed class SettingsView : UserControl
     private bool TryCreateDraft(out PanelSettings draft)
     {
         draft = null!;
-        if (messageSortChoices.Values.Any(choices => !Enum.IsDefined((MessageSortOrder)choices.Unread.SelectedIndex) ||
-            !Enum.IsDefined((MessageSortOrder)choices.Read.SelectedIndex)))
+        var reading = Model.Reading;
+        var appearance = Model.Appearance;
+        var translation = Model.Translation;
+        if (!reading.HasValidSorting)
         {
             SetStatus(Localization.Get("Settings.InvalidMessageSortOrder"));
             return false;
         }
-        if (!TryCreateMessageBorders(out var messageBorders))
+        if (!appearance.TryCreateBorders(out var messageBorders))
         {
+            SetStatus(Localization.Get("Settings.InvalidMessageBorderThickness"));
             return false;
         }
-        if (messageRetentionCount.Value is not { } retentionCount || retentionCount != decimal.Truncate(retentionCount) ||
+        if (reading.MessageRetentionCount is not { } retentionCount || retentionCount != decimal.Truncate(retentionCount) ||
             retentionCount is < 1 or > PanelSettings.MAX_MESSAGE_RETENTION_COUNT)
         {
             SetStatus(Localization.Format("Settings.InvalidMessageRetentionCount", PanelSettings.MAX_MESSAGE_RETENTION_COUNT));
@@ -444,17 +292,17 @@ public sealed class SettingsView : UserControl
             SetStatus(colorError ?? Localization.Get("Colors.InvalidColor"));
             return false;
         }
-        CommitGlossaryEdits();
-        var terms = glossary.Where(entry => !string.IsNullOrWhiteSpace(entry.Source) || entry.HasTranslations).ToList();
+        translationPage.CommitEdits();
+        var terms = translation.Glossary.Where(entry => !string.IsNullOrWhiteSpace(entry.Source) || entry.HasTranslations).ToList();
         if (terms.Any(entry => string.IsNullOrWhiteSpace(entry.Source) || !entry.HasTranslations))
         {
             SetStatus(Localization.Get("Settings.IncompleteTerm"));
             return false;
         }
-        if (enabled.IsChecked == true && (!Uri.TryCreate(SelectedBaseUrl, UriKind.Absolute, out var endpoint) ||
+        if (translation.Enabled && (!Uri.TryCreate(translation.SelectedBaseUrl, UriKind.Absolute, out var endpoint) ||
             endpoint.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(endpoint.Query) ||
             !string.IsNullOrEmpty(endpoint.Fragment) || !string.IsNullOrEmpty(endpoint.UserInfo) ||
-            string.IsNullOrWhiteSpace(model.Text) || string.IsNullOrWhiteSpace(SelectedTargetLanguage)))
+            string.IsNullOrWhiteSpace(translation.Model) || string.IsNullOrWhiteSpace(translation.SelectedLanguage.Code)))
         {
             SetStatus(Localization.Get("Settings.InvalidTranslation"));
             return false;
@@ -470,180 +318,113 @@ public sealed class SettingsView : UserControl
             CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup,
             Translation = new()
             {
-                Enabled = enabled.IsChecked == true,
-                BaseUrl = SelectedBaseUrl,
-                ApiKey = apiKey.Text ?? "",
-                Model = model.Text?.Trim() ?? "",
-                TargetLanguage = SelectedTargetLanguage,
-                ExtraSystemPrompt = extraPrompt.Text ?? "",
-                DisplayMode = (TranslationDisplayMode)displayMode.SelectedIndex,
-                BacklogMode = (TranslationBacklogMode)backlogMode.SelectedIndex,
+                Enabled = translation.Enabled,
+                BaseUrl = translation.SelectedBaseUrl,
+                ApiKey = translation.ApiKey ?? "",
+                Model = translation.Model?.Trim() ?? "",
+                TargetLanguage = translation.SelectedLanguage.Code,
+                ExtraSystemPrompt = translation.ExtraPrompt ?? "",
+                DisplayMode = (TranslationDisplayMode)translation.DisplayMode,
+                BacklogMode = (TranslationBacklogMode)translation.BacklogMode,
                 Glossary = terms.SelectMany(entry => entry.GetEntries()).ToList()
             },
             Reading = new()
             {
-                GiftAutoPinMinimum = giftMinimum.Value ?? 0,
-                GiftReadResetPolicy = (GiftReadResetPolicy)giftResetPolicy.SelectedIndex
+                GiftAutoPinMinimum = reading.GiftMinimum ?? 0,
+                GiftReadResetPolicy = (GiftReadResetPolicy)reading.GiftResetPolicy
             },
-            MessageSorting = new()
-            {
-                SuperChat = CreateMessageSortDraft(MessageKind.SuperChat),
-                Gift = CreateMessageSortDraft(MessageKind.Gift),
-                Guard = CreateMessageSortDraft(MessageKind.Guard)
-            },
-            ShowUserPinyin = userPinyin.IsChecked == true,
-            ShowGiftPinyin = giftPinyin.IsChecked == true,
-            ShowDanmuPinyin = danmuPinyin.IsChecked == true,
-            ShowSuperChatPinyin = superChatPinyin.IsChecked == true,
-            PinyinLayout = (PinyinLayoutMode)pinyinLayout.SelectedIndex,
-            MessageTextScale = (double)(messageTextScale.Value ?? 100) / 100,
+            MessageSorting = reading.CreateSorting(),
+            ShowUserPinyin = reading.UserPinyin,
+            ShowGiftPinyin = reading.GiftPinyin,
+            ShowDanmuPinyin = reading.DanmuPinyin,
+            ShowSuperChatPinyin = reading.SuperChatPinyin,
+            PinyinLayout = (PinyinLayoutMode)reading.PinyinLayout,
+            MessageTextScale = (double)(reading.MessageTextScale ?? 100) / 100,
             MessageColumns = settings.MessageColumns,
             MessageRetentionCount = (int)retentionCount,
-            ShowUserAvatars = showUserAvatars.IsChecked == true,
-            ShowFanMedals = showFanMedals.IsChecked == true,
-            CompactDanmuDisplay = compactDisplay.IsChecked == true,
-            CompactDanmuWrap = compactDanmuWrap.IsChecked == true,
-            CompactSuperChatWrap = compactSuperChatWrap.IsChecked == true,
-            AutoScrollLongMessages = autoScrollLongMessages.IsChecked == true,
-            HideEmoticonDanmu = hideEmoticonDanmu.IsChecked == true,
+            ShowUserAvatars = reading.ShowUserAvatars,
+            ShowFanMedals = reading.ShowFanMedals,
+            CompactDanmuDisplay = reading.CompactDisplay,
+            CompactDanmuWrap = reading.CompactDanmuWrap,
+            CompactSuperChatWrap = reading.CompactSuperChatWrap,
+            AutoScrollLongMessages = reading.AutoScrollLongMessages,
+            HideEmoticonDanmu = reading.HideEmoticonDanmu,
             DanmuRegexFilter = danmuRegexSettings,
             SpecialAttention = SpecialAttentionEditor.Model.CreateSnapshot(settings.SpecialAttention)
         };
         return true;
     }
 
-    private MessageReadSortSettings CreateMessageSortDraft(MessageKind kind)
-    {
-        var choices = messageSortChoices[kind];
-        return new()
-        {
-            Unread = (MessageSortOrder)choices.Unread.SelectedIndex,
-            Read = (MessageSortOrder)choices.Read.SelectedIndex
-        };
-    }
-
-    private Control BuildMessageSorting()
-    {
-        var table = new Grid
-        {
-            ColumnDefinitions = new("Auto,*,*"), RowDefinitions = new("Auto,Auto,Auto,Auto"),
-            ColumnSpacing = 16, RowSpacing = 8
-        };
-        var unread = Label("Settings.UnreadSortOrder");
-        Grid.SetColumn(unread, 1);
-        table.Children.Add(unread);
-        var read = Label("Settings.ReadSortOrder");
-        Grid.SetColumn(read, 2);
-        table.Children.Add(read);
-        var index = 1;
-        foreach (var (kind, choices) in messageSortChoices)
-        {
-            var title = Label("Workbench.Panel." + kind);
-            title.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetRow(title, index);
-            Grid.SetRow(choices.Unread, index);
-            Grid.SetColumn(choices.Unread, 1);
-            Grid.SetRow(choices.Read, index);
-            Grid.SetColumn(choices.Read, 2);
-            table.Children.Add(title);
-            table.Children.Add(choices.Unread);
-            table.Children.Add(choices.Read);
-            index++;
-        }
-        return Card("Settings.MessageSorting", WithHint(table, "Settings.MessageSortingHelp"));
-    }
-
-    private bool TryCreateMessageBorders(out MessageBorderSettings borders)
-    {
-        borders = null!;
-        if (superChatBorderThickness.Value is not { } superChat || giftBorderThickness.Value is not { } gift ||
-            guardBorderThickness.Value is not { } guard ||
-            superChat < (decimal)MessageBorderSettings.MIN_THICKNESS || superChat > (decimal)MessageBorderSettings.MAX_THICKNESS ||
-            gift < (decimal)MessageBorderSettings.MIN_THICKNESS || gift > (decimal)MessageBorderSettings.MAX_THICKNESS ||
-            guard < (decimal)MessageBorderSettings.MIN_THICKNESS || guard > (decimal)MessageBorderSettings.MAX_THICKNESS)
-        {
-            SetStatus(Localization.Get("Settings.InvalidMessageBorderThickness"));
-            return false;
-        }
-        borders = new() { SuperChat = (double)superChat, Gift = (double)gift, Guard = (double)guard };
-        return true;
-    }
-
-    private static NumericUpDown CreateBorderThicknessInput(string name, double value)
-    {
-        return new()
-        {
-            Name = name,
-            Minimum = (decimal)MessageBorderSettings.MIN_THICKNESS,
-            Maximum = (decimal)MessageBorderSettings.MAX_THICKNESS,
-            Increment = 0.5m,
-            Value = (decimal)value,
-            FormatString = "0.##"
-        };
-    }
-
     private bool TryBeginOperation()
     {
-        if (operating)
+        if (Model.IsOperating)
         {
             return false;
         }
-        operating = true;
-        surface.IsEnabled = false;
+        Model.IsOperating = true;
         return true;
     }
 
     private void EndOperation()
     {
-        operating = false;
-        surface.IsEnabled = true;
+        Model.IsOperating = false;
     }
 
-    private Control BuildAppearance()
+    private void OnModelChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName == nameof(SettingsDialogViewModel.SelectedSection))
+        {
+            surface.PageContent = pages[Model.SelectedSection];
+        }
+        else if (args.PropertyName == nameof(SettingsDialogViewModel.CheckForUpdatesOnStartup))
+        {
+            var startupEnabled = Model.CheckForUpdatesOnStartup;
+            runtime.Configuration.Settings.CheckForUpdatesOnStartup = startupEnabled;
+            StartupUpdatePreferenceChanged?.Invoke(startupEnabled);
+            PendingUpdatePreferenceSave = SavePreferenceAsync();
+        }
+    }
+
+    private void OnAppearanceChanged(object? sender, PropertyChangedEventArgs args)
     {
         var settings = runtime.Configuration.Settings;
-        var languageIds = new[] { "system", "zh-CN", "en-US", "ja-JP" };
-        var languages = Choices(["Settings.FollowSystem", "Settings.Chinese", "Settings.English", "Settings.Japanese"], Math.Max(0, Array.IndexOf(languageIds, settings.Language)));
-        languages.SelectionChanged += (_, _) =>
+        var appearance = Model.Appearance;
+        if (args.PropertyName == nameof(SettingsAppearanceViewModel.LanguageIndex) &&
+            appearance.LanguageIndex >= 0 && appearance.LanguageIndex < SettingsAppearanceViewModel.languageIds.Length)
         {
-            if (languages.SelectedIndex >= 0)
-            {
-                settings.Language = languageIds[languages.SelectedIndex];
-                Localization.SetLanguage(settings.Language);
-            }
-        };
-        var themes = new[] { "system", "light", "dark" };
-        var theme = Choices(["Settings.FollowSystem", "Settings.Light", "Settings.Dark"], Math.Max(0, Array.IndexOf(themes, settings.Theme)));
-        void ApplyAppearance()
-        {
-            var application = Application.Current!;
-            application.RequestedThemeVariant = settings.Theme switch
-            {
-                "light" => ThemeVariant.Light,
-                "dark" => ThemeVariant.Dark,
-                _ => ThemeVariant.Default
-            };
-            runtime.Colors.Apply(application, settings.ColorScheme);
-            colorSchemeEditor.RefreshDefaults();
-            theme.SelectedIndex = Math.Max(0, Array.IndexOf(themes, settings.Theme));
-            runtime.NotifyAppearanceChanged();
+            settings.Language = SettingsAppearanceViewModel.languageIds[appearance.LanguageIndex];
+            Localization.SetLanguage(settings.Language);
         }
-        colorSchemeEditor.Changed += ApplyAppearance;
-        theme.SelectionChanged += (_, _) =>
+        else if (args.PropertyName == nameof(SettingsAppearanceViewModel.ThemeIndex) &&
+            appearance.ThemeIndex >= 0 && appearance.ThemeIndex < SettingsAppearanceViewModel.themeIds.Length &&
+            settings.Theme != SettingsAppearanceViewModel.themeIds[appearance.ThemeIndex])
         {
-            if (theme.SelectedIndex >= 0 && settings.Theme != themes[theme.SelectedIndex])
-            {
-                settings.Theme = themes[theme.SelectedIndex];
-                settings.ColorScheme.SelectedSchemeId = null;
-                ApplyAppearance();
-            }
+            settings.Theme = SettingsAppearanceViewModel.themeIds[appearance.ThemeIndex];
+            settings.ColorScheme.SelectedSchemeId = null;
+            ApplyAppearance();
+        }
+        else if (args.PropertyName == nameof(SettingsAppearanceViewModel.UseWindowMenuOnMac))
+        {
+            settings.UseWindowMenuOnMac = appearance.UseWindowMenuOnMac;
+            WindowMenuOnMacChanged?.Invoke(settings.UseWindowMenuOnMac);
+            PendingMenuPreferenceSave = SavePreferenceAsync();
+        }
+    }
+
+    private void ApplyAppearance()
+    {
+        var settings = runtime.Configuration.Settings;
+        var application = Application.Current!;
+        application.RequestedThemeVariant = settings.Theme switch
+        {
+            "light" => ThemeVariant.Light,
+            "dark" => ThemeVariant.Dark,
+            _ => ThemeVariant.Default
         };
-        return Stack(Card("Settings.Appearance", Row("Settings.Language", languages), Row("Settings.Theme", theme), windowMenuOnMac),
-            Card("Settings.MessageBorders",
-                Row("Settings.SuperChatBorderThickness", superChatBorderThickness),
-                Row("Settings.GiftBorderThickness", giftBorderThickness),
-                Row("Settings.GuardBorderThickness", guardBorderThickness)),
-            colorSchemeEditor);
+        runtime.Colors.Apply(application, settings.ColorScheme);
+        colorSchemeEditor.RefreshDefaults();
+        Model.Appearance.ThemeIndex = Math.Max(0, Array.IndexOf(SettingsAppearanceViewModel.themeIds, settings.Theme));
+        runtime.NotifyAppearanceChanged();
     }
 
     private async Task SavePreferenceAsync()
@@ -658,346 +439,38 @@ public sealed class SettingsView : UserControl
         }
     }
 
-    private Control BuildTranslation()
+    private async Task ClearCacheAsync()
     {
-        var add = Ui.IconButton("Settings.AddTerm", LucideIconKind.Plus, () =>
+        try
         {
-            AddTerm();
-            return Task.CompletedTask;
-        }, Report);
-        var remove = Ui.IconButton("Settings.RemoveTerm", LucideIconKind.Trash2, () =>
+            await runtime.ClearTranslationCacheAsync();
+            SetStatus(Localization.Get("Settings.CacheCleared"), isError: false);
+        }
+        catch (Exception exception)
         {
-            RemoveTerm(glossaryGrid.SelectedItem as GlossaryRow);
-            return Task.CompletedTask;
-        }, Report);
-        add.Name = "AddGlossaryTerm";
-        remove.Name = "RemoveGlossaryTerm";
-        remove.IsEnabled = false;
-        glossaryGrid.SelectionChanged += (_, _) => remove.IsEnabled = glossaryGrid.SelectedItem is GlossaryRow;
-        glossaryGrid.LoadingRow += (_, args) =>
-        {
-            var row = args.Row;
-            var menu = new LocalizedContextMenu();
-            var delete = new MenuItem { Icon = new LucideIcon { Kind = LucideIconKind.Trash2 } };
-            menu.SetHeader(delete, "Panel.Delete");
-            delete.Click += (_, _) => RemoveTerm(row.DataContext as GlossaryRow);
-            menu.Items.Add(delete);
-            row.ContextMenu = menu;
-        };
-        var tableHeader = new Grid { ColumnDefinitions = new("*,Auto,Auto"), ColumnSpacing = 8 };
-        var title = Label("Settings.Glossary");
-        title.Classes.Add("sectionTitle");
-        tableHeader.Children.Add(title);
-        Grid.SetColumn(add, 1);
-        Grid.SetColumn(remove, 2);
-        tableHeader.Children.Add(add);
-        tableHeader.Children.Add(remove);
-        return Stack(
-            Card("Settings.Translation", enabled,
-                WithHint(Row("Settings.BaseUrl", Stack(provider, baseUrl)), "Settings.BaseUrlHelp"),
-                Row("Settings.ApiKey", apiKey), Row("Settings.Model", model), Row("Settings.TargetLanguage", targetLanguage)),
-            Card("Settings.DisplayMode", Row("Settings.DisplayMode", displayMode),
-                WithHint(Row("Settings.Backlog", backlogMode), "Settings.BacklogHelp")),
-            Card("Settings.ExtraPrompt", extraPrompt),
-            Panel(Stack(tableHeader, glossaryGrid)));
-    }
-
-    private void AddTerm()
-    {
-        CommitGlossaryEdits();
-        var term = new GlossaryRow("", SelectedTargetLanguage, []);
-        glossary.Add(term);
-        glossaryGrid.SelectedItem = term;
-        glossaryGrid.ScrollIntoView(term, glossaryGrid.Columns[0]);
-    }
-
-    private void RemoveTerm(GlossaryRow? term)
-    {
-        if (term is not null)
-        {
-            CommitGlossaryEdits();
-            glossary.Remove(term);
+            SetStatus(Localization.Get("Settings.SaveFailed") + " · " + exception.GetType().Name);
         }
     }
 
-    private void SelectGlossaryLanguage()
+    private void OnAttached(object? sender, VisualTreeAttachmentEventArgs args)
     {
-        CommitGlossaryEdits();
-        foreach (var term in glossary)
-        {
-            term.SelectLanguage(SelectedTargetLanguage);
-        }
-        glossaryLanguage.Text = $"({SelectedTargetLanguage})";
+        Localization.LanguageChanged += OnLanguageChanged;
+        Model.RefreshLocalization();
     }
 
-    private void CommitGlossaryEdits()
+    private void OnDetached(object? sender, VisualTreeAttachmentEventArgs args)
     {
-        glossaryGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-        glossaryGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        Localization.LanguageChanged -= OnLanguageChanged;
     }
 
-    private Control BuildData()
+    private void OnLanguageChanged(object? sender, EventArgs args)
     {
-        var import = ActionButton("Settings.Import", LucideIconKind.Import);
-        import.Name = "ImportSettingsButton";
-        import.Click += (_, _) => PendingSettingsTransfer = ImportSettingsAsync();
-        var export = ActionButton("Settings.Export", LucideIconKind.Upload);
-        export.Name = "ExportSettingsButton";
-        export.Click += (_, _) => PendingSettingsTransfer = ExportSettingsAsync();
-        var clearCurrent = ActionButton("Settings.ClearCurrent", LucideIconKind.Trash2);
-        clearCurrent.Click += (_, _) => ClearRequested?.Invoke(false);
-        var clearAll = ActionButton("Settings.ClearAll", LucideIconKind.Trash2);
-        clearAll.Click += (_, _) => ClearRequested?.Invoke(true);
-        var cache = ActionButton("Settings.ClearCache", LucideIconKind.Database);
-        cache.Click += async (_, _) =>
-        {
-            cache.IsEnabled = false;
-            try
-            {
-                await runtime.ClearTranslationCacheAsync();
-                SetStatus(Localization.Get("Settings.CacheCleared"), isError: false);
-            }
-            catch (Exception exception)
-            {
-                SetStatus(Localization.Get("Settings.SaveFailed") + " · " + exception.GetType().Name);
-            }
-            finally
-            {
-                cache.IsEnabled = true;
-            }
-        };
-        return Stack(Card("Settings.Transfer",
-                WithHint(new WrapPanel
-                {
-                    Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8,
-                    Children = { import, export }
-                }, "Settings.TransferHelp", "Settings.TransferKeyHelp")),
-            Card("Settings.Data",
-                WithHint(clearCurrent, "Settings.HistoryHelp"), WithHint(clearAll, "Settings.HistoryHelp")),
-            Card("Settings.ClearCache", WithHint(cache, "Settings.CacheHelp")));
-    }
-
-    private Control BuildUpdates()
-    {
-        var startup = Check("Settings.CheckForUpdatesOnStartup", runtime.Configuration.Settings.CheckForUpdatesOnStartup);
-        startup.Name = "CheckForUpdatesOnStartupCheckBox";
-        startup.IsCheckedChanged += (_, _) =>
-        {
-            var startupEnabled = startup.IsChecked == true;
-            runtime.Configuration.Settings.CheckForUpdatesOnStartup = startupEnabled;
-            StartupUpdatePreferenceChanged?.Invoke(startupEnabled);
-            PendingUpdatePreferenceSave = SavePreferenceAsync();
-        };
-        var check = ActionButton("Settings.CheckForUpdates", LucideIconKind.RefreshCw);
-        check.Name = "CheckForUpdatesButton";
-        check.Click += (_, _) => CheckForUpdatesRequested?.Invoke();
-        return Stack(Card("Settings.Updates",
-            Row("Updates.CurrentVersion", new TextBlock
-            {
-                Name = "CurrentAppVersion",
-                Text = AppUpdateVersion.Current.ToString(),
-                VerticalAlignment = VerticalAlignment.Center
-            }),
-            WithHint(startup, "Settings.UpdatesHelp"), WithHint(check, "Settings.UpdatesHelp")));
-    }
-
-    private void AddSection(string key, string descriptionKey, Control content)
-    {
-        var title = Label(key);
-        title.FontWeight = FontWeight.SemiBold;
-        var description = Help(descriptionKey);
-        var button = new Button { Content = new StackPanel { Spacing = 2, Children = { title, description } } };
-        button.Name = key.Replace("Settings.", "SettingsSection", StringComparison.Ordinal);
-        button.Classes.Add("settingsSectionButton");
-        button.Bind(AutomationProperties.NameProperty, Localization.Observe(key));
-        var page = new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = content
-        };
-        button.Click += (_, _) => SelectSection(button, page, descriptionKey);
-        sectionButtons.Add(button);
-        surface.FindControl<StackPanel>("SectionNavigation")!.Children.Add(button);
-        if (sectionButtons.Count == 1)
-        {
-            SelectSection(button, page, descriptionKey);
-        }
-    }
-
-    private void SelectSection(Button selected, Control page, string descriptionKey)
-    {
-        foreach (var button in sectionButtons)
-        {
-            button.Classes.Set("selected", button == selected);
-        }
-        surface.FindControl<ContentControl>("SectionContent")!.Content = page;
-        surface.FindControl<TextBlock>("SectionDescription")!.Bind(TextBlock.TextProperty, Localization.Observe(descriptionKey));
+        Model.RefreshLocalization();
     }
 
     private void SetStatus(string text, bool isError = true)
     {
-        status.Text = text;
-        status.Classes.Set("success", !isError);
-        status.IsVisible = !string.IsNullOrEmpty(text);
-    }
-
-    private void Report(Exception exception)
-    {
-        SetStatus(Localization.Get("Settings.SaveFailed") + " · " + exception.GetType().Name);
-    }
-
-    private static Border Card(string key, params Control[] controls)
-    {
-        var title = Label(key);
-        title.Classes.Add("sectionTitle");
-        return Panel(Stack([title, .. controls]));
-    }
-
-    private static Border Panel(Control content)
-    {
-        var panel = new Border { Padding = new Thickness(14), Child = content };
-        panel.Classes.Add("panel");
-        return panel;
-    }
-
-    private static StackPanel Stack(params Control[] controls)
-    {
-        var panel = new StackPanel { Spacing = 14 };
-        foreach (var control in controls)
-        {
-            panel.Children.Add(control);
-        }
-        return panel;
-    }
-
-    private static Grid Row(string key, Control content)
-    {
-        var row = new Grid { ColumnDefinitions = new("180,*"), ColumnSpacing = 14 };
-        var label = Label(key);
-        label.VerticalAlignment = VerticalAlignment.Center;
-        row.Children.Add(label);
-        Grid.SetColumn(content, 1);
-        row.Children.Add(content);
-        content.HorizontalAlignment = HorizontalAlignment.Stretch;
-        return row;
-    }
-
-    private static Border WithHint(Control content, params string[] keys)
-    {
-        var tooltip = new StackPanel { MaxWidth = 480, Spacing = 8 };
-        foreach (var key in keys)
-        {
-            tooltip.Children.Add(Label(key));
-        }
-        var row = new Border { Background = Brushes.Transparent, Child = content };
-        ToolTip.SetTip(row, tooltip);
-        return row;
-    }
-
-    private static TextBlock Label(string key)
-    {
-        var block = new TextBlock { TextWrapping = TextWrapping.Wrap };
-        block.Bind(TextBlock.TextProperty, Localization.Observe(key));
-        return block;
-    }
-
-    private static TextBlock Help(string key)
-    {
-        var block = Label(key);
-        block.Opacity = 0.7;
-        block.FontSize = 12;
-        return block;
-    }
-
-    private static Button ActionButton(string key, LucideIconKind icon)
-    {
-        return new()
-        {
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Content = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 6,
-                Children = { new LucideIcon { Kind = icon }, Label(key) }
-            }
-        };
-    }
-
-    private static CheckBox Check(string key, bool value)
-    {
-        var check = new CheckBox { IsChecked = value };
-        check.Bind(ContentControl.ContentProperty, Localization.Observe(key));
-        return check;
-    }
-
-    private ComboBox CreateProviderSelector(string currentUrl)
-    {
-        var presets = TranslationProviderOption.Presets;
-        var selected = presets.FirstOrDefault(option =>
-            string.Equals(option.BaseUrl, currentUrl.Trim().TrimEnd('/'), StringComparison.OrdinalIgnoreCase)) ?? presets[^1];
-        var selector = new ComboBox
-        {
-            Name = "TranslationProvider",
-            ItemsSource = presets,
-            SelectedItem = selected,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            ItemTemplate = new FuncDataTemplate<TranslationProviderOption>((option, _) =>
-                option?.BaseUrl is null ? Label("Settings.CustomProvider") : new StackPanel
-                {
-                    Spacing = 2,
-                    Children =
-                    {
-                        new TextBlock { Text = option.Name },
-                        new TextBlock { Text = option.BaseUrl, FontSize = 11, Opacity = 0.7 }
-                    }
-                })
-        };
-        baseUrl.IsVisible = selected.BaseUrl is null;
-        selector.SelectionChanged += (_, _) =>
-            baseUrl.IsVisible = selector.SelectedItem is TranslationProviderOption { BaseUrl: null };
-        return selector;
-    }
-
-    private static ComboBox CreateTargetLanguageSelector(string currentLanguage)
-    {
-        var options = TranslationLanguageOption.Presets.ToList();
-        var selected = options.FirstOrDefault(option => option.Code == currentLanguage);
-        if (selected is null)
-        {
-            selected = new(currentLanguage);
-            options.Add(selected);
-        }
-        return new()
-        {
-            Name = "TranslationTargetLanguage",
-            ItemsSource = options,
-            SelectedItem = selected,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            ItemTemplate = new FuncDataTemplate<TranslationLanguageOption>((option, _) =>
-            {
-                if (option is null)
-                {
-                    return new TextBlock();
-                }
-                var name = option.NameKey is { } key ? Label(key) : new TextBlock { Text = option.NativeName };
-                return new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 6,
-                    Children = { name, new TextBlock { Text = $"({option.Code})" } }
-                };
-            })
-        };
-    }
-
-    private static ComboBox Choices(string[] keys, int selectedIndex)
-    {
-        return new()
-        {
-            ItemsSource = keys,
-            ItemTemplate = new FuncDataTemplate<string>((key, _) => key is null ? new TextBlock() : Label(key)),
-            SelectedIndex = Math.Clamp(selectedIndex, 0, keys.Length - 1),
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
+        Model.Status = text;
+        Model.IsStatusSuccess = !isError;
     }
 }

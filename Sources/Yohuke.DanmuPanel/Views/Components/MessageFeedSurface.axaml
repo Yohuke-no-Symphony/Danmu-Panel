@@ -5,6 +5,10 @@
              x:Class="Yohuke.DanmuPanel.Views.Components.MessageFeedSurface"
              x:DataType="vm:FeedViewModel">
     <UserControl.Styles>
+        <Style Selector="ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
         <Style Selector="Button.skeletonFeedRow">
             <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeBody}" />
         </Style>

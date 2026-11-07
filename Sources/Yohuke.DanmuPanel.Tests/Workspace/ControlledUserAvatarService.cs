@@ -11,6 +11,7 @@ internal sealed class ControlledUserAvatarService : IUserAvatarService
     internal int Subscribers { get; private set; }
     internal List<(long UserUid, string Path)> Invalidations { get; } = [];
     internal Action<long, string>? OnInvalidate { get; set; }
+    internal Func<long, string, CancellationToken, Task> OnInvalidateAsync { get; set; } = (_, _, _) => Task.CompletedTask;
 
     public event Action<long>? AvatarChanged
     {
@@ -36,7 +37,7 @@ internal sealed class ControlledUserAvatarService : IUserAvatarService
     {
         Invalidations.Add((userUid, invalidPath));
         OnInvalidate?.Invoke(userUid, invalidPath);
-        return Task.CompletedTask;
+        return OnInvalidateAsync(userUid, invalidPath, cancellationToken);
     }
 
     internal void NotifyChanged(long userUid)

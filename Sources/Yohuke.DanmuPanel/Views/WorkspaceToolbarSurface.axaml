@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Workspace"
+             x:Class="Yohuke.DanmuPanel.Views.WorkspaceToolbarSurface" x:DataType="vm:WorkspacePanelViewModel">
+    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+        <Border Classes="listenStatusLight" Classes.listening="{Binding IsListening}" Classes.idle="{Binding !IsListening}" ToolTip.Tip="{Binding ConnectionStatus}" />
+        <TextBlock Text="{Binding RoomTitle}" FontWeight="SemiBold" MaxWidth="240" TextTrimming="CharacterEllipsis" />
+        <TextBlock Text="{Binding RoomNumber}" Classes="muted" />
+        <Button Classes="listenToggleButton" Classes.listening="{Binding IsListening}" Classes.idle="{Binding !IsListening}"
+                Height="32" MinHeight="32" Padding="10,4" IsEnabled="{Binding HasRoom}" Command="{Binding ToggleListeningCommand}"
+                ToolTip.Tip="{Binding ConnectionStatus}">
+            <StackPanel Orientation="Horizontal" Spacing="6"><LucideIcon Kind="{Binding ListenIcon}" Size="16" /><TextBlock Text="{Binding ListenText}" /></StackPanel>
+        </Button>
+    </StackPanel>
+</UserControl>

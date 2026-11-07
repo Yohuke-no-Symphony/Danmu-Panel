@@ -1,16 +1,16 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="Yohuke.DanmuPanel.Views.WorkspaceCreateSurface" x:CompileBindings="False">
-    <Border Background="{DynamicResource AppCardBrush}" Padding="22">
+             x:Class="Yohuke.DanmuPanel.Views.WorkspaceCreateSurface" xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Workspace" xmlns:state="using:Yohuke.DanmuPanel.Models.State" x:DataType="vm:WorkspaceEditorViewModel">
+    <Border IsEnabled="{Binding !IsSaving}" Background="{DynamicResource AppCardBrush}" Padding="22">
         <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="14">
             <StackPanel Spacing="6">
-                <TextBlock x:Name="Heading" FontSize="26" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                <TextBlock x:Name="Subtitle" Classes="muted" HorizontalAlignment="Center" TextWrapping="Wrap" />
+                <TextBlock x:Name="Heading" Text="{Binding Heading}" FontSize="26" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                <TextBlock x:Name="Subtitle" Text="{Binding Subtitle}" Classes="muted" HorizontalAlignment="Center" TextWrapping="Wrap" />
             </StackPanel>
-            <TextBox Grid.Row="1" x:Name="WorkspaceNameInput" Watermark="{Loc Key=Panel.Name}" />
-            <TextBlock Grid.Row="2" x:Name="ErrorText" TextWrapping="Wrap" Foreground="{DynamicResource AppErrorBrush}" />
+            <TextBox Grid.Row="1" x:Name="WorkspaceNameInput" Text="{Binding Name, Mode=TwoWay}" Watermark="{Loc Key=Panel.Name}" />
+            <TextBlock Grid.Row="2" x:Name="ErrorText" Text="{Binding Error}" TextWrapping="Wrap" Foreground="{DynamicResource AppErrorBrush}" />
             <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                <Button x:Name="CancelButton" Grid.Column="1" Content="{Loc Key=Panel.Cancel}" />
-                <Button x:Name="SaveButton" Grid.Column="2" Classes="primaryButton" Content="{Loc Key=Workspace.Add}" />
+                <Button x:Name="CancelButton" IsVisible="{Binding IsCreating}" Command="{Binding CancelCommand}" Grid.Column="1" Content="{Loc Key=Panel.Cancel}" />
+                <Button x:Name="SaveButton" Command="{Binding SaveCommand}" Grid.Column="2" Classes="primaryButton" Content="{Loc Key=Workspace.Add}" />
             </Grid>
         </Grid>
     </Border>

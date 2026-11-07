@@ -1,0 +1,23 @@
+<Button xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Yohuke.DanmuPanel.Views.Components.MessageFeedSkeleton"
+        IsHitTestVisible="False" Focusable="False" VerticalAlignment="Top"
+        HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Background="Transparent"
+        BorderBrush="Transparent" ClipToBounds="True" Classes="skeletonFeedRow">
+    <Button.Styles>
+        <Style Selector="Button.skeletonFeedRow:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+    </Button.Styles>
+    <Button.Template>
+        <ControlTemplate>
+            <ContentPresenter x:Name="PART_ContentPresenter" Background="Transparent"
+                              BorderBrush="Transparent" BorderThickness="0"
+                              Content="{TemplateBinding Content}" Padding="{TemplateBinding Padding}"
+                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </ControlTemplate>
+    </Button.Template>
+    <StackPanel x:Name="SkeletonRows" />
+</Button>

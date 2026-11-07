@@ -10,7 +10,7 @@ internal sealed class MessageTranslationTextBlock : TextBlock
     /// <inheritdoc />
     protected override Type StyleKeyOverride => typeof(TextBlock);
 
-    internal MessageTranslationTextBlock()
+    public MessageTranslationTextBlock()
     {
         UpdateLineHeight();
     }

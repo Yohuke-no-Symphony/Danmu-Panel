@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:settings="using:Yohuke.DanmuPanel.Views.Settings"
+             x:Class="Yohuke.DanmuPanel.Views.Settings.SettingsCard"
+             x:Name="Root"
+             x:DataType="settings:SettingsCard"
+             x:CompileBindings="True">
+    <UserControl.Content>
+        <Border Classes="panel" Padding="14">
+            <StackPanel Spacing="14">
+                <TextBlock Text="{Binding Title, ElementName=Root}" Classes="sectionTitle" TextWrapping="Wrap" IsVisible="{Binding HasTitle, ElementName=Root}"/>
+                <ContentPresenter Content="{Binding Body, ElementName=Root}" HorizontalContentAlignment="Stretch"/>
+            </StackPanel>
+        </Border>
+    </UserControl.Content>
+</UserControl>

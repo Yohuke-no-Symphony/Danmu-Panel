@@ -1,0 +1,23 @@
+<DockPanel xmlns="https://github.com/avaloniaui"
+           xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+           xmlns:vm="using:Yohuke.DanmuPanel.ViewModels"
+           xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
+           x:Class="Yohuke.DanmuPanel.Views.Components.MessageIdentitySurface"
+           x:DataType="vm:MessageItemViewModel" LastChildFill="True"
+           VerticalAlignment="Center" Classes="danmuFeedIdentity">
+    <TextBlock DockPanel.Dock="Right" Classes="danmuFeedMeta" Text="{Binding Time}" TextTrimming="CharacterEllipsis" />
+    <Grid ColumnDefinitions="Auto,*" HorizontalAlignment="Stretch">
+        <components:UserAvatarView x:Name="UserAvatar" UserUid="{Binding UserUid}" ShowAvatar="{Binding ShowUserAvatars}" />
+        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+            <components:PinyinLoadingPlaceholder Classes="namePinyinPending" Length="4" HorizontalAlignment="Left"
+                IsVisible="{Binding IsNamePinyinPending}" FontSize="{DynamicResource MessageFontSizePinyin}"
+                Foreground="{DynamicResource MessagePinyinBrush}" FontFamily="{Binding #UserName.FontFamily}"
+                FontStyle="{Binding #UserName.FontStyle}" FontStretch="{Binding #UserName.FontStretch}"
+                TextBlock.LineHeight="{Binding #UserName.LineHeight}" LineSpacing="{Binding #UserName.LineSpacing}" />
+            <components:EmoticonTextBlock x:Name="UserName" Classes="danmuFeedUser" ContentText="{Binding Name}"
+                Annotations="{Binding NameAnnotations}" PinyinLayout="{Binding PinyinLayout}" TextAlignment="Left"
+                PinyinForeground="{DynamicResource MessagePinyinBrush}" PinyinFontSize="{DynamicResource MessageFontSizePinyin}"
+                ToolTip.Tip="{Binding Name}" />
+        </StackPanel>
+    </Grid>
+</DockPanel>

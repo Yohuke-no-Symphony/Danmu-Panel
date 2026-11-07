@@ -23,6 +23,8 @@ public sealed partial class SpecialAttentionEditorViewModel : ObservableObject, 
     private string? searchMessageKey;
     private string? editMessageKey;
     private bool disposed;
+    private IUserAvatarService? avatarService;
+    private Action<UserSearchResult>? registerAvatar;
     [ObservableProperty] private string searchText = "";
     [ObservableProperty] private string searchStatus = "";
     [ObservableProperty] private string editStatus = "";
@@ -37,6 +39,8 @@ public sealed partial class SpecialAttentionEditorViewModel : ObservableObject, 
 
     public ObservableCollection<SpecialAttentionUser> Users { get; }
     public ObservableCollection<UserSearchResult> SearchResults { get; } = [];
+    public ObservableCollection<SpecialAttentionUserRowViewModel> UserRows { get; } = [];
+    public ObservableCollection<SpecialAttentionUserRowViewModel> SearchResultRows { get; } = [];
     public IAsyncRelayCommand SearchCommand { get; }
     public IAsyncRelayCommand LoadMoreCommand { get; }
     public IRelayCommand<UserSearchResult> AddSearchedUserCommand { get; }
@@ -59,6 +63,8 @@ public sealed partial class SpecialAttentionEditorViewModel : ObservableObject, 
         RemoveUserCommand = new RelayCommand<SpecialAttentionUser>(RemoveUser,
             user => !disposed && user is not null && Users.Any(existing => existing.UserUid == user.UserUid));
         Users.CollectionChanged += OnUsersChanged;
+        SearchResults.CollectionChanged += OnSearchResultsChanged;
+        SynchronizeUserRows();
     }
 
     /// <summary>复制草稿；提供当前配置时合并外部新增及删除，保留当前名称资料。</summary>
@@ -108,6 +114,7 @@ public sealed partial class SpecialAttentionEditorViewModel : ObservableObject, 
         disposed = true;
         CancelSearch();
         Users.CollectionChanged -= OnUsersChanged;
+        SearchResults.CollectionChanged -= OnSearchResultsChanged;
     }
 
     internal async Task SearchAsync(bool next)
@@ -250,8 +257,68 @@ public sealed partial class SpecialAttentionEditorViewModel : ObservableObject, 
 
     private void OnUsersChanged(object? sender, NotifyCollectionChangedEventArgs args)
     {
+        SynchronizeUserRows();
         AddSearchedUserCommand.NotifyCanExecuteChanged();
         RemoveUserCommand.NotifyCanExecuteChanged();
+    }
+
+    internal void ConfigureAvatars(IUserAvatarService service, Action<UserSearchResult> register)
+    {
+        avatarService = service;
+        registerAvatar = register;
+        UserRows.Clear();
+        SearchResultRows.Clear();
+        SynchronizeUserRows();
+        SynchronizeSearchRows();
+    }
+
+    private void OnSearchResultsChanged(object? sender, NotifyCollectionChangedEventArgs args)
+    {
+        SynchronizeSearchRows();
+    }
+
+    private void SynchronizeUserRows()
+    {
+        var existing = UserRows.ToDictionary(row => row.Item);
+        SynchronizeRows(UserRows, Users.Select(user => existing.GetValueOrDefault(user) ??
+            new SpecialAttentionUserRowViewModel(user.UserUid, user.DisplayName, user, RemoveUserCommand, false, avatarService)).ToArray());
+    }
+
+    private void SynchronizeSearchRows()
+    {
+        var existing = SearchResultRows.ToDictionary(row => row.Item);
+        var rows = SearchResults.Select(result =>
+        {
+            registerAvatar?.Invoke(result);
+            return existing.GetValueOrDefault(result) ?? new SpecialAttentionUserRowViewModel(result.UserUid,
+                result.DisplayName, result, AddSearchedUserCommand, true, avatarService);
+        }).ToArray();
+        SynchronizeRows(SearchResultRows, rows);
+    }
+
+    private static void SynchronizeRows(ObservableCollection<SpecialAttentionUserRowViewModel> target,
+        IReadOnlyList<SpecialAttentionUserRowViewModel> rows)
+    {
+        var current = rows.ToHashSet();
+        for (var index = target.Count - 1; index >= 0; index--)
+        {
+            if (!current.Contains(target[index]))
+            {
+                target.RemoveAt(index);
+            }
+        }
+        for (var index = 0; index < rows.Count; index++)
+        {
+            var previous = target.IndexOf(rows[index]);
+            if (previous < 0)
+            {
+                target.Insert(index, rows[index]);
+            }
+            else if (previous != index)
+            {
+                target.Move(previous, index);
+            }
+        }
     }
 
     private void RefreshCommands()

@@ -275,14 +275,14 @@ public sealed class SpecialAttentionSearchDialogTests
     private static void ShowSpecialAttention(Window window, SettingsView view)
     {
         window.Show();
-        Find<Button>(view, "SettingsSectionSpecialAttention").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Find<Button>(view, "SettingsSectionSpecialAttention").Command!.Execute("SpecialAttention");
         Pump(window);
     }
 
     private static SpecialAttentionSearchWindow OpenSearchDialog(Window owner, SettingsView view)
     {
         Find<Button>(view.SpecialAttentionEditor, "OpenSpecialAttentionSearchButton")
-            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            .Command!.Execute(null);
         Pump(owner);
         var dialog = Assert.IsType<SpecialAttentionSearchWindow>(Assert.Single(owner.OwnedWindows));
         Pump(dialog);

@@ -1,32 +1,19 @@
-using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Controls.Templates;
-using Avalonia.Data;
+using Avalonia.Markup.Xaml;
 using Avalonia.Input;
-using Avalonia.Layout;
-using Avalonia.Media;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
-internal sealed class MessageColumnSplitter : Thumb
+internal sealed partial class MessageColumnSplitter : Thumb
 {
     internal event EventHandler<PointerPressedEventArgs>? ResizePressed;
 
     /// <inheritdoc />
     protected override Type StyleKeyOverride => typeof(Thumb);
 
-    internal MessageColumnSplitter()
+    public MessageColumnSplitter()
     {
-        Classes.Add("messageColumnSplitter");
-        Cursor = new(StandardCursorType.SizeWestEast);
-        Focusable = true;
-        MinWidth = 6;
-        Template = new FuncControlTemplate<MessageColumnSplitter>((_, _) =>
-        {
-            var line = new Border { Width = 1, HorizontalAlignment = HorizontalAlignment.Center };
-            line.Bind(Border.BackgroundProperty, new TemplateBinding(BackgroundProperty), BindingPriority.Template);
-            return new Border { Background = Brushes.Transparent, Child = line };
-        });
+        AvaloniaXamlLoader.Load(this);
     }
 
     /// <inheritdoc />

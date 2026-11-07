@@ -1,9 +1,16 @@
 using System.Globalization;
+using System.ComponentModel;
+using Yohuke.DanmuPanel.I18n;
 
 namespace Yohuke.DanmuPanel.Views.Settings;
 
-internal sealed record TranslationLanguageOption(string Code, string? NameKey = null)
+/// <summary>翻译目标语言的代码与跟随界面语言刷新的显示名称。</summary>
+public sealed record TranslationLanguageOption(string Code, string? NameKey = null) : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+    public string DisplayName => NameKey is { } key ? Localization.Get(key) : NativeName ?? Code;
+    public string DisplayCode => $"({Code})";
+
     internal string? NativeName
     {
         get
@@ -38,4 +45,9 @@ internal sealed record TranslationLanguageOption(string Code, string? NameKey = 
         new("vi-VN", "Settings.TargetLanguage.Vietnamese"),
         new("id-ID", "Settings.TargetLanguage.Indonesian")
     ];
+
+    internal void RefreshLocalization()
+    {
+        PropertyChanged?.Invoke(this, new(nameof(DisplayName)));
+    }
 }

@@ -92,7 +92,7 @@ public sealed class AppUpdateSettingsTests
     private static void Click(Control view, string name)
     {
         view.GetVisualDescendants().OfType<Button>().Single(button => button.Name == name)
-            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            .ExecuteBoundCommand();
         Dispatcher.UIThread.RunJobs();
     }
 }

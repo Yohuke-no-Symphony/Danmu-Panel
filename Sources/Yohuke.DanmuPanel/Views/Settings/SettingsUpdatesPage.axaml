@@ -1,0 +1,31 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:settings="using:Yohuke.DanmuPanel.Views.Settings"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Settings"
+             x:Class="Yohuke.DanmuPanel.Views.Settings.SettingsUpdatesPage"
+             x:Name="Root"
+             x:DataType="vm:SettingsDialogViewModel"
+             x:CompileBindings="True">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <settings:SettingsCard Title="{Loc Key=Settings.Updates}">
+            <StackPanel Spacing="14">
+                <settings:SettingsRow Label="{Loc Key=Updates.CurrentVersion}">
+                    <TextBlock x:Name="CurrentAppVersion" Text="{Binding CurrentVersion}" VerticalAlignment="Center"/>
+                </settings:SettingsRow>
+                <CheckBox x:Name="CheckForUpdatesOnStartupCheckBox"
+                          Content="{Loc Key=Settings.CheckForUpdatesOnStartup}"
+                          IsChecked="{Binding CheckForUpdatesOnStartup, Mode=TwoWay}"
+                          ToolTip.Tip="{Loc Key=Settings.UpdatesHelp}" />
+                <Button x:Name="CheckForUpdatesButton"
+                        Command="{Binding CheckForUpdatesCommand}"
+                        ToolTip.Tip="{Loc Key=Settings.UpdatesHelp}"
+                        HorizontalAlignment="Left">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <LucideIcon Kind="RefreshCw"/>
+                        <TextBlock Text="{Loc Key=Settings.CheckForUpdates}"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </settings:SettingsCard>
+    </ScrollViewer>
+</UserControl>

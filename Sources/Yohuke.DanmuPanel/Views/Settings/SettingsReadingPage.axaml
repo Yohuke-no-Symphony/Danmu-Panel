@@ -1,0 +1,163 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:settings="using:Yohuke.DanmuPanel.Views.Settings"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Settings"
+             x:Class="Yohuke.DanmuPanel.Views.Settings.SettingsReadingPage"
+             x:Name="Root"
+             x:DataType="vm:SettingsReadingViewModel"
+             x:CompileBindings="True">
+    <UserControl.Resources>
+        <DataTemplate x:Key="SettingsChoiceTemplate" x:DataType="vm:SettingsChoiceOption">
+            <TextBlock Text="{Binding Text}" />
+        </DataTemplate>
+    </UserControl.Resources>
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="14">
+            <settings:SettingsCard Title="{Loc Key=Settings.MessageDisplay}">
+                <StackPanel Spacing="14">
+                    <settings:SettingsRow Label="{Loc Key=Settings.MessageRetentionCount}" ToolTip.Tip="{Loc Key=Settings.MessageRetentionCountHelp}">
+                        <NumericUpDown x:Name="MessageRetentionCountInput"
+                                       Value="{Binding MessageRetentionCount, Mode=TwoWay}"
+                                       Minimum="1"
+                                       Maximum="{Binding MaximumMessageRetentionCount}"
+                                       Increment="1"
+                                       FormatString="0" />
+                    </settings:SettingsRow>
+                    <settings:SettingsRow Label="{Loc Key=Settings.MessageTextScale}" ToolTip.Tip="{Loc Key=Settings.MessageTextScaleHelp}">
+                        <NumericUpDown x:Name="MessageTextScaleInput"
+                                       Value="{Binding MessageTextScale, Mode=TwoWay}"
+                                       Minimum="50"
+                                       Maximum="200"
+                                       Increment="10"
+                                       FormatString="0" />
+                    </settings:SettingsRow>
+                    <CheckBox x:Name="ShowUserAvatarsCheckBox"
+                              Content="{Loc Key=Settings.ShowUserAvatars}"
+                              IsChecked="{Binding ShowUserAvatars, Mode=TwoWay}"
+                              ToolTip.Tip="{Loc Key=Settings.ShowUserAvatarsHelp}" />
+                    <CheckBox x:Name="ShowFanMedalsCheckBox"
+                              Content="{Loc Key=Settings.ShowFanMedals}"
+                              IsChecked="{Binding ShowFanMedals, Mode=TwoWay}"
+                              ToolTip.Tip="{Loc Key=Settings.ShowFanMedalsHelp}" />
+                    <CheckBox x:Name="HideEmoticonDanmuCheckBox"
+                              Content="{Loc Key=Settings.HideEmoticonDanmu}"
+                              IsChecked="{Binding HideEmoticonDanmu, Mode=TwoWay}"
+                              ToolTip.Tip="{Loc Key=Settings.HideEmoticonDanmuHelp}" />
+                    <CheckBox x:Name="CompactDanmuDisplayCheckBox"
+                              Content="{Loc Key=Settings.CompactDisplay}"
+                              IsChecked="{Binding CompactDisplay, Mode=TwoWay}" />
+                    <StackPanel Margin="24,0,0,0" Spacing="8">
+                        <CheckBox x:Name="CompactDanmuWrapCheckBox"
+                                  Content="{Loc Key=Settings.CompactMessageWrap}"
+                                  IsChecked="{Binding CompactDanmuWrap, Mode=TwoWay}"
+                                  IsEnabled="{Binding CompactDisplay}" />
+                        <CheckBox x:Name="CompactSuperChatWrapCheckBox"
+                                  Content="{Loc Key=Settings.CompactSuperChatWrap}"
+                                  IsChecked="{Binding CompactSuperChatWrap, Mode=TwoWay}"
+                                  IsEnabled="{Binding CompactDisplay}" />
+                        <CheckBox x:Name="AutoScrollLongMessagesCheckBox"
+                                  Content="{Loc Key=Settings.AutoScrollLongMessages}"
+                                  IsChecked="{Binding AutoScrollLongMessages, Mode=TwoWay}"
+                                  ToolTip.Tip="{Loc Key=Settings.AutoScrollLongMessagesHelp}"
+                                  IsEnabled="{Binding CompactDisplay}" />
+                    </StackPanel>
+                </StackPanel>
+            </settings:SettingsCard>
+            <settings:SettingsCard Title="{Loc Key=Settings.Reading}">
+                <StackPanel Spacing="14">
+                    <settings:SettingsRow Label="{Loc Key=Settings.GiftMinimum}">
+                        <NumericUpDown x:Name="GiftAutoPinMinimumInput"
+                                       Value="{Binding GiftMinimum, Mode=TwoWay}"
+                                       Minimum="0"
+                                       Maximum="1000000000"
+                                       Increment="1"
+                                       FormatString="0.##" />
+                    </settings:SettingsRow>
+                    <settings:SettingsRow Label="{Loc Key=Settings.ComboPolicy}">
+                        <ComboBox SelectedIndex="{Binding GiftResetPolicy, Mode=TwoWay}" HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding GiftResetPolicyOptions}" ItemTemplate="{StaticResource SettingsChoiceTemplate}" />
+                    </settings:SettingsRow>
+                </StackPanel>
+            </settings:SettingsCard>
+            <settings:SettingsCard Title="{Loc Key=Settings.MessageSorting}">
+                <StackPanel Spacing="14">
+                    <Grid ColumnDefinitions="Auto,*,*"
+                          RowDefinitions="Auto,Auto,Auto,Auto"
+                          ColumnSpacing="16"
+                          RowSpacing="8"
+                          ToolTip.Tip="{Loc Key=Settings.MessageSortingHelp}">
+                        <TextBlock Grid.Column="1" Text="{Loc Key=Settings.UnreadSortOrder}" TextWrapping="Wrap"/>
+                        <TextBlock Grid.Column="2" Text="{Loc Key=Settings.ReadSortOrder}" TextWrapping="Wrap"/>
+                        <TextBlock Grid.Row="1" Text="{Loc Key=Workbench.Panel.SuperChat}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <ComboBox Grid.Row="1"
+                                  Grid.Column="1"
+                                  x:Name="SuperChatUnreadSortOrderComboBox"
+                                  SelectedIndex="{Binding SuperChatUnreadSort, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding SortOrderOptions}" ItemTemplate="{StaticResource SettingsChoiceTemplate}" />
+                        <ComboBox Grid.Row="1"
+                                  Grid.Column="2"
+                                  x:Name="SuperChatReadSortOrderComboBox"
+                                  SelectedIndex="{Binding SuperChatReadSort, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding SortOrderOptions}" ItemTemplate="{StaticResource SettingsChoiceTemplate}" />
+                        <TextBlock Grid.Row="2" Text="{Loc Key=Workbench.Panel.Gift}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <ComboBox Grid.Row="2"
+                                  Grid.Column="1"
+                                  x:Name="GiftUnreadSortOrderComboBox"
+                                  SelectedIndex="{Binding GiftUnreadSort, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding SortOrderOptions}" ItemTemplate="{StaticResource SettingsChoiceTemplate}" />
+                        <ComboBox Grid.Row="2"
+                                  Grid.Column="2"
+                                  x:Name="GiftReadSortOrderComboBox"
+                                  SelectedIndex="{Binding GiftReadSort, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding SortOrderOptions}" ItemTemplate="{StaticResource SettingsChoiceTemplate}" />
+                        <TextBlock Grid.Row="3" Text="{Loc Key=Workbench.Panel.Guard}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <ComboBox Grid.Row="3"
+                                  Grid.Column="1"
+                                  x:Name="GuardUnreadSortOrderComboBox"
+                                  SelectedIndex="{Binding GuardUnreadSort, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding SortOrderOptions}" ItemTemplate="{StaticResource SettingsChoiceTemplate}" />
+                        <ComboBox Grid.Row="3"
+                                  Grid.Column="2"
+                                  x:Name="GuardReadSortOrderComboBox"
+                                  SelectedIndex="{Binding GuardReadSort, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding SortOrderOptions}" ItemTemplate="{StaticResource SettingsChoiceTemplate}" />
+                    </Grid>
+                </StackPanel>
+            </settings:SettingsCard>
+            <settings:SettingsCard Title="{Loc Key=Settings.Pinyin}">
+                <StackPanel Spacing="14">
+                    <CheckBox Content="{Loc Key=Settings.UserPinyin}"
+                              IsChecked="{Binding UserPinyin, Mode=TwoWay}"
+                              ToolTip.Tip="{Loc Key=Settings.PinyinHelp}" />
+                    <CheckBox Content="{Loc Key=Settings.GiftPinyin}"
+                              IsChecked="{Binding GiftPinyin, Mode=TwoWay}"
+                              ToolTip.Tip="{Loc Key=Settings.PinyinHelp}" />
+                    <CheckBox x:Name="ShowDanmuPinyinCheckBox"
+                              Content="{Loc Key=Settings.DanmuPinyin}"
+                              IsChecked="{Binding DanmuPinyin, Mode=TwoWay}"
+                              ToolTip.Tip="{Loc Key=Settings.PinyinHelp}" />
+                    <CheckBox x:Name="ShowSuperChatPinyinCheckBox"
+                              Content="{Loc Key=Settings.SuperChatPinyin}"
+                              IsChecked="{Binding SuperChatPinyin, Mode=TwoWay}"
+                              ToolTip.Tip="{Loc Key=Settings.PinyinHelp}" />
+                    <settings:SettingsRow Label="{Loc Key=Settings.PinyinLayout}">
+                        <ToolTip.Tip>
+                            <StackPanel Spacing="8" MaxWidth="480">
+                                <TextBlock Text="{Loc Key=Settings.PinyinHelp}" TextWrapping="Wrap" />
+                                <TextBlock Text="{Loc Key=Settings.PinyinScrollHelp}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </ToolTip.Tip>
+                        <ComboBox x:Name="PinyinLayoutComboBox" SelectedIndex="{Binding PinyinLayout, Mode=TwoWay}" HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding PinyinLayoutOptions}" ItemTemplate="{StaticResource SettingsChoiceTemplate}" />
+                    </settings:SettingsRow>
+                </StackPanel>
+            </settings:SettingsCard>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

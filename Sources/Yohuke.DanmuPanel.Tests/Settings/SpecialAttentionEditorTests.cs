@@ -58,7 +58,7 @@ public sealed class SpecialAttentionEditorTests
             Pump(window);
             Assert.DoesNotContain(editor.GetVisualDescendants().OfType<TextBox>(), value => value.Name == "SpecialAttentionSearchInput");
             editor.GetVisualDescendants().OfType<Button>().Single(value => value.Name == "OpenSpecialAttentionSearchButton")
-                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                .Command!.Execute(null);
             var dialog = Assert.IsType<SpecialAttentionSearchWindow>(Assert.Single(window.OwnedWindows));
             Pump(dialog);
             var input = dialog.GetVisualDescendants().OfType<TextBox>().Single(value => value.Name == "SpecialAttentionSearchInput");
@@ -128,7 +128,7 @@ public sealed class SpecialAttentionEditorTests
             Assert.Equal("#12AB34", restored.ColorScheme.Overrides["SpecialAttentionContentBrush"]);
             Assert.Equal("#80654321", restored.ColorScheme.Overrides["SpecialAttentionUserNameBrush"]);
             userNameColor.GetVisualDescendants().OfType<Button>().Single(value => value.Name == "ResetColorButton")
-                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                .Command!.Execute(null);
             Pump(window);
             Assert.False(configuration.Settings.ColorScheme.Overrides.ContainsKey("SpecialAttentionUserNameBrush"));
             Assert.Equal("#12AB34", configuration.Settings.ColorScheme.Overrides["SpecialAttentionContentBrush"]);
@@ -211,7 +211,7 @@ public sealed class SpecialAttentionEditorTests
     private static void Select(SettingsView view, string section)
     {
         view.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "SettingsSection" + section)
-            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            .Command!.Execute(section);
     }
 
     private static void Capture(Window window, string name)

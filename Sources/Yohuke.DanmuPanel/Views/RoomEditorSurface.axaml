@@ -3,9 +3,9 @@
              xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
              xmlns:workspace="using:Yohuke.DanmuPanel.Models.Workspace"
              x:Class="Yohuke.DanmuPanel.Views.RoomEditorSurface"
-             x:CompileBindings="False"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Workspace" xmlns:state="using:Yohuke.DanmuPanel.Models.State" x:DataType="vm:RoomEditorViewModel"
              x:Name="Root">
-    <components:SearchAndManualDialogSurface x:Name="LookupDialog">
+    <components:SearchAndManualDialogSurface x:Name="LookupDialog" IsSearchEnabled="{Binding !IsExisting}">
         <components:SearchAndManualDialogSurface.HeaderContent>
             <StackPanel Spacing="6">
                 <TextBlock Text="{Binding AddDialogTitle}" FontSize="20" FontWeight="SemiBold" />
@@ -18,7 +18,7 @@
                 <ComboBox x:Name="RoomAccountSelector" ItemsSource="{Binding AccountChoices}"
                           SelectedItem="{Binding SelectedAccount}" HorizontalAlignment="Stretch">
                     <ComboBox.ItemTemplate>
-                        <DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate>
+                        <DataTemplate DataType="state:AccountChoice"><TextBlock Text="{Binding Name}" /></DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
             </StackPanel>
@@ -48,7 +48,7 @@
                                                        VerticalAlignment="Center" MaxLines="1" />
                                             <Button x:Name="AddSearchedRoomButton" Grid.Column="4" Classes="primaryButton"
                                                     Content="{Loc Key=Workspace.Add}" VerticalAlignment="Center"
-                                                    Command="{Binding #Root.DataContext.AddSearchedRoomCommand}" CommandParameter="{Binding}" />
+                                                    Command="{Binding #Root.((vm:RoomEditorViewModel)DataContext).AddSearchedRoomCommand}" CommandParameter="{Binding}" />
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

@@ -1,0 +1,21 @@
+<Grid xmlns="https://github.com/avaloniaui"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:layouts="using:Yohuke.DanmuPanel.Layouts"
+      xmlns:core="using:Dock.Model.Core"
+      x:Class="Yohuke.DanmuPanel.Layouts.WorkbenchHeaderTitleSurface"
+      x:Name="Root" x:DataType="core:IDock"
+      ColumnDefinitions="*,Auto,Auto" HorizontalAlignment="Left">
+    <ContentPresenter Content="{Binding TitleContent, ElementName=Root}" />
+    <ContentControl x:Name="PART_HeaderBadge" Grid.Column="1" VerticalContentAlignment="Center"
+                    Content="{Binding ActiveDockable}">
+        <ContentControl.ContentTemplate>
+            <layouts:WorkbenchHeaderBadgeTemplate />
+        </ContentControl.ContentTemplate>
+    </ContentControl>
+    <ContentControl x:Name="PART_HeaderTabs" Grid.Column="2" VerticalContentAlignment="Center"
+                    Content="{Binding ActiveDockable}">
+        <ContentControl.ContentTemplate>
+            <layouts:WorkbenchHeaderTabsTemplate />
+        </ContentControl.ContentTemplate>
+    </ContentControl>
+</Grid>

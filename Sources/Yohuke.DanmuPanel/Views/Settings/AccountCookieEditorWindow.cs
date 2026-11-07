@@ -1,5 +1,5 @@
 using Avalonia.Controls;
-using CommunityToolkit.Mvvm.Input;
+using Yohuke.DanmuPanel.ViewModels.Settings;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Windowing;
 
@@ -17,13 +17,10 @@ public sealed class AccountCookieEditorWindow : Window
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Bind(TitleProperty, Localization.Observe(adding ? "Panel.AddAccountManually" : "Panel.EditAccountCookie"));
-        var surface = new AccountCookieEditorSurface();
-        surface.FindControl<TextBlock>("AccountCaption")!.Text = accountName;
-        var input = surface.FindControl<TextBox>("AccountCookieInput")!;
-        input.Text = cookie;
-        surface.FindControl<Button>("CancelCookieEdit")!.Command = new RelayCommand(() => Close(null));
-        surface.FindControl<Button>("SaveCookieEdit")!.Command = new RelayCommand(() => Close(input.Text ?? ""));
-        Content = surface;
+        Content = new AccountCookieEditorSurface
+        {
+            DataContext = new AccountCookieEditorViewModel(accountName, cookie, value => Close(value))
+        };
         WindowChrome.AttachFrame(this);
     }
 }

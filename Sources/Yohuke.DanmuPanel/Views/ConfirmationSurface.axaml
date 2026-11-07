@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Yohuke.DanmuPanel.Views.ConfirmationSurface"
-             x:CompileBindings="False"
+             xmlns:views="using:Yohuke.DanmuPanel.Views" x:DataType="views:ConfirmationWindow"
              x:Name="Root">
     <Border x:Name="DialogSurface"
             Background="{DynamicResource AppCardBrush}"

@@ -22,6 +22,13 @@ public sealed class ShimmerTextBlock : TemplatedControl
     internal bool IsSingleTextLine => EmoticonTextBlock.HasSingleTextLine(textBlock);
 
     public static readonly StyledProperty<string?> TextProperty = TextBlock.TextProperty.AddOwner<ShimmerTextBlock>();
+    public static readonly StyledProperty<double> LineSpacingProperty = TextBlock.LineSpacingProperty.AddOwner<ShimmerTextBlock>();
+
+    public double LineSpacing
+    {
+        get => GetValue(LineSpacingProperty);
+        set => SetValue(LineSpacingProperty, value);
+    }
 
     public string? Text
     {

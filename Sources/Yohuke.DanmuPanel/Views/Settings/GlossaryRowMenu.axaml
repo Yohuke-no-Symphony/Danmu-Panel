@@ -1,0 +1,13 @@
+<ContextMenu xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Avalonia.Controls"
+             x:Class="Yohuke.DanmuPanel.Views.Settings.GlossaryRowMenu"
+             x:Name="Root"
+             x:DataType="controls:DataGridRow"
+             x:CompileBindings="True">
+    <MenuItem Header="{Loc Key=Panel.Delete}" Command="{Binding RemoveCommand, ElementName=Root}" CommandParameter="{Binding DataContext}">
+        <MenuItem.Icon>
+            <LucideIcon Kind="Trash2"/>
+        </MenuItem.Icon>
+    </MenuItem>
+</ContextMenu>

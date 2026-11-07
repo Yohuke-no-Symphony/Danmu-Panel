@@ -1,13 +1,23 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Settings"
+             x:Name="Root"
+             x:DataType="vm:SettingsDialogViewModel"
              x:Class="Yohuke.DanmuPanel.Views.Settings.SettingsDialogSurface"
-             x:CompileBindings="False">
+             x:CompileBindings="True"
+             IsEnabled="{Binding IsInteractive}">
     <UserControl.Styles>
+        <Style Selector="ComboBox">
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
+        <Style Selector="ComboBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
         <Style Selector="TextBlock#SaveStatus">
-            <Setter Property="Foreground" Value="{DynamicResource AppErrorBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AppErrorBrush}"/>
         </Style>
         <Style Selector="TextBlock#SaveStatus.success">
-            <Setter Property="Foreground" Value="{DynamicResource AppPrimaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AppPrimaryBrush}"/>
         </Style>
     </UserControl.Styles>
     <Border Background="{DynamicResource AppCardBrush}" ClipToBounds="True">
@@ -15,25 +25,120 @@
             <Border Grid.ColumnSpan="2" Classes="settingsDialogHeader">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                     <StackPanel Spacing="2" VerticalAlignment="Center">
-                        <TextBlock Text="{Loc Key=Settings.Title}" FontSize="20" FontWeight="SemiBold" />
-                        <TextBlock x:Name="SectionDescription" Classes="muted" TextWrapping="Wrap" />
-                        <TextBlock x:Name="SaveStatus" TextWrapping="Wrap" IsVisible="False" />
+                        <TextBlock Text="{Loc Key=Settings.Title}" FontSize="20" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="SectionDescription" Text="{Binding SectionDescription}" Classes="muted" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="SaveStatus"
+                                   Text="{Binding Status}"
+                                   Classes.success="{Binding IsStatusSuccess}"
+                                   TextWrapping="Wrap"
+                                   IsVisible="{Binding HasStatus}" />
                     </StackPanel>
-                    <Button x:Name="SaveSettingsButton" Grid.Column="1" Classes="primaryButton">
+                    <Button x:Name="SaveSettingsButton" Grid.Column="1" Classes="primaryButton" Command="{Binding SaveCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <LucideIcon Kind="Save" />
-                            <TextBlock Text="{Loc Key=Settings.Save}" />
+                            <LucideIcon Kind="Save"/>
+                            <TextBlock Text="{Loc Key=Settings.Save}"/>
                         </StackPanel>
                     </Button>
                 </Grid>
             </Border>
             <Border Grid.Row="1" Classes="settingsDialogSidebar">
                 <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel x:Name="SectionNavigation" Spacing="8" />
+                    <StackPanel x:Name="SectionNavigation" Spacing="8">
+                        <Button x:Name="SettingsSectionAppearance"
+                                Classes="settingsSectionButton"
+                                Classes.selected="{Binding IsAppearanceSelected}"
+                                Command="{Binding SelectSectionCommand}"
+                                CommandParameter="Appearance"
+                                AutomationProperties.Name="{Loc Key=Settings.Appearance}">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Loc Key=Settings.Appearance}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Loc Key=Settings.AppearanceDescription}" Opacity="0.7" FontSize="12" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="SettingsSectionReading"
+                                Classes="settingsSectionButton"
+                                Classes.selected="{Binding IsReadingSelected}"
+                                Command="{Binding SelectSectionCommand}"
+                                CommandParameter="Reading"
+                                AutomationProperties.Name="{Loc Key=Settings.Reading}">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Loc Key=Settings.Reading}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Loc Key=Settings.ReadingDescription}" Opacity="0.7" FontSize="12" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="SettingsSectionBlocking"
+                                Classes="settingsSectionButton"
+                                Classes.selected="{Binding IsBlockingSelected}"
+                                Command="{Binding SelectSectionCommand}"
+                                CommandParameter="Blocking"
+                                AutomationProperties.Name="{Loc Key=Settings.Blocking}">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Loc Key=Settings.Blocking}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Loc Key=Settings.BlockingDescription}" Opacity="0.7" FontSize="12" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="SettingsSectionSpecialAttention"
+                                Classes="settingsSectionButton"
+                                Classes.selected="{Binding IsSpecialAttentionSelected}"
+                                Command="{Binding SelectSectionCommand}"
+                                CommandParameter="SpecialAttention"
+                                AutomationProperties.Name="{Loc Key=Settings.SpecialAttention}">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Loc Key=Settings.SpecialAttention}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Loc Key=Settings.SpecialAttentionDescription}" Opacity="0.7" FontSize="12" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="SettingsSectionTranslation"
+                                Classes="settingsSectionButton"
+                                Classes.selected="{Binding IsTranslationSelected}"
+                                Command="{Binding SelectSectionCommand}"
+                                CommandParameter="Translation"
+                                AutomationProperties.Name="{Loc Key=Settings.Translation}">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Loc Key=Settings.Translation}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Loc Key=Settings.TranslationDescription}" Opacity="0.7" FontSize="12" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="SettingsSectionAccounts"
+                                Classes="settingsSectionButton"
+                                Classes.selected="{Binding IsAccountsSelected}"
+                                Command="{Binding SelectSectionCommand}"
+                                CommandParameter="Accounts"
+                                AutomationProperties.Name="{Loc Key=Settings.Accounts}">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Loc Key=Settings.Accounts}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Loc Key=Settings.AccountsDescription}" Opacity="0.7" FontSize="12" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="SettingsSectionData"
+                                Classes="settingsSectionButton"
+                                Classes.selected="{Binding IsDataSelected}"
+                                Command="{Binding SelectSectionCommand}"
+                                CommandParameter="Data"
+                                AutomationProperties.Name="{Loc Key=Settings.Data}">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Loc Key=Settings.Data}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Loc Key=Settings.DataDescription}" Opacity="0.7" FontSize="12" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="SettingsSectionUpdates"
+                                Classes="settingsSectionButton"
+                                Classes.selected="{Binding IsUpdatesSelected}"
+                                Command="{Binding SelectSectionCommand}"
+                                CommandParameter="Updates"
+                                AutomationProperties.Name="{Loc Key=Settings.Updates}">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Loc Key=Settings.Updates}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Loc Key=Settings.UpdatesDescription}" Opacity="0.7" FontSize="12" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
                 </ScrollViewer>
             </Border>
             <Border Grid.Row="1" Grid.Column="1" Classes="settingsDialogContent">
-                <ContentControl x:Name="SectionContent" HorizontalContentAlignment="Stretch"
+                <ContentControl x:Name="SectionContent"
+                                Content="{Binding PageContent, ElementName=Root}"
+                                HorizontalContentAlignment="Stretch"
                                 VerticalContentAlignment="Stretch" />
             </Border>
         </Grid>

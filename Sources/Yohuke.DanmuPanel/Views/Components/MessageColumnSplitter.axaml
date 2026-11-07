@@ -1,0 +1,12 @@
+<Thumb xmlns="https://github.com/avaloniaui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+       x:Class="Yohuke.DanmuPanel.Views.Components.MessageColumnSplitter"
+       Classes="messageColumnSplitter" Cursor="SizeWestEast" Focusable="True" MinWidth="6">
+    <Thumb.Template>
+        <ControlTemplate>
+            <Border Background="Transparent">
+                <Border Width="1" HorizontalAlignment="Center" Background="{TemplateBinding Background}" />
+            </Border>
+        </ControlTemplate>
+    </Thumb.Template>
+</Thumb>

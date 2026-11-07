@@ -1,14 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
-using Avalonia.Data;
-using Avalonia.Data.Converters;
-using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Styling;
 using Avalonia.VisualTree;
-using Lucide.Avalonia;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Services;
@@ -27,6 +21,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     private readonly ListBox list;
     private readonly ListBox pinnedList;
     private readonly MessageColumnResizeController columnResize;
+    private readonly MessageFeedTemplates templates = new();
     private DanmuFeedScrollController? scroll;
     private bool isScrollToTopPending;
     private bool columnWidthsDirty;
@@ -36,6 +31,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     internal MessageCopyPopup? CopyPopup { get; private set; }
     internal EmoticonBitmapCache EmoticonBitmaps { get; } = new();
     public FeedViewModel Model { get; }
+    public MessageFeedHeaderViewModel Header { get; }
 
     /// <summary>为每个停靠或浮动宿主创建独立的面板操作按钮。</summary>
     public IDataTemplate HeaderActionsTemplate { get; }
@@ -53,6 +49,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         this.reportError = reportError;
         messageKind = kind;
         Model = new(runtime, kind);
+        Header = new(Model, () => ClearAsync(kind), ScrollToLatestAsync, ScrollToTopAsync, reportError);
         columnResize = new(this, (ratio, completed) =>
             OnColumnResizeRequested(this, new(ratio, completed)));
         AddHandler(MessageFeedColumnLayout.ResizeStartedEvent, OnColumnResizeStarted);
@@ -85,37 +82,11 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             scroll?.Dispose();
             scroll = null;
         };
-        HeaderActionsTemplate = new FuncDataTemplate<MessageFeedView>((_, _) =>
-        {
-            var actions = new StackPanel { Orientation = Orientation.Horizontal };
-            var clear = Ui.IconButton("Panel.ClearFeed", LucideIconKind.Trash2, () => ClearAsync(kind), reportError);
-            clear.Name = "ClearFeedButton";
-            clear.Classes.Add("dockChromeButton");
-            clear.Bind(IsEnabledProperty, new Binding(nameof(FeedViewModel.HasSelectedRoom)) { Source = Model });
-            actions.Children.Add(clear);
-            var button = Ui.IconButton("Panel.BackToLatest", LucideIconKind.ArrowDownToLine, ScrollToLatestAsync, reportError);
-            button.Name = "BackToLatestButton";
-            button.Classes.Add("dockChromeButton");
-            if (kind != MessageKind.Danmu)
-            {
-                var markAllRead = Ui.IconButton("Panel.MarkAllRead", LucideIconKind.CheckCheck, Model.MarkAllReadAsync, reportError);
-                markAllRead.Name = "MarkAllReadButton";
-                markAllRead.Classes.Add("dockChromeButton");
-                markAllRead.Bind(IsEnabledProperty, new Binding(nameof(FeedViewModel.HasUnreadMessages)) { Source = Model });
-                actions.Children.Add(markAllRead);
-                var top = Ui.IconButton("Panel.BackToTop", LucideIconKind.ArrowUpToLine, ScrollToTopAsync, reportError);
-                top.Name = "BackToTopButton";
-                top.Classes.Add("dockChromeButton");
-                top.Bind(IsEnabledProperty, new Binding(nameof(FeedViewModel.HasSelectedRoom)) { Source = Model });
-                actions.Children.Add(top);
-            }
-            actions.Children.Add(button);
-            return actions;
-        });
+        HeaderActionsTemplate = GetTemplate(kind == MessageKind.Danmu ? "DanmuHeaderActions" : "CardHeaderActions");
         if (kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard)
         {
-            HeaderBadgeTemplate = new FuncDataTemplate<MessageFeedView>((_, _) => CreateUnreadBadge());
-            HeaderTabsTemplate = new FuncDataTemplate<MessageFeedView>((_, _) => CreateReadTabs());
+            HeaderBadgeTemplate = GetTemplate("UnreadBadge");
+            HeaderTabsTemplate = GetTemplate("ReadTabs");
         }
         var surface = new MessageFeedSurface { DataContext = Model };
         surface.Host.Content = list;
@@ -377,13 +348,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         {
             result.Classes.Add("danmuFeedList");
         }
-        result.Styles.Add(new Avalonia.Styling.Style(selector => selector.OfType<ListBoxItem>())
-        {
-            Setters = { new Setter(PaddingProperty, new Thickness(0)), new Setter(MarginProperty, new Thickness(0)) }
-        });
-        var panelMenu = new LocalizedContextMenu();
-        AddPanelActions(panelMenu);
-        result.ContextMenu = panelMenu;
+        result.ContextMenu = (LocalizedContextMenu)GetTemplate(kind == MessageKind.Danmu ? "DanmuPanelMenu" : "CardPanelMenu").Build(Header)!;
         return result;
     }
 
@@ -439,153 +404,56 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         popup.Show(this, anchorBounds);
     }
 
-    private Border CreateUnreadBadge()
+    private IDataTemplate GetTemplate(string key)
     {
-        var count = new TextBlock();
-        count.Bind(TextBlock.TextProperty, new Binding(nameof(FeedViewModel.UnreadCount)) { Source = Model });
-        count.Bind(TextBlock.FontSizeProperty, new Binding(nameof(FeedViewModel.MessageTextScale))
-        {
-            Source = Model,
-            Converter = new FuncValueConverter<double, double>(scale => 13 * scale)
-        });
-        var badge = new Border { Child = count, IsHitTestVisible = false };
-        badge.Classes.Add("panelUnreadBadge");
-        badge.Bind(IsVisibleProperty, new Binding(nameof(FeedViewModel.HasUnreadMessages)) { Source = Model });
-        return badge;
+        return new ContextBoundDataTemplate((IDataTemplate)templates[key]!);
     }
 
-    private TabStrip CreateReadTabs()
+    internal Task SelectReadTabAsync(int index)
     {
-        var unread = new TabStripItem { Name = "UnreadMessagesTab" };
-        unread.Bind(ContentProperty, Localization.Observe("Panel.Unread"));
-        var read = new TabStripItem { Name = "ReadMessagesTab" };
-        read.Bind(ContentProperty, Localization.Observe("Panel.Read"));
-        var tabs = new TabStrip
-        {
-            Name = "MessageReadTabs",
-            Items = { unread, read }
-        };
-        tabs.Classes.Add("messageReadTabs");
-        tabs.Bind(SelectingItemsControl.SelectedIndexProperty,
-            new Binding(nameof(FeedViewModel.SelectedReadTabIndex)) { Source = Model, Mode = BindingMode.OneWay });
-        tabs.SelectionChanged += async (_, args) =>
-        {
-            args.Handled = true;
-            if (tabs.SelectedIndex is 0 or 1)
-            {
-                await RunAsync(() => Model.SelectReadFilterAsync(tabs.SelectedIndex == 0
-                    ? MessageReadFilter.Unread : MessageReadFilter.Read));
-            }
-        };
-        return tabs;
+        return RunAsync(() => Model.SelectReadFilterAsync(index == 0 ? MessageReadFilter.Unread : MessageReadFilter.Read));
     }
 
     private LocalizedContextMenu CreateMessageMenu(MessageFeedRow row, MessageKind kind)
     {
-        var menu = new LocalizedContextMenu();
-        var activation = AddAction(menu, kind == MessageKind.Danmu ? "Panel.PinMessage" : "Panel.MarkRead",
-            kind == MessageKind.Danmu ? LucideIconKind.Pin : LucideIconKind.Check,
-            () => row.DataContext is MessageItemViewModel item ? ActivateMessageAsync(item) : Task.CompletedTask);
-        void RefreshActivation()
-        {
-            if (row.DataContext is not MessageItemViewModel item)
-            {
-                return;
-            }
-            if (kind == MessageKind.Danmu)
-            {
-                menu.SetHeader(activation, item.Record.IsPinned ? "Panel.UnpinMessage" : "Panel.PinMessage");
-                ((LucideIcon)activation.Icon!).Kind = item.Record.IsPinned ? LucideIconKind.PinOff : LucideIconKind.Pin;
-            }
-            else
-            {
-                activation.IsEnabled = !item.Record.IsRead;
-            }
-        }
-        RefreshActivation();
-        menu.Opened += (_, _) => RefreshActivation();
-        if (kind is MessageKind.Danmu or MessageKind.SuperChat)
-        {
-            AddAction(menu, "Panel.CopyText", LucideIconKind.Copy, () =>
+        var model = new MessageFeedMenuViewModel(kind, Header, () => row.DataContext as MessageItemViewModel,
+            ActivateMessageAsync, _ =>
             {
                 ShowCopyPopup(row);
                 return Task.CompletedTask;
-            });
-            var retry = AddAction(menu, "Panel.RetryTranslation", LucideIconKind.Languages, async () =>
+            }, RetryTranslationAsync, async item =>
             {
-                if (row.DataContext is MessageItemViewModel item && runtime.Configuration.Settings.Translation.Enabled &&
-                    !runtime.IsTranslationBlocked(item.Record))
-                {
-                    await runtime.Messages.RetryTranslationJobAsync(item.Record.Id, item.Record.Generation,
-                        TranslationRequestFactory.GetConfigurationFingerprint(runtime.Configuration.Settings.Translation));
-                    runtime.NotifyTranslation(retryAuthentication: true);
-                    await Model.RefreshAsync();
-                }
-            });
-            retry.Name = "RetryTranslationMenuItem";
-            void RefreshRetry()
-            {
-                retry.IsEnabled = runtime.Configuration.Settings.Translation.Enabled &&
-                    row.DataContext is MessageItemViewModel item && !runtime.IsTranslationBlocked(item.Record);
-            }
-            RefreshRetry();
-            menu.Opened += (_, _) => RefreshRetry();
-        }
-        if (kind == MessageKind.Danmu)
+                var followed = runtime.Configuration.Settings.SpecialAttention.Users.Any(user => user.UserUid == item.UserUid);
+                await runtime.SetSpecialAttentionAsync(item.UserUid, item.Name, !followed);
+            }, item => runtime.Configuration.Settings.Translation.Enabled && !runtime.IsTranslationBlocked(item.Record),
+            item => runtime.Configuration.Settings.SpecialAttention.Users.Any(user => user.UserUid == item.UserUid), reportError);
+        var key = kind switch
         {
-            var attention = AddAction(menu, "SpecialAttention.Add", LucideIconKind.Star, async () =>
-            {
-                if (row.DataContext is MessageItemViewModel item && item.UserUid > 0)
-                {
-                    var followed = runtime.Configuration.Settings.SpecialAttention.Users.Any(user => user.UserUid == item.UserUid);
-                    await runtime.SetSpecialAttentionAsync(item.UserUid, item.Name, !followed);
-                }
-            });
-            attention.Name = "ToggleSpecialAttentionMenuItem";
-            void RefreshAttention()
-            {
-                attention.IsEnabled = row.DataContext is MessageItemViewModel { UserUid: > 0 };
-                var followed = row.DataContext is MessageItemViewModel item &&
-                    runtime.Configuration.Settings.SpecialAttention.Users.Any(user => user.UserUid == item.UserUid);
-                menu.SetHeader(attention, followed ? "SpecialAttention.Remove" : "SpecialAttention.Add");
-            }
-            RefreshAttention();
-            menu.Opened += (_, _) => RefreshAttention();
-        }
-        menu.Items.Add(new Separator());
-        AddPanelActions(menu);
-        return menu;
-    }
-
-    private void AddPanelActions(LocalizedContextMenu menu)
-    {
-        AddAction(menu, "Panel.MoreHistory", LucideIconKind.History, Model.LoadMoreAsync);
-        if (messageKind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard)
-        {
-            AddAction(menu, "Panel.BackToTop", LucideIconKind.ArrowUpToLine, ScrollToTopAsync);
-        }
-        AddAction(menu, "Panel.BackToLatest", LucideIconKind.ArrowDownToLine, ScrollToLatestAsync);
-    }
-
-    private MenuItem AddAction(LocalizedContextMenu menu, string key, LucideIconKind icon, Func<Task> action)
-    {
-        var item = new MenuItem { Icon = new LucideIcon { Kind = icon, Size = 16 } };
-        menu.SetHeader(item, key);
-        item.Click += async (_, args) =>
-        {
-            args.Handled = true;
-            item.IsEnabled = false;
-            try
-            {
-                await RunAsync(action);
-            }
-            finally
-            {
-                item.IsEnabled = true;
-            }
+            MessageKind.Danmu => "DanmuRowMenu",
+            MessageKind.SuperChat => "SuperChatRowMenu",
+            _ => "CardRowMenu"
         };
-        menu.Items.Add(item);
-        return item;
+        var menu = (LocalizedContextMenu)GetTemplate(key).Build(model)!;
+        menu.Opened += (_, _) =>
+        {
+            model.Refresh();
+            Localization.LanguageChanged += OnMenuLanguageChanged;
+        };
+        menu.Closed += (_, _) => Localization.LanguageChanged -= OnMenuLanguageChanged;
+        return menu;
+
+        void OnMenuLanguageChanged(object? sender, EventArgs args)
+        {
+            model.Refresh();
+        }
+    }
+
+    private async Task RetryTranslationAsync(MessageItemViewModel item)
+    {
+        await runtime.Messages.RetryTranslationJobAsync(item.Record.Id, item.Record.Generation,
+            TranslationRequestFactory.GetConfigurationFingerprint(runtime.Configuration.Settings.Translation));
+        runtime.NotifyTranslation(retryAuthentication: true);
+        await Model.RefreshAsync();
     }
 
     private async Task ActivateMessageAsync(MessageItemViewModel item)

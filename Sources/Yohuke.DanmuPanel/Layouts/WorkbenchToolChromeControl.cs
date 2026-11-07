@@ -1,12 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Controls.Templates;
-using Avalonia.Data;
 using Avalonia.Interactivity;
-using Avalonia.Layout;
 using Dock.Avalonia.Controls;
 using Dock.Model.Core;
-using Yohuke.DanmuPanel.Views.Components;
 
 namespace Yohuke.DanmuPanel.Layouts;
 
@@ -37,44 +33,14 @@ internal sealed class WorkbenchToolChromeControl : ToolChromeControl
 
         if (e.NameScope.Find<TextBlock>("PART_Title") is { Parent: Panel titleHost } title)
         {
-            var badge = new ContentControl
-            {
-                Name = "PART_HeaderBadge",
-                VerticalContentAlignment = VerticalAlignment.Center,
-                [!ContentProperty] = new Binding(nameof(IDock.ActiveDockable)),
-                ContentTemplate = new WorkbenchHeaderBadgeTemplate()
-            };
-            var titleLayout = new Grid
-            {
-                ColumnDefinitions = new("*,Auto,Auto"),
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-            var tabs = new ContentControl
-            {
-                Name = "PART_HeaderTabs",
-                VerticalContentAlignment = VerticalAlignment.Center,
-                [!ContentProperty] = new Binding(nameof(IDock.ActiveDockable)),
-                ContentTemplate = new WorkbenchHeaderTabsTemplate()
-            };
             var titleIndex = titleHost.Children.IndexOf(title);
             titleHost.Children.Remove(title);
-            Grid.SetColumn(badge, 1);
-            Grid.SetColumn(tabs, 2);
-            titleLayout.Children.Add(title);
-            titleLayout.Children.Add(badge);
-            titleLayout.Children.Add(tabs);
-            titleHost.Children.Insert(titleIndex, titleLayout);
+            titleHost.Children.Insert(titleIndex, new WorkbenchHeaderTitleSurface { TitleContent = title });
         }
 
         if (closeButton?.Parent is StackPanel headerButtons)
         {
-            headerButtons.Children.Insert(0, new ContentControl
-            {
-                Name = "PART_HeaderActions",
-                VerticalContentAlignment = VerticalAlignment.Center,
-                [!ContentProperty] = new Binding(nameof(IDock.ActiveDockable)),
-                ContentTemplate = new FuncDataTemplate<WorkbenchDockPanel>((panel, _) => CreateHeaderActions(panel))
-            });
+            headerButtons.Children.Insert(0, new WorkbenchHeaderActionsHost());
         }
 
         foreach (var name in new[]
@@ -85,23 +51,6 @@ internal sealed class WorkbenchToolChromeControl : ToolChromeControl
                 button.Classes.Add("dockChromeButton");
             }
         }
-    }
-
-    private static Control? CreateHeaderActions(WorkbenchDockPanel? panel)
-    {
-        if (panel?.View is not IWorkbenchHeaderActions { HeaderActionsTemplate: { } template })
-        {
-            return null;
-        }
-
-        var actions = template.Build(panel.View);
-
-        if (actions is not null)
-        {
-            actions.DataContext = panel.View;
-        }
-
-        return actions;
     }
 
     private void OnCloseButtonClick(object? sender, RoutedEventArgs e)

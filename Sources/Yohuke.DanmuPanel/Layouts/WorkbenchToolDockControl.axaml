@@ -1,0 +1,23 @@
+<dock:ToolDockControl xmlns="https://github.com/avaloniaui"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                      xmlns:dock="using:Dock.Avalonia.Controls"
+                      xmlns:controls="using:Dock.Model.Controls"
+                      xmlns:layouts="using:Yohuke.DanmuPanel.Layouts"
+                      xmlns:settings="using:Dock.Settings"
+                      x:Class="Yohuke.DanmuPanel.Layouts.WorkbenchToolDockControl"
+                      x:DataType="controls:IToolDock">
+    <dock:ToolDockControl.Template>
+        <ControlTemplate>
+            <dock:DockableControl x:Name="PART_DockableControl" TrackingMode="Visible"
+                                  Background="{TemplateBinding Background}"
+                                  settings:DockProperties.IsDropArea="True" settings:DockProperties.IsDockTarget="True">
+                <Border x:Name="PART_WorkspaceFrame" Classes="workbenchFrame"
+                        IsVisible="{Binding VisibleDockables.Count, Converter={x:Static layouts:WorkbenchDockConverters.HasItems}}">
+                    <layouts:WorkbenchToolChromeControl MinHeight="0" IsActive="{Binding IsActive}">
+                        <layouts:WorkbenchToolControl MinHeight="0" />
+                    </layouts:WorkbenchToolChromeControl>
+                </Border>
+            </dock:DockableControl>
+        </ControlTemplate>
+    </dock:ToolDockControl.Template>
+</dock:ToolDockControl>

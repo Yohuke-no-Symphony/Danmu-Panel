@@ -3,14 +3,15 @@ using Yohuke.DanmuPanel.I18n;
 
 namespace Yohuke.DanmuPanel.Views;
 
-internal sealed class LocalizedContextMenu : ContextMenu
+public sealed class LocalizedContextMenu : ContextMenu
 {
     private readonly Dictionary<MenuItem, string> headerKeys = new();
     private bool isObservingLanguage;
 
     protected override Type StyleKeyOverride => typeof(ContextMenu);
 
-    internal LocalizedContextMenu()
+    /// <summary>创建可跟随当前语言刷新的上下文菜单。</summary>
+    public LocalizedContextMenu()
     {
         Opened += (_, _) =>
         {

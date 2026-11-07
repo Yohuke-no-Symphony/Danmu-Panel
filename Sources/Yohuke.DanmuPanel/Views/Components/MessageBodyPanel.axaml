@@ -1,0 +1,40 @@
+<Panel xmlns="https://github.com/avaloniaui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+       xmlns:vm="using:Yohuke.DanmuPanel.ViewModels"
+       xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
+       x:Class="Yohuke.DanmuPanel.Views.Components.MessageBodyPanel"
+       x:DataType="vm:MessageItemViewModel" Classes="messageBody"
+       HorizontalAlignment="Stretch" VerticalAlignment="Center">
+    <StackPanel x:Name="OriginalRegion" IsVisible="{Binding ShowOriginal}">
+        <components:PinyinLoadingPlaceholder x:Name="ContentPinyinPending" Classes="contentPinyinPending"
+            Length="6" IsVisible="{Binding IsContentPinyinPending}"
+            FontSize="{DynamicResource MessageFontSizePinyin}" Foreground="{DynamicResource MessagePinyinBrush}"
+            FontFamily="{Binding #OriginalText.FontFamily}" FontStyle="{Binding #OriginalText.FontStyle}"
+            FontStretch="{Binding #OriginalText.FontStretch}" TextBlock.LineHeight="{Binding #OriginalText.LineHeight}"
+            LineSpacing="{Binding #OriginalText.LineSpacing}" />
+        <Grid>
+            <components:EmoticonTextBlock x:Name="OriginalText" Classes="danmuFeedContent regularFeedContent originalText"
+                TextWrapping="Wrap" ContentText="{Binding Detail}" Emoticons="{Binding Emoticons}"
+                Annotations="{Binding ContentPinyin}" PinyinLayout="{Binding PinyinLayout}"
+                PinyinForeground="{DynamicResource MessagePinyinBrush}" PinyinFontSize="{DynamicResource MessageFontSizePinyin}" />
+            <components:HoverMarqueeTextBlock x:Name="OriginalMarquee" Classes="compactFeedContent originalText"
+                Text="{Binding Detail}" AutoScroll="{Binding AutoScrollLongMessages}" Emoticons="{Binding Emoticons}"
+                Annotations="{Binding ContentPinyin}" PinyinLayout="{Binding PinyinLayout}"
+                PinyinForeground="{DynamicResource MessagePinyinBrush}" PinyinFontSize="{DynamicResource MessageFontSizePinyin}" />
+        </Grid>
+    </StackPanel>
+    <Grid x:Name="TranslationRegion" Classes="translationLine" IsVisible="{Binding ShowTranslation}">
+        <Grid IsVisible="{Binding HasTranslation}">
+            <components:MessageTranslationTextBlock x:Name="TranslatedText"
+                Classes="danmuFeedContent regularFeedContent translatedText" Text="{Binding Translation}"
+                TextTrimming="CharacterEllipsis" TextWrapping="Wrap" />
+            <components:HoverMarqueeTextBlock x:Name="TranslationMarquee" Classes="compactFeedContent translatedText"
+                Text="{Binding Translation}" AutoScroll="{Binding AutoScrollLongMessages}"
+                TextBlock.LineHeight="{Binding #TranslatedText.LineHeight}" />
+        </Grid>
+        <components:ShimmerTextBlock x:Name="PendingTranslation" Classes="translationPending"
+            HorizontalAlignment="Left" Text="{Loc Key=Panel.Translating}" IsVisible="{Binding IsTranslating}"
+            TextBlock.LineHeight="{Binding #TranslatedText.LineHeight}"
+            LineSpacing="{Binding #TranslatedText.LineSpacing}" />
+    </Grid>
+</Panel>

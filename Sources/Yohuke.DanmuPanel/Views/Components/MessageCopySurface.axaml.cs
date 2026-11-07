@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Yohuke.DanmuPanel.ViewModels;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
@@ -8,7 +9,7 @@ namespace Yohuke.DanmuPanel.Views.Components;
 public sealed partial class MessageCopySurface : UserControl
 {
     private readonly TabControl sources;
-    private readonly Button copySelected;
+    public MessageCopyViewModel Model { get; }
 
     internal event EventHandler? CloseRequested;
     internal event Action<string>? CopyRequested;
@@ -18,25 +19,22 @@ public sealed partial class MessageCopySurface : UserControl
     /// <summary>加载只读文本选择和复制操作。</summary>
     public MessageCopySurface()
     {
+        Model = new(text => CopyRequested?.Invoke(text), () => CloseRequested?.Invoke(this, EventArgs.Empty));
         AvaloniaXamlLoader.Load(this);
+        DataContext = Model;
         sources = this.FindControl<TabControl>("CopySourceTabs")!;
-        copySelected = this.FindControl<Button>("CopySelectedTextButton")!;
         var originalText = this.FindControl<TextBox>("CopyOriginalText")!;
         var translationText = this.FindControl<TextBox>("CopyTranslationText")!;
-        sources.SelectedIndex = 0;
         originalText.PropertyChanged += OnTextPropertyChanged;
         translationText.PropertyChanged += OnTextPropertyChanged;
         sources.SelectionChanged += (_, _) => RefreshSelection();
-        copySelected.Click += (_, _) => CopyRequested?.Invoke(CurrentText.SelectedText);
-        this.FindControl<Button>("CopyAllTextButton")!.Click += (_, _) => CopyRequested?.Invoke(CurrentText.Text!);
-        this.FindControl<Button>("CloseCopyPopupButton")!.Click += (_, _) => CloseRequested?.Invoke(this, EventArgs.Empty);
+
     }
 
     internal void SetMessage(string original, string translation)
     {
-        this.FindControl<TextBox>("CopyOriginalText")!.Text = original;
-        this.FindControl<TextBox>("CopyTranslationText")!.Text = translation;
-        this.FindControl<TabItem>("CopyTranslationTab")!.IsVisible = translation.Length > 0;
+        Model.Original = original;
+        Model.Translation = translation;
     }
 
     internal void FocusOriginal()
@@ -54,6 +52,6 @@ public sealed partial class MessageCopySurface : UserControl
 
     private void RefreshSelection()
     {
-        copySelected.IsEnabled = CurrentText.SelectionStart != CurrentText.SelectionEnd;
+        Model.SelectedText = CurrentText.SelectedText;
     }
 }

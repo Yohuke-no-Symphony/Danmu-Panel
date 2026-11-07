@@ -1,0 +1,65 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:settings="using:Yohuke.DanmuPanel.Views.Settings"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Settings"
+             x:Class="Yohuke.DanmuPanel.Views.Settings.SettingsDataPage"
+             x:Name="Root"
+             x:DataType="vm:SettingsDialogViewModel"
+             x:CompileBindings="True">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="14">
+            <settings:SettingsCard Title="{Loc Key=Settings.Transfer}">
+                <StackPanel Spacing="14">
+                    <Border Background="Transparent">
+                        <ToolTip.Tip>
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="{Loc Key=Settings.TransferHelp}" TextWrapping="Wrap" MaxWidth="480"/>
+                                <TextBlock Text="{Loc Key=Settings.TransferKeyHelp}" TextWrapping="Wrap" MaxWidth="480"/>
+                            </StackPanel>
+                        </ToolTip.Tip>
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                            <Button x:Name="ImportSettingsButton" Command="{Binding ImportCommand}" HorizontalAlignment="Left">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <LucideIcon Kind="Import"/>
+                                    <TextBlock Text="{Loc Key=Settings.Import}"/>
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="ExportSettingsButton" Command="{Binding ExportCommand}" HorizontalAlignment="Left">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <LucideIcon Kind="Upload"/>
+                                    <TextBlock Text="{Loc Key=Settings.Export}"/>
+                                </StackPanel>
+                            </Button>
+                        </WrapPanel>
+                    </Border>
+                </StackPanel>
+            </settings:SettingsCard>
+            <settings:SettingsCard Title="{Loc Key=Settings.Data}">
+                <StackPanel Spacing="14">
+                    <Button Command="{Binding ClearCurrentCommand}" ToolTip.Tip="{Loc Key=Settings.HistoryHelp}" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <LucideIcon Kind="Trash2"/>
+                            <TextBlock Text="{Loc Key=Settings.ClearCurrent}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding ClearAllCommand}" ToolTip.Tip="{Loc Key=Settings.HistoryHelp}" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <LucideIcon Kind="Trash2"/>
+                            <TextBlock Text="{Loc Key=Settings.ClearAll}"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </settings:SettingsCard>
+            <settings:SettingsCard Title="{Loc Key=Settings.ClearCache}">
+                <StackPanel Spacing="14">
+                    <Button Command="{Binding ClearCacheCommand}" ToolTip.Tip="{Loc Key=Settings.CacheHelp}" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <LucideIcon Kind="Database"/>
+                            <TextBlock Text="{Loc Key=Settings.ClearCache}"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </settings:SettingsCard>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
