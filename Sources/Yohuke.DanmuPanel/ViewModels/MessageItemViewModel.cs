@@ -43,6 +43,8 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     public long UserUid => Record.UserUid;
     /// <summary>是否显示消息用户头像。</summary>
     public bool ShowUserAvatars => settings.ShowUserAvatars;
+    /// <summary>是否为弹幕保留粉丝牌显示区域。</summary>
+    public bool ShowFanMedals => settings.ShowFanMedals;
     public string NamePinyin => namePinyin;
     public bool HasNamePinyin => NamePinyin.Length > 0;
     public bool IsNamePinyinPending => isPresentationPending && settings.ShowUserPinyin &&
@@ -201,6 +203,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         NotifyChange(previous.UserName, record.UserName, nameof(Name));
         NotifyChange(previous.UserUid, record.UserUid, nameof(UserUid));
         NotifyChange(previousSettings.ShowUserAvatars, settings.ShowUserAvatars, nameof(ShowUserAvatars));
+        NotifyChange(previousSettings.ShowFanMedals, settings.ShowFanMedals, nameof(ShowFanMedals));
         NotifyChange(previous.MedalLevel, record.MedalLevel, nameof(MedalLevel));
         NotifyChange(showedPin, ShowPinBadge, nameof(ShowPinBadge));
         NotifyChange(showedUnread, ShowUnreadDot, nameof(ShowUnreadDot));

@@ -87,6 +87,28 @@ public sealed class MessageFeedSkeletonTests
             using var preview = window.CaptureRenderedFrame();
             preview!.Save(Path.Combine(previewDirectory,
                 $"history-loading-{(compact ? "compact" : "normal")}-{scale * 100:0}.png"));
+
+            configuration.Settings.ShowFanMedals = false;
+            message.Update(message.Record, configuration.Settings);
+            await model.RefreshAsync();
+            Pump(window);
+
+            Assert.False(realMedal.IsVisible);
+            Assert.False(skeletonMedal.IsVisible);
+            Assert.Equal(0, realLayout.ColumnDefinitions[0].ActualWidth);
+            Assert.Equal(0, skeletonLayout.ColumnDefinitions[0].ActualWidth);
+            Assert.Equal(compact ? 2 : 3, placeholder.PlaceholderRectangles.Count);
+            Assert.InRange(Math.Abs(realBody.TranslatePoint(default, list)!.Value.X -
+                skeletonBody.TranslatePoint(default, list)!.Value.X), 0, 1);
+
+            configuration.Settings.ShowFanMedals = true;
+            message.Update(message.Record, configuration.Settings);
+            await model.RefreshAsync();
+            Pump(window);
+
+            Assert.True(realMedal.IsEffectivelyVisible);
+            Assert.True(skeletonMedal.IsEffectivelyVisible);
+            Assert.Equal(compact ? 3 : 4, placeholder.PlaceholderRectangles.Count);
         }
         finally
         {

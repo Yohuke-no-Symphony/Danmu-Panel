@@ -58,6 +58,7 @@ public sealed class SettingsShareService
         target.MessageColumns = settings.MessageColumns;
         target.MessageRetentionCount = settings.MessageRetentionCount;
         target.ShowUserAvatars = settings.ShowUserAvatars;
+        target.ShowFanMedals = settings.ShowFanMedals;
         target.CompactDanmuDisplay = settings.CompactDanmuDisplay;
         target.CompactDanmuWrap = settings.CompactDanmuWrap;
         target.CompactSuperChatWrap = settings.CompactSuperChatWrap;

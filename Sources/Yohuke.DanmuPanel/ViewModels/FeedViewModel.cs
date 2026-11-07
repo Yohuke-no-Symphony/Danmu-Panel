@@ -36,6 +36,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     private bool isCompactMessageWrap;
     private bool isCompactSuperChatWrap;
     private bool showUserAvatars;
+    private bool showFanMedals;
     private double messageTextScale = 1;
     private MessageDisplaySettings? displaySettings;
     private readonly HashSet<string> translationRequested = new();
@@ -79,6 +80,8 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     public double MessageTextScale => messageTextScale;
     /// <summary>历史加载占位与真实消息共用的头像显示偏好。</summary>
     public bool ShowUserAvatars => showUserAvatars;
+    /// <summary>历史加载占位与真实弹幕共用的粉丝牌显示偏好。</summary>
+    public bool ShowFanMedals => showFanMedals;
 
     /// <summary>连接一个独立消息类型的列表。</summary>
     public FeedViewModel(PanelRuntime runtime, MessageKind kind)
@@ -368,6 +371,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         SetProperty(ref isCompactSuperChatWrap, settings.CompactSuperChatWrap, nameof(IsCompactSuperChatWrap));
         SetProperty(ref messageTextScale, settings.MessageTextScale, nameof(MessageTextScale));
         SetProperty(ref showUserAvatars, settings.ShowUserAvatars, nameof(ShowUserAvatars));
+        SetProperty(ref showFanMedals, settings.ShowFanMedals, nameof(ShowFanMedals));
     }
 
     /// <inheritdoc/>

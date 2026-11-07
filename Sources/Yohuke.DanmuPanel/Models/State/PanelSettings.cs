@@ -52,6 +52,9 @@ public sealed class PanelSettings
     /// <summary>在四类消息的用户名左侧显示圆形头像，旧配置默认开启。</summary>
     public bool ShowUserAvatars { get; set; } = true;
 
+    /// <summary>在弹幕中显示粉丝牌及无粉丝牌占位，旧配置默认开启。</summary>
+    public bool ShowFanMedals { get; set; } = true;
+
     /// <summary>为四类消息启用 Neo 紧凑显示，旧配置默认启用。</summary>
     public bool CompactDanmuDisplay { get; set; } = true;
 

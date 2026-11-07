@@ -198,6 +198,11 @@ public sealed class MessageFeedSkeleton : Button
             medal.Classes.Add("danmuMedalBadge");
             medalSlot = new() { Children = { medal } };
             medalSlot.Classes.Add("danmuMedalSlot");
+            medalSlot.Bind(IsVisibleProperty, new Binding("DataContext.ShowFanMedals")
+            {
+                RelativeSource = new(RelativeSourceMode.FindAncestor) { AncestorType = typeof(MessageFeedSurface) },
+                FallbackValue = true
+            });
             slots.Add((medal, 1, 1, HorizontalAlignment.Left));
         }
         var name = CreateTextSlot("　", "danmuFeedUser");

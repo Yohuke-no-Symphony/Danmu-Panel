@@ -18,6 +18,7 @@ internal sealed class MessageDisplaySettings
     internal TranslationDisplayMode TranslationDisplayMode { get; }
     internal bool ShowUserPinyin { get; }
     internal bool ShowUserAvatars { get; }
+    internal bool ShowFanMedals { get; }
     internal bool ShowGiftPinyin { get; }
     internal bool ShowDanmuPinyin { get; }
     internal bool ShowSuperChatPinyin { get; }
@@ -34,6 +35,7 @@ internal sealed class MessageDisplaySettings
         TranslationDisplayMode = settings.Translation.DisplayMode;
         ShowUserPinyin = settings.ShowUserPinyin;
         ShowUserAvatars = settings.ShowUserAvatars;
+        ShowFanMedals = settings.ShowFanMedals;
         ShowGiftPinyin = settings.ShowGiftPinyin;
         ShowDanmuPinyin = settings.ShowDanmuPinyin;
         ShowSuperChatPinyin = settings.ShowSuperChatPinyin;
@@ -54,6 +56,7 @@ internal sealed class MessageDisplaySettings
             previous.TranslationDisplayMode == settings.Translation.DisplayMode &&
             previous.ShowUserPinyin == settings.ShowUserPinyin && previous.ShowGiftPinyin == settings.ShowGiftPinyin &&
             previous.ShowUserAvatars == settings.ShowUserAvatars &&
+            previous.ShowFanMedals == settings.ShowFanMedals &&
             previous.ShowDanmuPinyin == settings.ShowDanmuPinyin &&
             previous.ShowSuperChatPinyin == settings.ShowSuperChatPinyin &&
             previous.PinyinLayout == settings.PinyinLayout &&

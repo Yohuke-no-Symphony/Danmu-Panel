@@ -318,6 +318,8 @@
     "Settings.MessageDisplay": "Message display",
     "Settings.ShowUserAvatars": "Show user avatars",
     "Settings.ShowUserAvatarsHelp": "Show round avatars to the left of names in all messages, with local caching and automatic updates.",
+    "Settings.ShowFanMedals": "Show fan medals",
+    "Settings.ShowFanMedalsHelp": "Show fan medals in danmaku. Turning this off also hides the “None” placeholder and collapses the medal column.",
     "Settings.MessageRetentionCount": "Messages to retain",
     "Settings.MessageRetentionCountHelp": "Number of recent records shown by default in each message panel, initially 300. Pinned and priority unread messages are shown in addition. Reading history keeps the current records, and earlier history can still be loaded.",
     "Settings.InvalidMessageRetentionCount": "Enter a whole number from 1 to {0} for messages to retain.",

@@ -76,6 +76,7 @@ internal sealed class MessageFeedRow : Button
             });
             medalSlot = new() { Children = { medalFrame, noMedalFrame } };
             medalSlot.Classes.Add("danmuMedalSlot");
+            medalSlot.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.ShowFanMedals)));
         }
         var name = new EmoticonTextBlock();
         name.Bind(EmoticonTextBlock.ContentTextProperty, new Binding(nameof(MessageItemViewModel.Name)));
