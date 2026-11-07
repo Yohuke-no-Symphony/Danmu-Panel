@@ -1,8 +1,14 @@
+using System.Text.Json.Serialization;
+
 namespace Yohuke.DanmuPanel.Models.Messages;
 
-/// <summary>普通弹幕的全局正则屏蔽偏好，默认关闭并保留同传格式规则。</summary>
+/// <summary>普通弹幕的逐条屏蔽规则，默认关闭并预填同传和音乐规则。</summary>
+[JsonConverter(typeof(DanmuRegexFilterSettingsJsonConverter))]
 public sealed class DanmuRegexFilterSettings
 {
-    public bool Enabled { get; set; }
-    public List<string> Patterns { get; set; } = [@"^(.*?)【(.*\*?)】$"];
+    public List<DanmuRegexRuleSettings> Rules { get; set; } =
+    [
+        new() { Pattern = @"^(.*?)【(.*\*?)】$" },
+        new() { Pattern = @"(?:[♩♪♫♬♭♮♯]|🎵|🎶)" }
+    ];
 }

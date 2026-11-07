@@ -22,7 +22,7 @@ public sealed class MessageStorePayloadReadTests(ITestOutputHelper output)
             var records = Enumerable.Range(batch * 500, 500).Select(index => Message(index) with { IsTest = true }).ToArray();
             await store.AppendTestMessagesAsync(records, new());
         }
-        var filter = useFilters ? new DanmuRegexFilter(new() { Enabled = true, Patterns = ["^广告"] }) : null;
+        var filter = useFilters ? new DanmuRegexFilter(new() { Rules = [new() { Pattern = "^广告", BlockDisplay = true }] }) : null;
         var first = await store.LoadFeedAsync("room", MessageKind.Danmu, 5000, null,
             hideEmoticonDanmu: useFilters, danmuRegexFilter: filter);
         Assert.Equal(5000, first.Records.Count);
@@ -85,7 +85,7 @@ public sealed class MessageStorePayloadReadTests(ITestOutputHelper output)
         await using var store = new SqliteMessageStore(directory.DatabasePath);
         await store.AppendTestMessagesAsync(Enumerable.Range(0, 300)
             .Select(index => Message(index) with { IsTest = true }).ToArray(), new());
-        var filter = new DanmuRegexFilter(new() { Enabled = true, Patterns = ["^广告"] });
+        var filter = new DanmuRegexFilter(new() { Rules = [new() { Pattern = "^广告", BlockDisplay = true }] });
         var first = await store.LoadFeedAsync("room", MessageKind.Danmu, 100, null, danmuRegexFilter: filter);
         var reads = store.PayloadRowsRead;
 

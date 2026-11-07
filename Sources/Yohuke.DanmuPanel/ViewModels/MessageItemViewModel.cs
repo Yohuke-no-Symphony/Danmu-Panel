@@ -30,6 +30,8 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     private string price = "";
     private string translation = "";
     private bool translationPending;
+    private bool translationBlocked;
+    private int filterStateVersion;
     private bool hasTranslatableContent;
     private IBrush borderBrush = Brushes.Transparent;
     private IBrush medalBorderBrush = Brushes.Transparent;
@@ -71,7 +73,8 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     public string Price => price;
     public string Translation => translation;
     public bool HasTranslation => Translation.Length > 0 && !string.Equals(Translation, Record.Content, StringComparison.Ordinal);
-    public bool IsTranslating => settings.TranslationEnabled && translationPending && hasTranslatableContent && Translation.Length == 0;
+    public bool IsTranslating => !translationBlocked && settings.TranslationEnabled && translationPending &&
+        hasTranslatableContent && Translation.Length == 0;
     public bool ShowTranslation => HasTranslation || IsTranslating;
     public bool ShowOriginal => !HasTranslation || settings.TranslationDisplayMode == TranslationDisplayMode.Bilingual;
     public bool HasMedal => Medal.Length > 0;
@@ -173,6 +176,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     private void Update(MessageRecord record, MessageDisplaySettings currentSettings, bool initialize, bool isTranslationPending)
     {
         if (!initialize && ReferenceEquals(Record, record) && ReferenceEquals(settings, currentSettings) &&
+            filterStateVersion == currentSettings.DanmuFilter.StateVersion &&
             translationPending == isTranslationPending)
         {
             return;
@@ -195,6 +199,8 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         Record = record;
         settings = currentSettings;
         translationPending = isTranslationPending;
+        filterStateVersion = settings.DanmuFilter.StateVersion;
+        translationBlocked = settings.IsTranslationBlocked(record);
 
         if (!deferPresentation && (initialize || previous.Kind != record.Kind || previous.Content != record.Content ||
             !previous.Emoticons.SequenceEqual(record.Emoticons)))
@@ -267,7 +273,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         {
             SetProperty(ref price, record.Kind == MessageKind.SuperChat ? $"￥{record.TotalPrice:0.##}" : "", nameof(Price));
         }
-        SetProperty(ref translation, record.TranslationFingerprint == settings.TranslationFingerprint
+        SetProperty(ref translation, !translationBlocked && record.TranslationFingerprint == settings.TranslationFingerprint
             ? record.Translation ?? "" : "", nameof(Translation));
         SetProperty(ref borderBrush, GetBorderBrush(), nameof(BorderBrush));
         SetProperty(ref medalBorderBrush, record.MedalGuardLevel switch

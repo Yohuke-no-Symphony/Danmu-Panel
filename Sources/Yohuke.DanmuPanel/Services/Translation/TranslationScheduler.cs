@@ -1,5 +1,6 @@
 using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Models.Messages;
+using Yohuke.DanmuPanel.Services.Messages;
 
 namespace Yohuke.DanmuPanel.Services.Translation;
 
@@ -17,6 +18,8 @@ public sealed class TranslationScheduler : ITranslationScheduler
     private readonly Dictionary<string, Task> running = new(StringComparer.Ordinal);
     private readonly TimeProvider timeProvider;
     private TranslationSettings settings = new();
+    private DanmuRegexFilter currentDanmuFilter = new(new() { Rules = [] });
+    private int observedFilterStateVersion;
     private CancellationTokenSource generation = new();
     private Task? worker;
     private volatile bool authenticationFailed;
@@ -36,7 +39,8 @@ public sealed class TranslationScheduler : ITranslationScheduler
     public event Action<string, MessageKind?>? PendingChanged;
 
     /// <summary>恢复待办并启动唯一调度循环。</summary>
-    public async Task StartAsync(TranslationSettings settings, CancellationToken cancellationToken = default)
+    public async Task StartAsync(TranslationSettings settings, CancellationToken cancellationToken = default,
+        DanmuRegexFilter? danmuFilter = null)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         if (worker is not null)
@@ -44,35 +48,47 @@ public sealed class TranslationScheduler : ITranslationScheduler
             throw new InvalidOperationException("Translation scheduler has already started.");
         }
 
-        await UpdateSettingsAsync(settings, cancellationToken).ConfigureAwait(false);
+        await UpdateSettingsAsync(settings, cancellationToken, danmuFilter).ConfigureAwait(false);
         worker = RunAsync();
     }
 
     /// <summary>原子替换配置快照，取消旧配置任务并更新持久待办。</summary>
-    public async Task UpdateSettingsAsync(TranslationSettings value, CancellationToken cancellationToken = default)
+    public async Task UpdateSettingsAsync(TranslationSettings value, CancellationToken cancellationToken = default,
+        DanmuRegexFilter? danmuFilter = null)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         await configurationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var snapshot = TranslationRequestFactory.Snapshot(value);
+            var filter = danmuFilter ?? currentDanmuFilter;
             var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(snapshot);
             var requestChanged = !configured || fingerprint != TranslationRequestFactory.GetConfigurationFingerprint(settings) ||
                 TranslationRequestFactory.GetRequestFingerprint(snapshot) != TranslationRequestFactory.GetRequestFingerprint(settings) ||
                 snapshot.ApiKey != settings.ApiKey || snapshot.Enabled != settings.Enabled;
-            if (requestChanged)
+            var filterChanged = !configured || !currentDanmuFilter.HasSameTranslationRules(filter);
+            if (requestChanged || filterChanged)
             {
                 await generation.CancelAsync().ConfigureAwait(false);
                 generation.Dispose();
                 generation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
-                if (snapshot.Enabled)
-                {
-                    await store.ResetPendingAsync(fingerprint, cancellationToken).ConfigureAwait(false);
-                }
+            }
+            if (snapshot.Enabled)
+            {
+                await RestoreRegexBlockedAsync(filter, fingerprint, requestChanged || filterChanged,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                observedFilterStateVersion = filter.StateVersion;
+            }
+            if (requestChanged)
+            {
                 authenticationFailed = false;
             }
 
             settings = snapshot;
+            currentDanmuFilter = filter;
             configured = true;
         }
         finally
@@ -140,6 +156,12 @@ public sealed class TranslationScheduler : ITranslationScheduler
                 await configurationGate.WaitAsync(lifetime.Token).ConfigureAwait(false);
                 try
                 {
+                    if (settings.Enabled && currentDanmuFilter.StateVersion != observedFilterStateVersion)
+                    {
+                        await RestoreRegexBlockedAsync(currentDanmuFilter,
+                            TranslationRequestFactory.GetConfigurationFingerprint(settings), false,
+                            lifetime.Token).ConfigureAwait(false);
+                    }
                     if (settings.Enabled && !authenticationFailed && running.Count < MAX_CONCURRENCY)
                     {
                         if (settings.BacklogMode == TranslationBacklogMode.Realtime)
@@ -156,15 +178,25 @@ public sealed class TranslationScheduler : ITranslationScheduler
                         var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings);
                         foreach (var job in pending)
                         {
+                            if (running.ContainsKey(job.Id) || job.ConfigurationFingerprint != fingerprint)
+                            {
+                                continue;
+                            }
+                            if (job.Kind == MessageKind.Danmu && currentDanmuFilter.IsTranslationBlocked(job.Text))
+                            {
+                                if (await store.FailAsync(job, "skipped:regex", lifetime.Token).ConfigureAwait(false))
+                                {
+                                    PendingChanged?.Invoke(job.RoomTabId, job.Kind);
+                                }
+                                NotifyWorkAvailable();
+                                continue;
+                            }
                             if (running.Count >= MAX_CONCURRENCY)
                             {
                                 break;
                             }
 
-                            if (!running.ContainsKey(job.Id) && job.ConfigurationFingerprint == fingerprint)
-                            {
-                                running.Add(job.Id, ExecuteAsync(job, settings, generation.Token));
-                            }
+                            running.Add(job.Id, ExecuteAsync(job, settings, generation.Token));
                         }
                     }
                 }
@@ -191,6 +223,22 @@ public sealed class TranslationScheduler : ITranslationScheduler
                     break;
                 }
             }
+        }
+    }
+
+    private async Task RestoreRegexBlockedAsync(DanmuRegexFilter filter, string fingerprint, bool resetPending,
+        CancellationToken cancellationToken)
+    {
+        var stateVersion = filter.StateVersion;
+        var restored = await store.RestoreRegexBlockedAsync(filter, cancellationToken).ConfigureAwait(false);
+        if (resetPending || restored > 0)
+        {
+            await store.ResetPendingAsync(fingerprint, cancellationToken).ConfigureAwait(false);
+        }
+        observedFilterStateVersion = stateVersion;
+        if (restored > 0)
+        {
+            PendingChanged?.Invoke("", null);
         }
     }
 

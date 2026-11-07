@@ -7,7 +7,8 @@ namespace Yohuke.DanmuPanel.Models.Settings;
 public sealed class SettingsSharePackage
 {
     public const string FORMAT = "Yohuke.DanmuPanel.Settings";
-    public const int CURRENT_VERSION = 1;
+    public const int MIN_SUPPORTED_VERSION = 1;
+    public const int CURRENT_VERSION = 2;
 
     [JsonRequired]
     public string Format { get; set; } = FORMAT;

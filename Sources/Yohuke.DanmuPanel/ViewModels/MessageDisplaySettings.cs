@@ -2,8 +2,10 @@ using System.Globalization;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Yohuke.DanmuPanel.I18n;
+using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Models.Translation;
+using Yohuke.DanmuPanel.Services.Messages;
 using Yohuke.DanmuPanel.Services.Translation;
 
 namespace Yohuke.DanmuPanel.ViewModels;
@@ -17,6 +19,7 @@ internal sealed class MessageDisplaySettings
     internal string TranslationFingerprint { get; }
     internal bool TranslationEnabled { get; }
     internal TranslationDisplayMode TranslationDisplayMode { get; }
+    internal DanmuRegexFilter DanmuFilter { get; }
     internal bool ShowUserPinyin { get; }
     internal bool ShowUserAvatars { get; }
     internal bool ShowFanMedals { get; }
@@ -29,11 +32,12 @@ internal sealed class MessageDisplaySettings
     internal string CultureName { get; }
     internal MessagePresentationOptions PresentationOptions { get; }
 
-    private MessageDisplaySettings(PanelSettings settings, string fingerprint, string languageId)
+    private MessageDisplaySettings(PanelSettings settings, string fingerprint, string languageId, DanmuRegexFilter danmuFilter)
     {
         TranslationFingerprint = fingerprint;
         TranslationEnabled = settings.Translation.Enabled;
         TranslationDisplayMode = settings.Translation.DisplayMode;
+        DanmuFilter = danmuFilter;
         ShowUserPinyin = settings.ShowUserPinyin;
         ShowUserAvatars = settings.ShowUserAvatars;
         ShowFanMedals = settings.ShowFanMedals;
@@ -49,11 +53,15 @@ internal sealed class MessageDisplaySettings
         specialAttentionUids = settings.SpecialAttention.Users.Select(user => user.UserUid).ToHashSet();
     }
 
-    internal static MessageDisplaySettings Capture(PanelSettings settings, MessageDisplaySettings? previous = null)
+    internal static MessageDisplaySettings Capture(PanelSettings settings, MessageDisplaySettings? previous = null,
+        DanmuRegexFilter? danmuFilter = null)
     {
         var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation);
         var languageId = Localization.IsInitialized ? Localization.CurrentLanguageID : "";
+        danmuFilter ??= previous?.DanmuFilter.HasSameSettings(settings.DanmuRegexFilter) == true
+            ? previous.DanmuFilter : new(settings.DanmuRegexFilter);
         if (previous is not null && previous.TranslationFingerprint == fingerprint &&
+            ReferenceEquals(previous.DanmuFilter, danmuFilter) &&
             previous.TranslationEnabled == settings.Translation.Enabled &&
             previous.TranslationDisplayMode == settings.Translation.DisplayMode &&
             previous.ShowUserPinyin == settings.ShowUserPinyin && previous.ShowGiftPinyin == settings.ShowGiftPinyin &&
@@ -68,7 +76,12 @@ internal sealed class MessageDisplaySettings
         {
             return previous;
         }
-        return new(settings, fingerprint, languageId);
+        return new(settings, fingerprint, languageId, danmuFilter);
+    }
+
+    internal bool IsTranslationBlocked(MessageRecord record)
+    {
+        return record.Kind == MessageKind.Danmu && DanmuFilter.IsTranslationBlocked(record.Content);
     }
 
     internal bool IsSpecialAttention(long userUid)

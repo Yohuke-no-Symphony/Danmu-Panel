@@ -16,7 +16,7 @@ public sealed partial class FeedViewModel
             Dispatcher.UIThread.Post(OnSpecialAttentionChanged);
             return;
         }
-        var current = MessageDisplaySettings.Capture(runtime.Configuration.Settings, displaySettings);
+        var current = MessageDisplaySettings.Capture(runtime.Configuration.Settings, displaySettings, runtime.DanmuFilter);
         if (ReferenceEquals(current, displaySettings))
         {
             return;

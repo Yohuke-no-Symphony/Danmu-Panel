@@ -40,7 +40,7 @@ public sealed class FeedReadWorkTests(ITestOutputHelper output)
         {
             await store.AppendTestMessagesAsync(batch, new());
         }
-        var filter = new DanmuRegexFilter(new() { Enabled = true, Patterns = ["^广告"] });
+        var filter = new DanmuRegexFilter(new() { Rules = [new() { Pattern = "^广告", BlockDisplay = true }] });
         var before = store.FeedVisibilityEvaluations;
         var first = await store.LoadFeedAsync("room", MessageKind.Danmu, 100, null, danmuRegexFilter: filter);
         Assert.Equal(100, store.FeedVisibilityEvaluations - before);
@@ -67,7 +67,7 @@ public sealed class FeedReadWorkTests(ITestOutputHelper output)
         using var cancellation = new CancellationTokenSource();
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var filter = new DanmuRegexFilter(new() { Enabled = true, Patterns = ["^(a+)+$"] });
+        var filter = new DanmuRegexFilter(new() { Rules = [new() { Pattern = "^(a+)+$", BlockDisplay = true }] });
         filter.PatternTimedOut += _ =>
         {
             entered.TrySetResult();

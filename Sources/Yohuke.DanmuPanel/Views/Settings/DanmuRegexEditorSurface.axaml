@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Yohuke.DanmuPanel.Views.Settings.DanmuRegexEditorSurface"
+             x:CompileBindings="False">
+    <StackPanel Spacing="12">
+        <TextBlock Text="{Loc Key=Settings.DanmuRegexRulesHelp}" Classes="muted" TextWrapping="Wrap" />
+        <Button x:Name="AddDanmuRegexRuleButton" HorizontalAlignment="Left"
+                Command="{Binding AddRuleCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <LucideIcon Kind="Plus" />
+                <TextBlock Text="{Loc Key=Settings.DanmuRegexAddRule}" />
+            </StackPanel>
+        </Button>
+        <ScrollViewer x:Name="DanmuRegexRulesScrollViewer" MaxHeight="400"
+                      HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="36,*,84,96,40" ColumnSpacing="8">
+                    <TextBlock Text="{Loc Key=Settings.DanmuRegexRuleNumber}" Classes="muted"
+                               VerticalAlignment="Center" TextWrapping="Wrap" />
+                    <TextBlock x:Name="DanmuRegexPatternHeader" Grid.Column="1"
+                               Text="{Loc Key=Settings.DanmuRegexPattern}" Classes="muted"
+                               VerticalAlignment="Center" TextWrapping="Wrap" />
+                    <TextBlock x:Name="DanmuRegexBlockDisplayHeader" Grid.Column="2"
+                               Text="{Loc Key=Settings.DanmuRegexBlockDisplay}" Classes="muted"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
+                               ToolTip.Tip="{Loc Key=Settings.DanmuRegexBlockDisplayHelp}" />
+                    <TextBlock x:Name="DanmuRegexBlockTranslationHeader" Grid.Column="3"
+                               Text="{Loc Key=Settings.DanmuRegexBlockTranslation}" Classes="muted"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
+                               ToolTip.Tip="{Loc Key=Settings.DanmuRegexBlockTranslationHelp}" />
+                </Grid>
+                <ItemsControl x:Name="DanmuRegexRules" ItemsSource="{Binding Rules}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid ColumnDefinitions="36,*,84,96,40" ColumnSpacing="8" Margin="0,0,0,8">
+                                <TextBlock x:Name="DanmuRegexRuleNumber" Text="{Binding Number}"
+                                           VerticalAlignment="Center" />
+                                <TextBox x:Name="DanmuRegexPatternInput" Grid.Column="1" MinWidth="100"
+                                         Text="{Binding Pattern, Mode=TwoWay}" AcceptsReturn="False"
+                                         TextWrapping="NoWrap" Watermark="{Loc Key=Settings.DanmuRegexPattern}"
+                                         AutomationProperties.Name="{Loc Key=Settings.DanmuRegexPattern}" />
+                                <CheckBox x:Name="DanmuRegexBlockDisplayCheckBox" Grid.Column="2"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          IsChecked="{Binding BlockDisplay, Mode=TwoWay}"
+                                          AutomationProperties.Name="{Loc Key=Settings.DanmuRegexBlockDisplay}"
+                                          ToolTip.Tip="{Loc Key=Settings.DanmuRegexBlockDisplayHelp}" />
+                                <CheckBox x:Name="DanmuRegexBlockTranslationCheckBox" Grid.Column="3"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          IsChecked="{Binding BlockTranslation, Mode=TwoWay}"
+                                          AutomationProperties.Name="{Loc Key=Settings.DanmuRegexBlockTranslation}"
+                                          ToolTip.Tip="{Loc Key=Settings.DanmuRegexBlockTranslationHelp}" />
+                                <Button x:Name="RemoveDanmuRegexRuleButton" Grid.Column="4"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        Command="{Binding $parent[UserControl].DataContext.RemoveRuleCommand}"
+                                        CommandParameter="{Binding}"
+                                        AutomationProperties.Name="{Loc Key=Settings.DanmuRegexRemoveRule}"
+                                        ToolTip.Tip="{Loc Key=Settings.DanmuRegexRemoveRule}">
+                                    <LucideIcon Kind="Trash2" />
+                                </Button>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </StackPanel>
+</UserControl>

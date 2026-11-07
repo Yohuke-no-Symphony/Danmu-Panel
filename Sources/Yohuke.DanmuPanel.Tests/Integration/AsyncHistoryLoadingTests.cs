@@ -584,7 +584,7 @@ public sealed class AsyncHistoryLoadingTests
         var configuration = Configuration();
         configuration.Settings.CompactDanmuDisplay = compact;
         configuration.Settings.AutoScrollLongMessages = false;
-        configuration.Settings.DanmuRegexFilter.Enabled = false;
+        configuration.Settings.DanmuRegexFilter.Rules.Clear();
         await using var runtime = new PanelRuntime(new(directory.Path), configuration);
         var messages = Enumerable.Range(0, 350).Select(index => new MessageRecord
         {

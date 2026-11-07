@@ -149,6 +149,34 @@ public sealed partial class SqliteMessageStore
     }
 
     /// <inheritdoc />
+    public Task<int> RestoreRegexBlockedAsync(DanmuRegexFilter filter, CancellationToken cancellationToken = default)
+    {
+        return EnqueueAsync(connection =>
+        {
+            using var transaction = connection.BeginTransaction();
+            using var command = Command(connection, transaction,
+                "SELECT payload FROM translation_jobs WHERE status=1 AND error='skipped:regex' ORDER BY created_ms,id;");
+            var restored = 0;
+            foreach (var job in ReadJobs(command))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var record = ReadMessage(connection, transaction, job.MessageId);
+                if (record is null || record.Generation != job.Generation || record.RoomTabId != job.RoomTabId ||
+                    record.TranslationFingerprint != job.ConfigurationFingerprint ||
+                    ReadGeneration(connection, transaction, record.RoomTabId) != job.Generation ||
+                    (record.Kind == MessageKind.Danmu && filter.IsTranslationBlocked(record.Content)))
+                {
+                    continue;
+                }
+                WriteJob(connection, transaction, job with { Priority = TranslationPriority(record) });
+                restored++;
+            }
+            transaction.Commit();
+            return restored;
+        }, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public Task<int> TrimPendingAsync(DateTimeOffset olderThan, int maxOrdinary, IReadOnlyCollection<string> inFlightJobIds,
         CancellationToken cancellationToken = default)
     {

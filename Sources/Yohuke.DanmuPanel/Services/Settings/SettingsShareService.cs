@@ -91,7 +91,8 @@ public sealed class SettingsShareService
             throw new InvalidDataException("The settings file is malformed or has missing required fields.", exception);
         }
 
-        if (package.Format != SettingsSharePackage.FORMAT || package.Version != SettingsSharePackage.CURRENT_VERSION)
+        if (package.Format != SettingsSharePackage.FORMAT ||
+            package.Version is < SettingsSharePackage.MIN_SUPPORTED_VERSION or > SettingsSharePackage.CURRENT_VERSION)
         {
             throw new InvalidDataException("The settings file format or version is not supported.");
         }

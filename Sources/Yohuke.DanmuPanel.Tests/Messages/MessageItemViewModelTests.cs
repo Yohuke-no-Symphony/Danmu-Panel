@@ -158,6 +158,65 @@ public sealed class MessageItemViewModelTests(ITestOutputHelper output)
         Assert.DoesNotContain(nameof(MessageItemViewModel.Detail), changes);
     }
 
+    /// <summary>同一设置对象修改正则后更新显隐通知，解除屏蔽恢复原译文且缓存身份不变。</summary>
+    [Fact]
+    public void EditingRegexRulesUpdatesCachedTranslationAndRestoresOriginalRecord()
+    {
+        var settings = new PanelSettings();
+        settings.Translation.DisplayMode = TranslationDisplayMode.TranslationOnly;
+        settings.DanmuRegexFilter.Rules = [new() { Pattern = "^other", BlockTranslation = true }];
+        var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation);
+        var record = new MessageRecord
+        {
+            Content = "lyrics♪", Translation = "Saved translation", TranslationFingerprint = fingerprint
+        };
+        var model = new MessageItemViewModel(record, settings, new PinyinService());
+        var changes = new List<string?>();
+        model.PropertyChanged += (_, args) => changes.Add(args.PropertyName);
+        Assert.True(model.HasTranslation);
+
+        settings.DanmuRegexFilter.Rules[0].Pattern = "^lyrics";
+        model.Update(record, settings);
+
+        Assert.False(model.HasTranslation);
+        Assert.True(model.ShowOriginal);
+        Assert.Contains(nameof(MessageItemViewModel.Translation), changes);
+        Assert.Contains(nameof(MessageItemViewModel.ShowOriginal), changes);
+        Assert.Same(record, model.Record);
+        Assert.Equal("Saved translation", record.Translation);
+        Assert.Equal(fingerprint, TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation));
+
+        settings.DanmuRegexFilter.Rules[0].BlockTranslation = false;
+        model.Update(record, settings);
+
+        Assert.Equal("Saved translation", model.Translation);
+        Assert.True(model.HasTranslation);
+        Assert.False(model.ShowOriginal);
+    }
+
+    /// <summary>共享规则因另一条消息超时暂停后，原位刷新恢复此前隐藏的缓存译文。</summary>
+    [Fact]
+    public void SuspendedSharedRegexRestoresTranslationOnUnchangedMessage()
+    {
+        var settings = new PanelSettings();
+        settings.DanmuRegexFilter.Rules = [new() { Pattern = "^(a+)+$", BlockTranslation = true }];
+        var record = new MessageRecord
+        {
+            Content = "aaa", Translation = "Saved translation",
+            TranslationFingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation)
+        };
+        var display = MessageDisplaySettings.Capture(settings);
+        var model = MessageItemViewModel.Create(record, display, new PinyinService());
+        Assert.False(model.HasTranslation);
+
+        Assert.False(display.DanmuFilter.IsTranslationBlocked(new string('a', 100_000) + "!"));
+        model.Apply(record, display);
+
+        Assert.True(model.HasTranslation);
+        Assert.Equal("Saved translation", model.Translation);
+        Assert.Same(record, model.Record);
+    }
+
     /// <summary>空名称可以直接读取，长名称最多显示三个完整文本元素。</summary>
     [Theory]
     [InlineData("", "")]

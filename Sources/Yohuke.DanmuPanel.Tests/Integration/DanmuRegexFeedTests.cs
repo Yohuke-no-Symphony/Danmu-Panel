@@ -39,7 +39,7 @@ public sealed class DanmuRegexFeedTests
             Assert.Equal(translation.Id, Assert.Single(model.PinnedItems).Record.Id);
         }
 
-        runtime.Configuration.Settings.DanmuRegexFilter.Enabled = true;
+        SetDisplayBlocking(runtime.Configuration.Settings, true);
         await runtime.ApplySettingsAsync();
         await model.RefreshAsync();
 
@@ -55,7 +55,7 @@ public sealed class DanmuRegexFeedTests
             Assert.Equal(2, model.UnreadCount);
         }
 
-        runtime.Configuration.Settings.DanmuRegexFilter.Enabled = false;
+        SetDisplayBlocking(runtime.Configuration.Settings, false);
         await runtime.ApplySettingsAsync();
         await model.RefreshAsync();
 
@@ -66,8 +66,7 @@ public sealed class DanmuRegexFeedTests
             Assert.Equal(translation.Id, Assert.Single(model.PinnedItems).Record.Id);
         }
 
-        runtime.Configuration.Settings.DanmuRegexFilter.Enabled = true;
-        runtime.Configuration.Settings.DanmuRegexFilter.Patterns = ["^我喜欢"];
+        runtime.Configuration.Settings.DanmuRegexFilter.Rules = [new() { Pattern = "^我喜欢", BlockDisplay = true }];
         await runtime.ApplySettingsAsync();
         await model.RefreshAsync();
 
@@ -82,7 +81,11 @@ public sealed class DanmuRegexFeedTests
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = new PanelRuntime(new(directory.Path), new()
         {
-            Settings = new() { DanmuRegexFilter = new() { Enabled = true }, MessageRetentionCount = 100 }
+            Settings = new()
+            {
+                DanmuRegexFilter = new() { Rules = [new() { Pattern = @"^(.*?)【(.*\*?)】$", BlockDisplay = true }] },
+                MessageRetentionCount = 100
+            }
         });
         for (var index = 0; index < 120; index++)
         {
@@ -130,7 +133,11 @@ public sealed class DanmuRegexFeedTests
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = new PanelRuntime(new(directory.Path), new PanelConfiguration
         {
-            Settings = new() { HideEmoticonDanmu = true, DanmuRegexFilter = new() { Enabled = true } }
+            Settings = new()
+            {
+                HideEmoticonDanmu = true,
+                DanmuRegexFilter = new() { Rules = [new() { Pattern = @"^(.*?)【(.*\*?)】$", BlockDisplay = true }] }
+            }
         });
         var emoticon = Message("😀", 0);
         var translation = Message("【同传】", 1);
@@ -143,7 +150,7 @@ public sealed class DanmuRegexFeedTests
         await model.SelectRoomAsync(new() { Id = "tab", RoomId = "123" });
         Assert.Equal(ordinary.Id, Assert.Single(model.Items).Record.Id);
 
-        runtime.Configuration.Settings.DanmuRegexFilter.Enabled = false;
+        SetDisplayBlocking(runtime.Configuration.Settings, false);
         await runtime.ApplySettingsAsync();
         await model.RefreshAsync();
 
@@ -151,7 +158,7 @@ public sealed class DanmuRegexFeedTests
         Assert.DoesNotContain(model.Items, item => item.Record.Id == emoticon.Id);
 
         runtime.Configuration.Settings.HideEmoticonDanmu = false;
-        runtime.Configuration.Settings.DanmuRegexFilter.Enabled = true;
+        SetDisplayBlocking(runtime.Configuration.Settings, true);
         await runtime.ApplySettingsAsync();
         await model.RefreshAsync();
 
@@ -165,7 +172,14 @@ public sealed class DanmuRegexFeedTests
     {
         using var directory = new MessageStoreTestDirectory();
         await using var store = new SqliteMessageStore(directory.DatabasePath);
-        var filter = new DanmuRegexFilter(new() { Enabled = true, Patterns = ["^(a+)+$", "^广告"] });
+        var filter = new DanmuRegexFilter(new()
+        {
+            Rules =
+            [
+                new() { Pattern = "^(a+)+$", BlockDisplay = true },
+                new() { Pattern = "^广告", BlockDisplay = true }
+            ]
+        });
         await store.AppendAsync(Message(new string('a', 100_000) + "!", 0), new());
         await store.AppendAsync(Message(new string('a', 100_001) + "!", 1), new());
         await store.AppendAsync(Message("广告内容", 2), new());
@@ -183,6 +197,14 @@ public sealed class DanmuRegexFeedTests
         Assert.Equal(3, refreshed.Records.Count);
         Assert.Contains(refreshed.Records, item => item.Id == ordinary.Id);
         Assert.Single(timedOut);
+    }
+
+    private static void SetDisplayBlocking(PanelSettings settings, bool enabled)
+    {
+        foreach (var rule in settings.DanmuRegexFilter.Rules)
+        {
+            rule.BlockDisplay = enabled;
+        }
     }
 
     private static MessageRecord Message(string content, int seconds, MessageKind kind = MessageKind.Danmu)

@@ -253,7 +253,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
             }
             var records = snapshot.Records;
             var currentSettings = runtime.Configuration.Settings;
-            displaySettings = MessageDisplaySettings.Capture(currentSettings, displaySettings);
+            displaySettings = MessageDisplaySettings.Capture(currentSettings, displaySettings, runtime.DanmuFilter);
             var existingItems = Items.ToDictionary(item => item.Record.Id);
             var translationCandidates = new List<MessageRecord>();
             var uiBudget = new FeedUiWorkBudget();
@@ -271,9 +271,10 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
             {
                 var record = records[index];
                 var changed = true;
-                var translationPending = record.TranslationFingerprint == displaySettings.TranslationFingerprint &&
+                var translationBlocked = displaySettings.IsTranslationBlocked(record);
+                var translationPending = !translationBlocked && record.TranslationFingerprint == displaySettings.TranslationFingerprint &&
                     snapshot.PendingTranslationIds.Contains(record.Id);
-                if (displaySettings.TranslationEnabled && record.Kind is MessageKind.Danmu or MessageKind.SuperChat)
+                if (!translationBlocked && displaySettings.TranslationEnabled && record.Kind is MessageKind.Danmu or MessageKind.SuperChat)
                 {
                     var fingerprint = displaySettings.TranslationFingerprint;
                     if (record.TranslationFingerprint != fingerprint && translationRequested.Add(record.Id + fingerprint))

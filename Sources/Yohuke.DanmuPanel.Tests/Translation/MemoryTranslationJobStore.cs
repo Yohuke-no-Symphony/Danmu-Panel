@@ -1,14 +1,27 @@
 using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Services.Translation;
+using Yohuke.DanmuPanel.Models.Messages;
+using Yohuke.DanmuPanel.Services.Messages;
 
 namespace Yohuke.DanmuPanel.Tests.Translation;
 
 internal sealed class MemoryTranslationJobStore : ITranslationJobStore
 {
     private readonly object gate = new();
+    private readonly Dictionary<string, TranslationJob> regexBlocked = [];
     internal List<TranslationJob> Pending { get; } = [];
     internal Dictionary<string, string> Results { get; } = [];
     internal int Skipped { get; private set; }
+    internal int RegexBlockedCount
+    {
+        get
+        {
+            lock (gate)
+            {
+                return regexBlocked.Count;
+            }
+        }
+    }
 
     public Task<IReadOnlyList<TranslationJob>> GetPendingAsync(int limit, CancellationToken cancellationToken = default)
     {
@@ -37,9 +50,32 @@ internal sealed class MemoryTranslationJobStore : ITranslationJobStore
 
     public Task<bool> FailAsync(TranslationJob job, string error, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         lock (gate)
         {
-            return Task.FromResult(Pending.RemoveAll(current => current.Id == job.Id && current.ConfigurationFingerprint == job.ConfigurationFingerprint) > 0);
+            var removed = Pending.RemoveAll(current => current.Id == job.Id &&
+                current.ConfigurationFingerprint == job.ConfigurationFingerprint) > 0;
+            if (removed && error == "skipped:regex")
+            {
+                regexBlocked[job.Id] = job;
+            }
+            return Task.FromResult(removed);
+        }
+    }
+
+    public Task<int> RestoreRegexBlockedAsync(DanmuRegexFilter filter, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (gate)
+        {
+            var restored = regexBlocked.Values.Where(job => job.Kind != MessageKind.Danmu ||
+                !filter.IsTranslationBlocked(job.Text)).ToArray();
+            foreach (var job in restored)
+            {
+                Pending.Add(job);
+                regexBlocked.Remove(job.Id);
+            }
+            return Task.FromResult(restored.Length);
         }
     }
 

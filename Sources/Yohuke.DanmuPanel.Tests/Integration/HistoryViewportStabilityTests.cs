@@ -51,7 +51,7 @@ public sealed class HistoryViewportStabilityTests(ITestOutputHelper output)
         settings.CompactDanmuDisplay = compact;
         settings.CompactDanmuWrap = false;
         settings.AutoScrollLongMessages = false;
-        settings.DanmuRegexFilter.Enabled = false;
+        settings.DanmuRegexFilter.Rules.Clear();
         var pinyin = new BlockingPinyinService();
         await using var runtime = new PanelRuntime(new(directory.Path), configuration, pinyin);
         await SeedHistoryAsync(runtime, directory);

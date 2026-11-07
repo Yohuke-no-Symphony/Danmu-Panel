@@ -29,6 +29,7 @@ public sealed class SettingsView : UserControl
     private readonly SettingsDialogSurface surface = new();
     private readonly ColorSchemeEditor colorSchemeEditor;
     internal SpecialAttentionEditor SpecialAttentionEditor { get; }
+    internal DanmuRegexEditor DanmuRegexEditor { get; }
     private readonly PanelRuntime runtime;
     private readonly SettingsShareService sharing = new();
     private readonly ISettingsTransferDialogs transferDialogs;
@@ -64,8 +65,6 @@ public sealed class SettingsView : UserControl
     private readonly CheckBox compactSuperChatWrap;
     private readonly CheckBox autoScrollLongMessages;
     private readonly CheckBox hideEmoticonDanmu;
-    private readonly CheckBox danmuRegexEnabled;
-    private readonly TextBox danmuRegexPatterns;
     private readonly CheckBox windowMenuOnMac;
     private readonly ObservableCollection<GlossaryRow> glossary;
     private readonly TextBlock glossaryLanguage;
@@ -111,6 +110,7 @@ public sealed class SettingsView : UserControl
         colorSchemeEditor = new(settings, runtime.Colors,
             new HashSet<string>(StringComparer.Ordinal) { ColorSettingCatalog.SPECIAL_ATTENTION_MESSAGE_BRUSH });
         SpecialAttentionEditor = new(runtime, colorSchemeEditor.GetInput(ColorSettingCatalog.SPECIAL_ATTENTION_MESSAGE_BRUSH), userSearch, userAvatars);
+        DanmuRegexEditor = new(settings.DanmuRegexFilter);
         superChatBorderThickness = CreateBorderThicknessInput("SuperChatBorderThicknessInput", settings.MessageBorders.SuperChat);
         giftBorderThickness = CreateBorderThicknessInput("GiftBorderThicknessInput", settings.MessageBorders.Gift);
         guardBorderThickness = CreateBorderThicknessInput("GuardBorderThicknessInput", settings.MessageBorders.Guard);
@@ -184,17 +184,6 @@ public sealed class SettingsView : UserControl
         autoScrollLongMessages.Name = "AutoScrollLongMessagesCheckBox";
         hideEmoticonDanmu = Check("Settings.HideEmoticonDanmu", settings.HideEmoticonDanmu);
         hideEmoticonDanmu.Name = "HideEmoticonDanmuCheckBox";
-        danmuRegexEnabled = Check("Settings.DanmuRegexEnabled", settings.DanmuRegexFilter.Enabled);
-        danmuRegexEnabled.Name = "DanmuRegexFilterEnabledCheckBox";
-        danmuRegexPatterns = new()
-        {
-            Name = "DanmuRegexPatternsInput",
-            Text = string.Join(Environment.NewLine, settings.DanmuRegexFilter.Patterns),
-            AcceptsReturn = true,
-            TextWrapping = TextWrapping.NoWrap,
-            MinHeight = 140,
-            MaxHeight = 260
-        };
         compactDanmuWrap.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
         compactSuperChatWrap.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
         autoScrollLongMessages.Bind(IsEnabledProperty, new Binding(nameof(CheckBox.IsChecked)) { Source = compactDisplay });
@@ -243,8 +232,6 @@ public sealed class SettingsView : UserControl
                         WithHint(autoScrollLongMessages, "Settings.AutoScrollLongMessagesHelp")
                     }
                 }),
-            Card("Settings.DanmuRegexFilter", danmuRegexEnabled,
-                Row("Settings.DanmuRegexPatterns", danmuRegexPatterns)),
             Card("Settings.Reading", Row("Settings.GiftMinimum", giftMinimum), Row("Settings.ComboPolicy", giftResetPolicy)),
             BuildMessageSorting(),
             Card("Settings.Pinyin",
@@ -253,6 +240,7 @@ public sealed class SettingsView : UserControl
                 WithHint(danmuPinyin, "Settings.PinyinHelp"),
                 WithHint(superChatPinyin, "Settings.PinyinHelp"),
                 WithHint(Row("Settings.PinyinLayout", pinyinLayout), "Settings.PinyinHelp", "Settings.PinyinScrollHelp"))));
+        AddSection("Settings.Blocking", "Settings.BlockingDescription", Card("Settings.DanmuRegexFilter", DanmuRegexEditor));
         AddSection("Settings.SpecialAttention", "Settings.SpecialAttentionDescription", Card("SpecialAttention.Title", SpecialAttentionEditor));
         AddSection("Settings.Translation", "Settings.TranslationDescription", BuildTranslation());
         AddSection("Settings.Accounts", "Settings.AccountsDescription", accountsView);
@@ -441,21 +429,10 @@ public sealed class SettingsView : UserControl
             SetStatus(Localization.Format("Settings.InvalidMessageRetentionCount", PanelSettings.MAX_MESSAGE_RETENTION_COUNT));
             return false;
         }
-        var regexLines = (danmuRegexPatterns.Text ?? "").Split(["\r\n", "\n", "\r"], StringSplitOptions.None);
-        var patterns = new List<string>();
-        for (var index = 0; index < regexLines.Length; index++)
+        if (!DanmuRegexEditor.Model.TryCreateSettings(out var danmuRegexSettings, out var invalidRuleNumber))
         {
-            var pattern = regexLines[index];
-            if (string.IsNullOrWhiteSpace(pattern))
-            {
-                continue;
-            }
-            if (!DanmuRegexFilter.IsValidPattern(pattern))
-            {
-                SetStatus(Localization.Format("Settings.DanmuRegexInvalidPattern", index + 1));
-                return false;
-            }
-            patterns.Add(pattern);
+            SetStatus(Localization.Format("Settings.DanmuRegexInvalidPattern", invalidRuleNumber));
+            return false;
         }
         if (!colorSchemeEditor.TryCommit(out var colorError))
         {
@@ -524,7 +501,7 @@ public sealed class SettingsView : UserControl
             CompactSuperChatWrap = compactSuperChatWrap.IsChecked == true,
             AutoScrollLongMessages = autoScrollLongMessages.IsChecked == true,
             HideEmoticonDanmu = hideEmoticonDanmu.IsChecked == true,
-            DanmuRegexFilter = new() { Enabled = danmuRegexEnabled.IsChecked == true, Patterns = patterns },
+            DanmuRegexFilter = danmuRegexSettings,
             SpecialAttention = SpecialAttentionEditor.Model.CreateSnapshot(settings.SpecialAttention)
         };
         return true;

@@ -14,6 +14,66 @@ namespace Yohuke.DanmuPanel.Tests.Settings;
 /// <summary>验证设置分享格式、凭据保留和外部文件校验。</summary>
 public sealed class SettingsShareServiceTests
 {
+    /// <summary>新版分享仅导出逐条规则结构和版本二，避免旧程序静默丢失独立开关。</summary>
+    [Fact]
+    public async Task ExportWritesVersionTwoAndOnlyPerRuleSettings()
+    {
+        var settings = CreateCompleteSettings("shared-key");
+        await using var stream = new MemoryStream();
+
+        await new SettingsShareService().ExportAsync(settings, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        Assert.Equal(2, document.RootElement.GetProperty("Version").GetInt32());
+        var filter = document.RootElement.GetProperty("Settings").GetProperty("DanmuRegexFilter");
+        Assert.Equal(new[] { "Rules" }, filter.EnumerateObject().Select(property => property.Name));
+        var rules = filter.GetProperty("Rules");
+        Assert.True(rules[0].GetProperty("BlockDisplay").GetBoolean());
+        Assert.False(rules[0].GetProperty("BlockTranslation").GetBoolean());
+        Assert.False(rules[1].GetProperty("BlockDisplay").GetBoolean());
+        Assert.True(rules[1].GetProperty("BlockTranslation").GetBoolean());
+    }
+
+    /// <summary>版本一旧分享的全局开关逐条迁移，应用后规则对象仍相互独立。</summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task LegacyPackageMigratesGlobalSwitchesToEachRule(bool blockDisplay, bool blockTranslation)
+    {
+        var json = JsonSerializer.Serialize(new
+        {
+            Format = SettingsSharePackage.FORMAT,
+            Version = 1,
+            Settings = new
+            {
+                DanmuRegexFilter = new
+                {
+                    Enabled = blockDisplay,
+                    BlockTranslation = blockTranslation,
+                    Patterns = new[] { "^广告", "机器人$" }
+                }
+            }
+        });
+        await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var sharing = new SettingsShareService();
+
+        var imported = await sharing.ImportAsync(stream);
+        var target = new PanelSettings();
+        sharing.ApplyTo(target, imported);
+
+        Assert.Equal(new[] { "^广告", "机器人$" }, target.DanmuRegexFilter.Rules.Select(rule => rule.Pattern));
+        Assert.All(target.DanmuRegexFilter.Rules, rule =>
+        {
+            Assert.Equal(blockDisplay, rule.BlockDisplay);
+            Assert.Equal(blockTranslation, rule.BlockTranslation);
+        });
+        Assert.NotSame(imported.DanmuRegexFilter.Rules[0], target.DanmuRegexFilter.Rules[0]);
+        imported.DanmuRegexFilter.Rules[0].BlockDisplay = !blockDisplay;
+        Assert.Equal(blockDisplay, target.DanmuRegexFilter.Rules[0].BlockDisplay);
+    }
+
     /// <summary>本地缓存身份不导出，导入配置时也不能覆盖目标缓存身份。</summary>
     [Fact]
     public async Task TranslationCacheIdentityIsLocalAndSurvivesSettingsImport()
@@ -117,7 +177,8 @@ public sealed class SettingsShareServiceTests
         Assert.NotSame(source.MessageColumns.Gift, target.MessageColumns.Gift);
         Assert.NotSame(source.MessageColumns.Guard, target.MessageColumns.Guard);
         Assert.NotSame(source.DanmuRegexFilter, target.DanmuRegexFilter);
-        Assert.NotSame(source.DanmuRegexFilter.Patterns, target.DanmuRegexFilter.Patterns);
+        Assert.NotSame(source.DanmuRegexFilter.Rules, target.DanmuRegexFilter.Rules);
+        Assert.NotSame(source.DanmuRegexFilter.Rules[0], target.DanmuRegexFilter.Rules[0]);
         var applied = JsonSerializer.Serialize(target);
 
         source.ColorScheme.Overrides.Clear();
@@ -126,8 +187,9 @@ public sealed class SettingsShareServiceTests
         source.Translation.ApiKey = "changed-key";
         source.Translation.Glossary[0].Target = "changed";
         source.Translation.Glossary.Clear();
-        source.DanmuRegexFilter.Enabled = true;
-        source.DanmuRegexFilter.Patterns.Clear();
+        source.DanmuRegexFilter.Rules[0].Pattern = "changed";
+        source.DanmuRegexFilter.Rules[0].BlockDisplay = false;
+        source.DanmuRegexFilter.Rules.Clear();
         source.MessageColumns.Danmu.RegularIdentityRatio = 0.7;
         source.MessageColumns.Gift.CompactIdentityRatio = 0.2;
         source.MessageColumns.Guard.RegularIdentityRatio = 0.5;
@@ -165,7 +227,7 @@ public sealed class SettingsShareServiceTests
                 source.MessageRetentionCount = 0;
                 break;
             case "danmuRegexFilter":
-                source.DanmuRegexFilter.Patterns = ["["];
+                source.DanmuRegexFilter.Rules = [new() { Pattern = "[" }];
                 break;
             case "translation":
                 source.Translation.Glossary[0].Target = " ";
@@ -260,7 +322,7 @@ public sealed class SettingsShareServiceTests
     [InlineData("{\"Format\":\"other\",\"Version\":1,\"Settings\":{}}")]
     [InlineData("{\"Format\":null,\"Version\":1,\"Settings\":{}}")]
     [InlineData("{\"Format\":\"Yohuke.DanmuPanel.Settings\",\"Version\":0,\"Settings\":{}}")]
-    [InlineData("{\"Format\":\"Yohuke.DanmuPanel.Settings\",\"Version\":2,\"Settings\":{}}")]
+    [InlineData("{\"Format\":\"Yohuke.DanmuPanel.Settings\",\"Version\":3,\"Settings\":{}}")]
     [InlineData("{\"Format\":\"Yohuke.DanmuPanel.Settings\",\"Version\":\"1\",\"Settings\":{}}")]
     [InlineData("{\"Format\":\"Yohuke.DanmuPanel.Settings\",\"Version\":1,\"Settings\":[]}")]
     [InlineData("{\"Format\":\"Yohuke.DanmuPanel.Settings\",\"Version\":1,\"Settings\":null}")]
@@ -446,7 +508,14 @@ public sealed class SettingsShareServiceTests
             CompactSuperChatWrap = false,
             AutoScrollLongMessages = false,
             HideEmoticonDanmu = true,
-            DanmuRegexFilter = new() { Enabled = false, Patterns = ["^广告", "机器人$"] },
+            DanmuRegexFilter = new()
+            {
+                Rules =
+                [
+                    new() { Pattern = "^广告", BlockDisplay = true },
+                    new() { Pattern = "机器人$", BlockTranslation = true }
+                ]
+            },
             SpecialAttention = new() { Users = [new() { UserUid = 123456789, DisplayName = "特别关注用户" }] },
             DefaultAccountId = "local-account",
             SelectedWorkspaceId = "local-workspace"

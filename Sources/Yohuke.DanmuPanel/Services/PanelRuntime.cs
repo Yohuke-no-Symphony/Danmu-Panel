@@ -77,7 +77,7 @@ public sealed partial class PanelRuntime : IAsyncDisposable
     public async Task InitializeAsync()
     {
         await Messages.ReevaluateReadOptionsAsync(Configuration.Settings.Reading);
-        await scheduler.StartAsync(Configuration.Settings.Translation);
+        await scheduler.StartAsync(Configuration.Settings.Translation, danmuFilter: DanmuFilter);
         await Task.WhenAll(Configuration.Accounts.Select(account => AccountSessions.ValidateAsync(account)));
     }
 
@@ -122,7 +122,7 @@ public sealed partial class PanelRuntime : IAsyncDisposable
         var nextReceptionSettings = CaptureReceptionSettings();
         await ConfigurationStore.SaveAsync(Configuration);
         await Messages.ReevaluateReadOptionsAsync(Configuration.Settings.Reading);
-        await scheduler.UpdateSettingsAsync(Configuration.Settings.Translation);
+        await scheduler.UpdateSettingsAsync(Configuration.Settings.Translation, danmuFilter: danmuFilter);
         DanmuFilter = danmuFilter;
         Volatile.Write(ref receptionSettings, nextReceptionSettings);
         SpecialAttentionChanged?.Invoke();
@@ -318,6 +318,11 @@ public sealed partial class PanelRuntime : IAsyncDisposable
             I18n.Localization.Format("Settings.DanmuRegexTimedOut", index),
             I18n.Localization.Get("Settings.DanmuRegexFilter"));
         return filter;
+    }
+
+    internal bool IsTranslationBlocked(MessageRecord record)
+    {
+        return record.Kind == MessageKind.Danmu && DanmuFilter.IsTranslationBlocked(record.Content);
     }
 
     private void ReportError(string message, string source)

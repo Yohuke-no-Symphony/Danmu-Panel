@@ -513,7 +513,8 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             });
             var retry = AddAction(menu, "Panel.RetryTranslation", LucideIconKind.Languages, async () =>
             {
-                if (row.DataContext is MessageItemViewModel item && runtime.Configuration.Settings.Translation.Enabled)
+                if (row.DataContext is MessageItemViewModel item && runtime.Configuration.Settings.Translation.Enabled &&
+                    !runtime.IsTranslationBlocked(item.Record))
                 {
                     await runtime.Messages.RetryTranslationJobAsync(item.Record.Id, item.Record.Generation,
                         TranslationRequestFactory.GetConfigurationFingerprint(runtime.Configuration.Settings.Translation));
@@ -521,8 +522,14 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
                     await Model.RefreshAsync();
                 }
             });
-            retry.IsEnabled = runtime.Configuration.Settings.Translation.Enabled;
-            menu.Opened += (_, _) => retry.IsEnabled = runtime.Configuration.Settings.Translation.Enabled;
+            retry.Name = "RetryTranslationMenuItem";
+            void RefreshRetry()
+            {
+                retry.IsEnabled = runtime.Configuration.Settings.Translation.Enabled &&
+                    row.DataContext is MessageItemViewModel item && !runtime.IsTranslationBlocked(item.Record);
+            }
+            RefreshRetry();
+            menu.Opened += (_, _) => RefreshRetry();
         }
         if (kind == MessageKind.Danmu)
         {
@@ -597,7 +604,8 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             if (record.Kind == MessageKind.Danmu)
             {
                 var updated = await runtime.Messages.TogglePinAsync(record.Id);
-                if (updated?.IsPinned == true && runtime.Configuration.Settings.Translation.Enabled)
+                if (updated?.IsPinned == true && runtime.Configuration.Settings.Translation.Enabled &&
+                    !runtime.IsTranslationBlocked(updated))
                 {
                     await runtime.Messages.UpsertTranslationJobAsync(updated.Id, updated.Generation,
                         TranslationRequestFactory.GetConfigurationFingerprint(runtime.Configuration.Settings.Translation));
