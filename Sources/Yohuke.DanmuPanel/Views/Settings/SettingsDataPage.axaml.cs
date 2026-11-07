@@ -1,4 +1,6 @@
+using Avalonia;
 using Avalonia.Controls;
+using Yohuke.DanmuPanel.ViewModels.Settings;
 
 namespace Yohuke.DanmuPanel.Views.Settings;
 
@@ -9,5 +11,15 @@ public sealed partial class SettingsDataPage : UserControl
     public SettingsDataPage()
     {
         InitializeComponent();
+    }
+
+    /// <inheritdoc />
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        if (DataContext is SettingsDialogViewModel model && model.Data.RefreshCacheSizeCommand.CanExecute(null))
+        {
+            model.Data.RefreshCacheSizeCommand.Execute(null);
+        }
     }
 }

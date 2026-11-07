@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.Appearance;
@@ -26,6 +27,7 @@ public sealed class SettingsView : UserControl
     private readonly SettingsShareService sharing = new();
     private readonly ISettingsTransferDialogs transferDialogs;
     private readonly Control accountsView;
+    private readonly Func<string, Task<bool>> openDataDirectory;
 
     internal SettingsDialogViewModel Model { get; }
     internal SpecialAttentionEditor SpecialAttentionEditor { get; }
@@ -54,11 +56,13 @@ public sealed class SettingsView : UserControl
 
     internal SettingsView(PanelRuntime runtime, Control accountsView, bool supportsNativeMenus,
         ISettingsTransferDialogs? transferDialogs = null, IBilibiliUserSearchService? userSearch = null,
-        IUserAvatarService? userAvatars = null)
+        IUserAvatarService? userAvatars = null, Func<string, Task<bool>>? openDataDirectory = null)
     {
         this.runtime = runtime;
         this.transferDialogs = transferDialogs ?? new SettingsTransferDialogs();
         this.accountsView = accountsView;
+        this.openDataDirectory = openDataDirectory ?? LaunchDataDirectoryAsync;
+        var cacheSize = new CacheSizeService(new(runtime.ConfigurationStore.DirectoryPath));
         var settings = runtime.Configuration.Settings;
         Model = new(settings, supportsNativeMenus, async () =>
             {
@@ -67,7 +71,8 @@ public sealed class SettingsView : UserControl
             () => PendingSettingsTransfer = ImportSettingsAsync(),
             () => PendingSettingsTransfer = ExportSettingsAsync(),
             all => ClearRequested?.Invoke(all), ClearCacheAsync,
-            () => CheckForUpdatesRequested?.Invoke());
+            () => CheckForUpdatesRequested?.Invoke(),
+            new(runtime.ConfigurationStore.DirectoryPath, cacheSize.GetSizeAsync, OpenDataDirectoryAsync));
         colorSchemeEditor = new(settings, runtime.Colors,
             new HashSet<string>(StringComparer.Ordinal)
             {
@@ -444,12 +449,39 @@ public sealed class SettingsView : UserControl
         try
         {
             await runtime.ClearTranslationCacheAsync();
+            if (Model.Data.RefreshCacheSizeCommand.ExecutionTask is { IsCompleted: false } pendingRefresh)
+            {
+                await pendingRefresh;
+            }
+            await Model.Data.RefreshCacheSizeCommand.ExecuteAsync(null);
             SetStatus(Localization.Get("Settings.CacheCleared"), isError: false);
         }
         catch (Exception exception)
         {
             SetStatus(Localization.Get("Settings.SaveFailed") + " · " + exception.GetType().Name);
         }
+    }
+
+    private async Task OpenDataDirectoryAsync()
+    {
+        try
+        {
+            if (!await openDataDirectory(runtime.ConfigurationStore.DirectoryPath))
+            {
+                SetStatus(Localization.Get("Settings.OpenDataDirectoryFailed"));
+            }
+        }
+        catch (Exception exception)
+        {
+            SetStatus(Localization.Get("Settings.OpenDataDirectoryFailed") + " · " + exception.GetType().Name);
+        }
+    }
+
+    private async Task<bool> LaunchDataDirectoryAsync(string path)
+    {
+        var owner = TopLevel.GetTopLevel(this)!;
+        using var folder = await owner.StorageProvider.TryGetFolderFromPathAsync(path);
+        return folder is not null && await owner.Launcher.LaunchFileAsync(folder);
     }
 
     private void OnAttached(object? sender, VisualTreeAttachmentEventArgs args)

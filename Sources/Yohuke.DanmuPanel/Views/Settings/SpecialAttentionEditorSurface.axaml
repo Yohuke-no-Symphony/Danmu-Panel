@@ -19,7 +19,11 @@
                 <TextBlock Text="{Binding Users.Count}" Classes="muted" VerticalAlignment="Center" />
             </StackPanel>
             <Button x:Name="OpenSpecialAttentionSearchButton" Grid.Column="1"
-                    Content="{Loc Key=SpecialAttention.OpenSearch}" Command="{Binding #Root.OpenSearchCommand}" />
+                    Classes="iconButton" Command="{Binding #Root.OpenSearchCommand}"
+                    ToolTip.Tip="{Loc Key=SpecialAttention.OpenSearch}"
+                    AutomationProperties.Name="{Loc Key=SpecialAttention.OpenSearch}">
+                <LucideIcon Kind="UserPlus" />
+            </Button>
         </Grid>
         <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled">
             <ItemsControl x:Name="SpecialAttentionUsers" ItemsSource="{Binding UserRows}">

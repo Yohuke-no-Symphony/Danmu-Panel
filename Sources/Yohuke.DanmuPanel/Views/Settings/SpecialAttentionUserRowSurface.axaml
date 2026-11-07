@@ -14,11 +14,17 @@
                 <TextBlock Text="{Binding UidText}" FontSize="11" Classes="muted" />
             </StackPanel>
             <Button Name="AddSpecialAttentionSearchResultButton" Grid.Column="2" VerticalAlignment="Center"
-                    IsVisible="{Binding IsAdding}" Content="{Loc Key=SpecialAttention.AddUser}"
-                    Command="{Binding ActionCommand}" CommandParameter="{Binding Item}" />
+                    IsVisible="{Binding IsAdding}" Classes="iconButton"
+                    ToolTip.Tip="{Loc Key=SpecialAttention.AddUser}" AutomationProperties.Name="{Loc Key=SpecialAttention.AddUser}"
+                    Command="{Binding ActionCommand}" CommandParameter="{Binding Item}">
+                <LucideIcon Kind="UserPlus" />
+            </Button>
             <Button Name="RemoveSpecialAttentionUserButton" Grid.Column="2" VerticalAlignment="Center"
-                    IsVisible="{Binding IsRemoving}" Content="{Loc Key=SpecialAttention.RemoveUser}"
-                    Command="{Binding ActionCommand}" CommandParameter="{Binding Item}" />
+                    IsVisible="{Binding IsRemoving}" Classes="iconButton"
+                    ToolTip.Tip="{Loc Key=SpecialAttention.RemoveUser}" AutomationProperties.Name="{Loc Key=SpecialAttention.RemoveUser}"
+                    Command="{Binding ActionCommand}" CommandParameter="{Binding Item}">
+                <LucideIcon Kind="Trash2" />
+            </Button>
         </Grid>
     </Border>
 </UserControl>

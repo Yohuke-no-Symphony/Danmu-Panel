@@ -8,6 +8,33 @@
              x:CompileBindings="True">
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
         <StackPanel Spacing="14">
+            <settings:SettingsCard Title="{Loc Key=Settings.LocalStorage}">
+                <StackPanel Spacing="14">
+                    <settings:SettingsRow Label="{Loc Key=Settings.CacheSize}" ToolTip.Tip="{Loc Key=Settings.CacheSizeHelp}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBlock x:Name="CacheSizeText" Text="{Binding Data.CacheSizeText}" VerticalAlignment="Center"/>
+                            <Button x:Name="RefreshCacheSizeButton" Grid.Column="1" Classes="iconButton"
+                                    Command="{Binding Data.RefreshCacheSizeCommand}"
+                                    ToolTip.Tip="{Loc Key=Settings.RefreshCacheSize}"
+                                    AutomationProperties.Name="{Loc Key=Settings.RefreshCacheSize}">
+                                <LucideIcon Kind="RefreshCw"/>
+                            </Button>
+                        </Grid>
+                    </settings:SettingsRow>
+                    <settings:SettingsRow Label="{Loc Key=Settings.DataDirectory}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="{Binding Data.DataDirectoryPath}" TextWrapping="Wrap" Classes="muted"/>
+                            <Button x:Name="OpenDataDirectoryButton" Command="{Binding Data.OpenDataDirectoryCommand}"
+                                    HorizontalAlignment="Left" AutomationProperties.Name="{Loc Key=Settings.OpenDataDirectory}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <LucideIcon Kind="FolderOpen"/>
+                                    <TextBlock Text="{Loc Key=Settings.OpenDataDirectory}"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </settings:SettingsRow>
+                </StackPanel>
+            </settings:SettingsCard>
             <settings:SettingsCard Title="{Loc Key=Settings.Transfer}">
                 <StackPanel Spacing="14">
                     <Border Background="Transparent">

@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -9,6 +10,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Input;
+using Lucide.Avalonia;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Services;
@@ -57,8 +59,9 @@ public sealed class SpecialAttentionEditorTests
             editor.BringIntoView();
             Pump(window);
             Assert.DoesNotContain(editor.GetVisualDescendants().OfType<TextBox>(), value => value.Name == "SpecialAttentionSearchInput");
-            editor.GetVisualDescendants().OfType<Button>().Single(value => value.Name == "OpenSpecialAttentionSearchButton")
-                .Command!.Execute(null);
+            var openSearch = editor.GetVisualDescendants().OfType<Button>().Single(value => value.Name == "OpenSpecialAttentionSearchButton");
+            AssertIconButton(openSearch, LucideIconKind.UserPlus, "SpecialAttention.OpenSearch");
+            openSearch.Command!.Execute(null);
             var dialog = Assert.IsType<SpecialAttentionSearchWindow>(Assert.Single(window.OwnedWindows));
             Pump(dialog);
             var input = dialog.GetVisualDescendants().OfType<TextBox>().Single(value => value.Name == "SpecialAttentionSearchInput");
@@ -70,6 +73,7 @@ public sealed class SpecialAttentionEditorTests
             await pending;
             Pump(dialog);
             var add = dialog.GetVisualDescendants().OfType<Button>().Single(value => value.Name == "AddSpecialAttentionSearchResultButton");
+            AssertIconButton(add, LucideIconKind.UserPlus, "SpecialAttention.AddUser");
 
             add.Command!.Execute(add.CommandParameter);
             Pump(dialog);
@@ -112,6 +116,10 @@ public sealed class SpecialAttentionEditorTests
             Assert.Empty(view.GetVisualDescendants().OfType<SpecialAttentionEditor>());
             Select(view, "SpecialAttention");
             Assert.Equal(2, editor.Model.Users.Count);
+            foreach (var remove in editor.GetVisualDescendants().OfType<Button>().Where(value => value.Name == "RemoveSpecialAttentionUserButton"))
+            {
+                AssertIconButton(remove, LucideIconKind.Trash2, "SpecialAttention.RemoveUser");
+            }
             Assert.Same(color, FindColor(editor, "SpecialAttentionContentBrush"));
             Assert.Same(userNameColor, FindColor(editor, "SpecialAttentionUserNameBrush"));
             editor.BringIntoView();
@@ -183,6 +191,14 @@ public sealed class SpecialAttentionEditorTests
         {
             window.Close();
         }
+    }
+
+    private static void AssertIconButton(Button button, LucideIconKind kind, string labelKey)
+    {
+        Assert.Contains("iconButton", button.Classes);
+        Assert.Equal(kind, Assert.IsType<LucideIcon>(button.Content).Kind);
+        Assert.Equal(Localization.Get(labelKey), ToolTip.GetTip(button));
+        Assert.Equal(Localization.Get(labelKey), AutomationProperties.GetName(button));
     }
 
     private static ColorInput FindColor(Control root, string key)

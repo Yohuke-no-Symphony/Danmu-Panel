@@ -60,7 +60,8 @@ public sealed partial class PanelRuntime : IAsyncDisposable
         configuration.Accounts.CollectionChanged += OnAccountsChanged;
         var database = Path.Combine(configurationStore.DirectoryPath, "messages.db");
         Messages = new(database);
-        translationCache = new(Path.Combine(configurationStore.DirectoryPath, "translation-cache.db"));
+        var directories = new AppDirectoryService(configurationStore.DirectoryPath);
+        translationCache = new(directories.TranslationCacheDatabasePath);
         translationService = new(new OpenAiCompatibleTranslationClient(translationHttp), translationCache);
         scheduler = new(Messages, translationService);
         TestMessages = new(Messages, () => Configuration.Settings, roomId => MessagesChanged?.Invoke(roomId, null),
@@ -68,9 +69,9 @@ public sealed partial class PanelRuntime : IAsyncDisposable
         scheduler.Completed += (_, args) => MessagesChanged?.Invoke(args.RoomTabId, args.Kind);
         scheduler.PendingChanged += (roomId, kind) => MessagesChanged?.Invoke(roomId, kind);
         scheduler.Error += message => ReportError(message, I18n.Localization.Get("Panel.Log.Translation"));
-        Emoticons = new(new AppDirectoryService(configurationStore.DirectoryPath));
-        Avatars = new(new AppDirectoryService(configurationStore.DirectoryPath));
-        UserAvatars = new(new AppDirectoryService(configurationStore.DirectoryPath), Avatars);
+        Emoticons = new(directories);
+        Avatars = new(directories);
+        UserAvatars = new(directories, Avatars);
     }
 
     /// <summary>应用保存的阅读规则并恢复翻译队列。</summary>

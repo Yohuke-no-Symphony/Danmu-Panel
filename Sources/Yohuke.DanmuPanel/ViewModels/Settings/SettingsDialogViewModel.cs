@@ -19,6 +19,7 @@ public sealed partial class SettingsDialogViewModel : ObservableObject
     public SettingsAppearanceViewModel Appearance { get; }
     public SettingsReadingViewModel Reading { get; }
     public SettingsTranslationViewModel Translation { get; }
+    public SettingsDataViewModel Data { get; }
     public IRelayCommand<string> SelectSectionCommand { get; }
     public IAsyncRelayCommand SaveCommand { get; }
     public IRelayCommand ImportCommand { get; }
@@ -42,11 +43,13 @@ public sealed partial class SettingsDialogViewModel : ObservableObject
 
     /// <summary>创建不持有控件的页面状态及由宿主提供的服务命令。</summary>
     public SettingsDialogViewModel(PanelSettings settings, bool supportsNativeMenus, Func<Task> save,
-        Action import, Action export, Action<bool> clear, Func<Task> clearCache, Action checkForUpdates)
+        Action import, Action export, Action<bool> clear, Func<Task> clearCache, Action checkForUpdates,
+        SettingsDataViewModel data)
     {
         Appearance = new(settings, supportsNativeMenus);
         Reading = new(settings);
         Translation = new(settings.Translation);
+        Data = data;
         checkForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
         SelectSectionCommand = new RelayCommand<string>(section => SelectedSection = section!, section => section is not null && sections.Contains(section));
         SaveCommand = new AsyncRelayCommand(save);
@@ -65,6 +68,7 @@ public sealed partial class SettingsDialogViewModel : ObservableObject
         Appearance.RefreshLocalization();
         Reading.RefreshLocalization();
         Translation.RefreshLocalization();
+        Data.RefreshLocalization();
     }
 
     partial void OnSelectedSectionChanged(string value)
