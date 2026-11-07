@@ -16,6 +16,48 @@ namespace Yohuke.DanmuPanel.Tests.Windowing;
 /// <summary>验证连续改变正文宽度时及时换行，且每段文字只进行必要的测量。</summary>
 public sealed class MessageBodyPanelMeasureTests(ITestOutputHelper output)
 {
+    /// <summary>区域尺寸不变时，原文或译文字号改变仍立即刷新基线。</summary>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ObservedTextMetricsRefreshBaselinesWithoutResizingRegions(bool changeOriginal)
+    {
+        var original = new TextBlock { Text = "原文", FontSize = 16, Width = 150, Height = 60 };
+        var translation = new TextBlock { Text = "Translation", FontSize = 16, Width = 130, Height = 60 };
+        var originalRegion = new Grid { Children = { original } };
+        var translationRegion = new Grid { Children = { translation } };
+        var panel = new MessageBodyPanel(originalRegion, translationRegion,
+            () => original.TextLayout.Baseline, () => translation.TextLayout.Baseline,
+            () => original.DesiredSize.Width, () => true)
+        {
+            AllowInline = true, HorizontalSpacing = 8, VerticalAlignment = VerticalAlignment.Top
+        };
+        panel.ObserveText(original);
+        panel.ObserveText(translation);
+        var window = new Window { Width = 500, Height = 200, Content = panel };
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            var originalSize = originalRegion.DesiredSize;
+            var translationSize = translationRegion.DesiredSize;
+            foreach (var fontSize in new[] { 22, 12, 18 })
+            {
+                (changeOriginal ? original : translation).FontSize = fontSize;
+                window.UpdateLayout();
+                var originalBaseline = original.TranslatePoint(default, panel)!.Value.Y + original.TextLayout.Baseline;
+                var translationBaseline = translation.TranslatePoint(default, panel)!.Value.Y + translation.TextLayout.Baseline;
+                Assert.Equal(originalSize, originalRegion.DesiredSize);
+                Assert.Equal(translationSize, translationRegion.DesiredSize);
+                Assert.InRange(Math.Abs(originalBaseline - translationBaseline), 0, 1);
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>持续缩窄已换行的译文，不反复按自然宽度重新排版原文和译文。</summary>
     [AvaloniaTheory]
     [InlineData(false)]

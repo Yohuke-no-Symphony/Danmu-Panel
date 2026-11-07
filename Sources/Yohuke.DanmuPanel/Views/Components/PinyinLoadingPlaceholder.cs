@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -11,6 +12,7 @@ namespace Yohuke.DanmuPanel.Views.Components;
 /// <summary>在待生成拼音的位置显示无文字短矩形，隐藏和离开视口后停止扫光。</summary>
 public sealed class PinyinLoadingPlaceholder : TemplatedControl
 {
+    private readonly TextBlock textMetrics = new() { Text = "pīn yīn", FontWeight = FontWeight.Normal };
     private readonly List<Visual> visibilityAncestors = [];
     private CompositionCustomVisual? animationVisual;
     private bool isAttached;
@@ -30,7 +32,8 @@ public sealed class PinyinLoadingPlaceholder : TemplatedControl
 
     static PinyinLoadingPlaceholder()
     {
-        AffectsMeasure<PinyinLoadingPlaceholder>(FontSizeProperty, LengthProperty);
+        AffectsMeasure<PinyinLoadingPlaceholder>(FontFamilyProperty, FontSizeProperty, FontStyleProperty,
+            FontStretchProperty, LengthProperty, TextBlock.LineHeightProperty, TextBlock.LineSpacingProperty);
         AffectsRender<PinyinLoadingPlaceholder>(FontSizeProperty, ForegroundProperty);
     }
 
@@ -60,7 +63,15 @@ public sealed class PinyinLoadingPlaceholder : TemplatedControl
     /// <inheritdoc />
     protected override Size MeasureOverride(Size availableSize)
     {
-        return new(Math.Min(availableSize.Width, FontSize * Length), FontSize * 1.3);
+        textMetrics.FontFamily = FontFamily;
+        textMetrics.FontSize = FontSize;
+        textMetrics.FontStyle = FontStyle;
+        textMetrics.FontStretch = FontStretch;
+        textMetrics.LineHeight = TextBlock.GetLineHeight(this);
+        textMetrics.LineSpacing = GetValue(TextBlock.LineSpacingProperty);
+        textMetrics.Measure(Size.Infinity);
+        return new(Math.Min(availableSize.Width, FontSize * Length),
+            textMetrics.DesiredSize.Height + textMetrics.LineSpacing);
     }
 
     /// <inheritdoc />

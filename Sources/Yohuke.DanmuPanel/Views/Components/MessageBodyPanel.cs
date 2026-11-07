@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.VisualTree;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
@@ -65,6 +67,21 @@ internal sealed class MessageBodyPanel : Panel
         Children.Add(translation);
     }
 
+    internal void ObserveText(Control text)
+    {
+        text.PropertyChanged += OnTextPropertyChanged;
+    }
+
+    internal void InvalidateTextMetrics(Control text)
+    {
+        for (Layoutable? current = text; current is not null && !ReferenceEquals(current, this);
+             current = current.GetVisualParent<Layoutable>())
+        {
+            current.InvalidateMeasure();
+        }
+        InvalidateMeasure();
+    }
+
     /// <inheritdoc />
     protected override Size MeasureOverride(Size availableSize)
     {
@@ -115,5 +132,20 @@ internal sealed class MessageBodyPanel : Panel
     private double GetVerticalSpacing()
     {
         return original.IsVisible && translation.IsVisible ? VerticalSpacing : 0;
+    }
+
+    private void OnTextPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs change)
+    {
+        if (change.Property == TextBlock.TextProperty || change.Property == TextBlock.FontFamilyProperty ||
+            change.Property == TextBlock.FontSizeProperty || change.Property == TextBlock.FontWeightProperty ||
+            change.Property == TextBlock.FontStyleProperty || change.Property == TextBlock.FontStretchProperty ||
+            change.Property == TextBlock.LineHeightProperty || change.Property == TextBlock.LineSpacingProperty ||
+            change.Property == TextBlock.LetterSpacingProperty || change.Property == TextBlock.MaxLinesProperty ||
+            change.Property == TextBlock.TextWrappingProperty || change.Property == TextBlock.TextTrimmingProperty ||
+            change.Property == TextBlock.TextAlignmentProperty || change.Property == TextBlock.PaddingProperty ||
+            change.Property == FlowDirectionProperty || change.Property == IsVisibleProperty)
+        {
+            InvalidateTextMetrics((Control)sender!);
+        }
     }
 }

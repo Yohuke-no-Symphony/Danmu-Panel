@@ -437,8 +437,14 @@ public sealed class DanmuTranslationLayoutTests
         var original = body.Children[0];
         var translation = body.Children[1];
         Assert.True(original.IsVisible && translation.IsVisible);
-        Assert.True(translation.Bounds.X > original.Bounds.Right,
-            $"Expected side-by-side content: original={original.Bounds}, translation={translation.Bounds}");
+        var text = original.GetVisualDescendants().OfType<EmoticonTextBlock>()
+            .Single(control => control.IsEffectivelyVisible);
+        var mainText = text.GetVisualDescendants().OfType<PinyinSeparateLinePresenter>()
+            .SingleOrDefault()?.OriginalText ?? text;
+        var textRight = mainText.TranslatePoint(default, body)!.Value.X + mainText.Padding.Left +
+                        mainText.TextLayout.WidthIncludingTrailingWhitespace;
+        var spacing = Assert.IsType<MessageBodyPanel>(body).HorizontalSpacing;
+        Assert.InRange(translation.Bounds.X - textRight, spacing - 1, spacing + 1);
         Assert.InRange(Math.Abs(MainTextBaseline(original, body) - MainTextBaseline(translation, body)), 0, 1);
         Assert.InRange(Math.Abs(body.Bounds.Height - Math.Max(original.Bounds.Bottom, translation.Bounds.Bottom)), 0, 0.5);
         Assert.InRange(translation.Bounds.Right, 0, body.Bounds.Width + 0.5);

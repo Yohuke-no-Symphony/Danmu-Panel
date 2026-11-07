@@ -38,6 +38,7 @@ public sealed class HoverMarqueeTextBlock : UserControl
     internal double TextBaseline => textBlock.Padding.Top + textBlock.TextLayout.Baseline;
     internal bool IsSingleTextLine => textBlock.IsSingleTextLine;
     internal double InlineTextWidth => textBlock.InlineTextWidth;
+    internal event Action<Control>? TextMetricsChanged;
     internal EmoticonBitmapCache? BitmapCache
     {
         get => textBlock.BitmapCache;
@@ -163,6 +164,7 @@ public sealed class HoverMarqueeTextBlock : UserControl
             {
                 UpdateScrolling();
             }
+            TextMetricsChanged?.Invoke(textBlock);
         };
         AttachedToVisualTree += (_, _) =>
         {

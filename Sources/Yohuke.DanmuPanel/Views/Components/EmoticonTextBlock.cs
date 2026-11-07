@@ -241,16 +241,21 @@ public sealed class EmoticonTextBlock : TextBlock
                  change.Property == PinyinHighlightBackgroundProperty ||
                  change.Property == ThemeVariantScope.ActualThemeVariantProperty)
         {
-            if (change.Property == FontFamilyProperty || change.Property == FontSizeProperty ||
+            var metricsChanged = change.Property == FontFamilyProperty || change.Property == FontSizeProperty ||
                 change.Property == FontWeightProperty || change.Property == FontStyleProperty ||
                 change.Property == FontStretchProperty || change.Property == PinyinFontSizeProperty ||
                 change.Property == TextWrappingProperty || change.Property == TextAlignmentProperty ||
                 change.Property == TextTrimmingProperty || change.Property == LineSpacingProperty ||
-                change.Property == LineHeightProperty)
+                change.Property == LineHeightProperty;
+            if (metricsChanged)
             {
                 HighlightedSourceStart = -1;
             }
             UpdateTypography();
+            if (metricsChanged)
+            {
+                AnnotationLayoutChanged?.Invoke();
+            }
         }
         else if (change.Property == IsVisibleProperty)
         {

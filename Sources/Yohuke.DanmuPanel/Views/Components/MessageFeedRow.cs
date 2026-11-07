@@ -90,7 +90,7 @@ internal sealed class MessageFeedRow : Button
         name.Classes.Add("danmuFeedUser");
         name.TextAlignment = TextAlignment.Left;
         name.Bind(ToolTip.TipProperty, new Binding(nameof(MessageItemViewModel.Name)));
-        var namePending = CreatePinyinPlaceholder(nameof(MessageItemViewModel.IsNamePinyinPending), 4);
+        var namePending = CreatePinyinPlaceholder(nameof(MessageItemViewModel.IsNamePinyinPending), 4, name);
         namePending.Classes.Add("namePinyinPending");
         namePending.HorizontalAlignment = HorizontalAlignment.Left;
         var userName = new StackPanel
@@ -117,7 +117,8 @@ internal sealed class MessageFeedRow : Button
         original.Bind(EmoticonTextBlock.PinyinLayoutProperty, new Binding(nameof(MessageItemViewModel.PinyinLayout)));
         original.Bind(EmoticonTextBlock.PinyinForegroundProperty, new DynamicResourceExtension("MessagePinyinBrush"));
         original.Bind(EmoticonTextBlock.PinyinFontSizeProperty, new DynamicResourceExtension("MessageFontSizePinyin"));
-        var translation = BoundText(nameof(MessageItemViewModel.Translation));
+        var translation = new MessageTranslationTextBlock { TextTrimming = TextTrimming.CharacterEllipsis };
+        translation.Bind(TextBlock.TextProperty, new Binding(nameof(MessageItemViewModel.Translation)));
         translation.Classes.Add("danmuFeedContent");
         translation.Classes.Add("regularFeedContent");
         translation.Classes.Add("translatedText");
@@ -131,13 +132,16 @@ internal sealed class MessageFeedRow : Button
         originalMarquee.Bind(HoverMarqueeTextBlock.PinyinFontSizeProperty, new DynamicResourceExtension("MessageFontSizePinyin"));
         var translationMarquee = CreateMarquee(nameof(MessageItemViewModel.Translation));
         translationMarquee.Classes.Add("translatedText");
+        translationMarquee.Bind(TextBlock.LineHeightProperty, new Binding(nameof(TextBlock.LineHeight)) { Source = translation });
         var translatedContent = new Grid { Children = { translation, translationMarquee } };
         translatedContent.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.HasTranslation)));
         var pendingTranslation = new ShimmerTextBlock { HorizontalAlignment = HorizontalAlignment.Left };
         pendingTranslation.Classes.Add("translationPending");
         pendingTranslation.Bind(ShimmerTextBlock.TextProperty, Localization.Observe("Panel.Translating"));
         pendingTranslation.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.IsTranslating)));
-        var contentPending = CreatePinyinPlaceholder(nameof(MessageItemViewModel.IsContentPinyinPending), 6);
+        pendingTranslation.Bind(TextBlock.LineHeightProperty, new Binding(nameof(TextBlock.LineHeight)) { Source = translation });
+        pendingTranslation.Bind(TextBlock.LineSpacingProperty, new Binding(nameof(TextBlock.LineSpacing)) { Source = translation });
+        var contentPending = CreatePinyinPlaceholder(nameof(MessageItemViewModel.IsContentPinyinPending), 6, original);
         contentPending.Classes.Add("contentPinyinPending");
         var originalRegion = new StackPanel
         {
@@ -163,6 +167,12 @@ internal sealed class MessageFeedRow : Button
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
+        original.AnnotationLayoutChanged += () => body.InvalidateTextMetrics(original);
+        originalMarquee.TextMetricsChanged += body.InvalidateTextMetrics;
+        translationMarquee.TextMetricsChanged += body.InvalidateTextMetrics;
+        body.ObserveText(translation);
+        body.ObserveText(pendingTranslation);
+        body.ObserveText(contentPending);
         if (kind == MessageKind.Danmu)
         {
             body.Bind(MessageBodyPanel.AllowInlineProperty, new MultiBinding
@@ -369,12 +379,17 @@ internal sealed class MessageFeedRow : Button
         }
     }
 
-    private static PinyinLoadingPlaceholder CreatePinyinPlaceholder(string property, double length)
+    private static PinyinLoadingPlaceholder CreatePinyinPlaceholder(string property, double length, TextBlock reference)
     {
         var placeholder = new PinyinLoadingPlaceholder { Length = length };
         placeholder.Bind(IsVisibleProperty, new Binding(property));
         placeholder.Bind(PinyinLoadingPlaceholder.FontSizeProperty, new DynamicResourceExtension("MessageFontSizePinyin"));
         placeholder.Bind(PinyinLoadingPlaceholder.ForegroundProperty, new DynamicResourceExtension("MessagePinyinBrush"));
+        placeholder.Bind(PinyinLoadingPlaceholder.FontFamilyProperty, new Binding(nameof(TextBlock.FontFamily)) { Source = reference });
+        placeholder.Bind(PinyinLoadingPlaceholder.FontStyleProperty, new Binding(nameof(TextBlock.FontStyle)) { Source = reference });
+        placeholder.Bind(PinyinLoadingPlaceholder.FontStretchProperty, new Binding(nameof(TextBlock.FontStretch)) { Source = reference });
+        placeholder.Bind(TextBlock.LineHeightProperty, new Binding(nameof(TextBlock.LineHeight)) { Source = reference });
+        placeholder.Bind(TextBlock.LineSpacingProperty, new Binding(nameof(TextBlock.LineSpacing)) { Source = reference });
         return placeholder;
     }
 

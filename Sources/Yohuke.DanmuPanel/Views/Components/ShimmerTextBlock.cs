@@ -32,7 +32,8 @@ public sealed class ShimmerTextBlock : TemplatedControl
     static ShimmerTextBlock()
     {
         AffectsMeasure<ShimmerTextBlock>(TextProperty, FontFamilyProperty, FontSizeProperty,
-            FontStyleProperty, FontWeightProperty, FontStretchProperty);
+            FontStyleProperty, FontWeightProperty, FontStretchProperty, FlowDirectionProperty,
+            TextBlock.LineHeightProperty, TextBlock.LineSpacingProperty);
         AffectsRender<ShimmerTextBlock>(ForegroundProperty);
     }
 
@@ -133,6 +134,9 @@ public sealed class ShimmerTextBlock : TemplatedControl
         textBlock.FontWeight = FontWeight;
         textBlock.FontStretch = FontStretch;
         textBlock.Foreground = Foreground;
+        textBlock.FlowDirection = FlowDirection;
+        textBlock.LineHeight = TextBlock.GetLineHeight(this);
+        textBlock.LineSpacing = GetValue(TextBlock.LineSpacingProperty);
     }
 
     private bool CanAnimate => isAttached && isInViewport && IsEffectivelyVisible;
