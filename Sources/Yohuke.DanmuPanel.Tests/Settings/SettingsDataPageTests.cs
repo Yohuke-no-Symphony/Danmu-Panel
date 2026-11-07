@@ -22,12 +22,8 @@ public sealed class SettingsDataPageTests
         var root = Path.Combine(directory.Path, "资料 with spaces");
         await using var runtime = new PanelRuntime(new(root), new());
         await runtime.ClearTranslationCacheAsync();
-        var opened = new List<string>();
-        var view = new SettingsView(runtime, new TextBlock(), false, openDataDirectory: path =>
-        {
-            opened.Add(path);
-            return Task.FromResult(true);
-        });
+        var launcher = new ControlledDirectoryLauncher();
+        var view = new SettingsView(runtime, new TextBlock(), false, directoryLauncher: launcher);
         var window = new Window { Width = 1020, Height = 900, Content = view };
         try
         {
@@ -52,7 +48,7 @@ public sealed class SettingsDataPageTests
             Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(), text => text.Text == root);
             var open = view.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "OpenDataDirectoryButton");
             await Assert.IsAssignableFrom<IAsyncRelayCommand>(open.Command).ExecuteAsync(open.CommandParameter);
-            Assert.Equal(root, Assert.Single(opened));
+            Assert.Equal(root, Assert.Single(launcher.Requests).LocalPath);
 
             view.Model.SelectSectionCommand.Execute("Reading");
             Pump(window);
@@ -77,14 +73,51 @@ public sealed class SettingsDataPageTests
     {
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = new PanelRuntime(new(directory.Path), new());
-        var view = new SettingsView(runtime, new TextBlock(), false, openDataDirectory: _ => throwException
-            ? Task.FromException<bool>(new IOException())
-            : Task.FromResult(false));
+        var launcher = new ControlledDirectoryLauncher
+        {
+            Resolve = _ => throwException ? Task.FromException<bool>(new IOException()) : Task.FromResult(false)
+        };
+        var view = new SettingsView(runtime, new TextBlock(), false, directoryLauncher: launcher);
 
         await view.Model.Data.OpenDataDirectoryCommand.ExecuteAsync(null);
 
         Assert.StartsWith(Localization.Get("Settings.OpenDataDirectoryFailed"), view.Model.Status);
         Assert.False(view.Model.IsStatusSuccess);
+    }
+
+    /// <summary>目录启动交给平台前必须编码空格和特殊字符，不能将原始路径作为命令参数。</summary>
+    [AvaloniaTheory]
+    [InlineData("Application Support")]
+    [InlineData("资料 with spaces")]
+    [InlineData("cache #100% & [v1] 'data'")]
+    public async Task DirectoryLauncherReceivesAnEscapedAbsoluteFileUri(string folderName)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        var root = Path.Combine(directory.Path, folderName);
+        await using var runtime = new PanelRuntime(new(root), new());
+        var launcher = new ControlledDirectoryLauncher();
+        var view = new SettingsView(runtime, new TextBlock(), false, directoryLauncher: launcher);
+        var window = new Window { Content = view };
+        try
+        {
+            window.Show();
+
+            await view.Model.Data.OpenDataDirectoryCommand.ExecuteAsync(null);
+
+            var uri = Assert.Single(launcher.Requests);
+            Assert.True(uri.IsAbsoluteUri);
+            Assert.True(uri.IsFile);
+            Assert.Equal(root, uri.LocalPath);
+            Assert.Equal("", uri.Fragment);
+            Assert.Equal("", uri.Query);
+            Assert.Contains("%20", uri.AbsoluteUri);
+            Assert.DoesNotContain(" ", uri.AbsoluteUri);
+            Assert.DoesNotContain("#", uri.AbsoluteUri);
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 
     private static void Pump(Window window)

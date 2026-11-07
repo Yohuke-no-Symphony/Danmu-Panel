@@ -27,7 +27,7 @@ public sealed class SettingsView : UserControl
     private readonly SettingsShareService sharing = new();
     private readonly ISettingsTransferDialogs transferDialogs;
     private readonly Control accountsView;
-    private readonly Func<string, Task<bool>> openDataDirectory;
+    private readonly ILauncher? directoryLauncher;
 
     internal SettingsDialogViewModel Model { get; }
     internal SpecialAttentionEditor SpecialAttentionEditor { get; }
@@ -56,12 +56,12 @@ public sealed class SettingsView : UserControl
 
     internal SettingsView(PanelRuntime runtime, Control accountsView, bool supportsNativeMenus,
         ISettingsTransferDialogs? transferDialogs = null, IBilibiliUserSearchService? userSearch = null,
-        IUserAvatarService? userAvatars = null, Func<string, Task<bool>>? openDataDirectory = null)
+        IUserAvatarService? userAvatars = null, ILauncher? directoryLauncher = null)
     {
         this.runtime = runtime;
         this.transferDialogs = transferDialogs ?? new SettingsTransferDialogs();
         this.accountsView = accountsView;
-        this.openDataDirectory = openDataDirectory ?? LaunchDataDirectoryAsync;
+        this.directoryLauncher = directoryLauncher;
         var cacheSize = new CacheSizeService(new(runtime.ConfigurationStore.DirectoryPath));
         var settings = runtime.Configuration.Settings;
         Model = new(settings, supportsNativeMenus, async () =>
@@ -466,7 +466,7 @@ public sealed class SettingsView : UserControl
     {
         try
         {
-            if (!await openDataDirectory(runtime.ConfigurationStore.DirectoryPath))
+            if (!await LaunchDataDirectoryAsync(runtime.ConfigurationStore.DirectoryPath))
             {
                 SetStatus(Localization.Get("Settings.OpenDataDirectoryFailed"));
             }
@@ -477,11 +477,15 @@ public sealed class SettingsView : UserControl
         }
     }
 
-    private async Task<bool> LaunchDataDirectoryAsync(string path)
+    private Task<bool> LaunchDataDirectoryAsync(string path)
     {
-        var owner = TopLevel.GetTopLevel(this)!;
-        using var folder = await owner.StorageProvider.TryGetFolderFromPathAsync(path);
-        return folder is not null && await owner.Launcher.LaunchFileAsync(folder);
+        if (!Directory.Exists(path))
+        {
+            return Task.FromResult(false);
+        }
+        var uri = new Uri(Path.GetFullPath(path));
+        var launcher = directoryLauncher ?? TopLevel.GetTopLevel(this)!.Launcher;
+        return launcher.LaunchUriAsync(uri);
     }
 
     private void OnAttached(object? sender, VisualTreeAttachmentEventArgs args)
