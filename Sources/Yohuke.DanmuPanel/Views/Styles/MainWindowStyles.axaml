@@ -966,6 +966,7 @@
     <Style Selector="Border.danmuMedalPlaceholder">
         <Setter Property="Background" Value="{DynamicResource AppBorderBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource AppMutedTextBrush}" />
+        <Setter Property="Opacity" Value="0.5" />
     </Style>
 
     <Style Selector="Border.danmuMedalBadge">
