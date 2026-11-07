@@ -155,6 +155,7 @@ internal sealed class MessageFeedRow : Button
                 ? original.Padding.Top + original.TextLayout.Baseline : originalMarquee.TextBaseline),
             () => pendingTranslation.IsVisible ? pendingTranslation.TextBaseline : translation.IsVisible
                 ? translation.Padding.Top + translation.TextLayout.Baseline : translationMarquee.TextBaseline,
+            () => original.IsVisible ? original.InlineTextWidth : originalMarquee.InlineTextWidth,
             () => (original.IsVisible ? original.IsSingleTextLine : originalMarquee.IsSingleTextLine) &&
                 (pendingTranslation.IsVisible ? pendingTranslation.IsSingleTextLine : translation.IsVisible
                     ? EmoticonTextBlock.HasSingleTextLine(translation) : translationMarquee.IsSingleTextLine))

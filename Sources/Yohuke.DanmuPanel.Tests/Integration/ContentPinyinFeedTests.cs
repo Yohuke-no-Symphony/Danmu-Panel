@@ -21,6 +21,62 @@ namespace Yohuke.DanmuPanel.Tests.Integration;
 /// <summary>验证正文注音在真实消息列表中的绑定、显隐、配色与点击行为。</summary>
 public sealed class ContentPinyinFeedTests
 {
+    /// <summary>独立拼音行较宽时，同行译文仍紧接正文，而不被上方拼音推远。</summary>
+    [AvaloniaTheory]
+    [InlineData(false, false, 1.0)]
+    [InlineData(true, false, 1.0)]
+    [InlineData(true, true, 1.0)]
+    [InlineData(false, false, 1.5)]
+    [InlineData(true, false, 1.5)]
+    [InlineData(true, true, 1.5)]
+    public async Task SeparateLineTranslationFollowsOriginalTextWidth(bool compact, bool wrap, double scale)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var runtime = new PanelRuntime(new(directory.Path), new());
+        var settings = runtime.Configuration.Settings;
+        settings.CompactDanmuDisplay = compact;
+        settings.CompactDanmuWrap = wrap;
+        settings.AutoScrollLongMessages = false;
+        settings.ShowDanmuPinyin = true;
+        settings.PinyinLayout = PinyinLayoutMode.SeparateLine;
+        settings.MessageTextScale = scale;
+        var record = new MessageRecord
+        {
+            RoomTabId = "tab", RoomId = "123", Kind = MessageKind.Danmu,
+            UserName = "viewer", Content = new string('窗', 8)
+        };
+        var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation);
+        await runtime.Messages.AppendAsync(record, settings.Reading, fingerprint);
+        Assert.True(await runtime.Messages.ApplyTranslationAsync(record.Id, record.Generation, fingerprint, "Translation"));
+        var view = new MessageFeedView(runtime, MessageKind.Danmu, exception => throw exception);
+        var window = new Window { Width = 1600, Height = 500, Content = view };
+        try
+        {
+            await view.Model.SelectRoomAsync(new() { Id = "tab", RoomId = "123" });
+            await view.Model.WaitForPresentationAsync();
+            window.Show();
+            Pump(window);
+            var presenter = Assert.Single(view.GetVisualDescendants().OfType<PinyinSeparateLinePresenter>(),
+                control => control.IsEffectivelyVisible);
+            var body = Assert.Single(view.GetVisualDescendants().OfType<MessageBodyPanel>());
+            var translation = Assert.Single(view.GetVisualDescendants().OfType<TextBlock>(),
+                control => control.Text == "Translation" && control.IsEffectivelyVisible);
+            Assert.Single(presenter.OriginalText.TextLayout.TextLines);
+            Assert.Single(presenter.PronunciationText.TextLayout.TextLines);
+            var originalPosition = presenter.OriginalText.TranslatePoint(default, body)!.Value;
+            var translationPosition = translation.TranslatePoint(default, body)!.Value;
+            var gap = translationPosition.X - originalPosition.X - presenter.OriginalText.TextLayout.WidthIncludingTrailingWhitespace;
+            Assert.InRange(gap, body.HorizontalSpacing - 1, body.HorizontalSpacing + 1);
+            Assert.InRange(Math.Abs(originalPosition.Y + presenter.OriginalText.TextLayout.Baseline -
+                                    translationPosition.Y - translation.TextLayout.Baseline), 0, 1);
+        }
+        finally
+        {
+            view.Model.Dispose();
+            window.Close();
+        }
+    }
+
     /// <summary>普通与紧凑模式均响应开关及排版更新，并在仅译文时隐藏整块注音。</summary>
     [AvaloniaTheory]
     [InlineData(MessageKind.Danmu, false, PinyinLayoutMode.Ruby)]

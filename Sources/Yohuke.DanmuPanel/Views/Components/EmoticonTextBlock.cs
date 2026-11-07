@@ -53,6 +53,8 @@ public sealed class EmoticonTextBlock : TextBlock
     internal bool HasAnnotations => rubySyllables.Count > 0 || pronunciationRuns.Count > 0;
     internal bool IsSingleTextLine => HasSingleTextLine(this) && (separateLine is null ||
         HasSingleTextLine(separateLine.OriginalText) && HasSingleTextLine(separateLine.PronunciationText));
+    internal double InlineTextWidth => separateLine is null ? DesiredSize.Width :
+        Padding.Left + separateLine.OriginalText.DesiredSize.Width + Padding.Right;
     internal event Action? AnnotationLayoutChanged;
     internal bool HasHoveredEmoticon => imagePreview?.HasTarget == true;
     internal int CachedRubyInlineCount => rubyInlineCache.Count;

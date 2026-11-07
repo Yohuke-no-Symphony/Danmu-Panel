@@ -1,7 +1,10 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Services.Translation;
 using Yohuke.DanmuPanel.Views.Components;
@@ -33,6 +36,7 @@ public sealed class MessageBodyPanelMeasureTests(ITestOutputHelper output)
         var translation = new LayoutCountingDecorator { Child = translationText };
         var panel = new MessageBodyPanel(original, translation,
             () => originalText.TextLayout.Baseline, () => translationText.TextLayout.Baseline,
+            () => original.DesiredSize.Width,
             () => EmoticonTextBlock.HasSingleTextLine(originalText) && EmoticonTextBlock.HasSingleTextLine(translationText))
         {
             AllowInline = true, HorizontalSpacing = 8, VerticalSpacing = 2
@@ -73,6 +77,7 @@ public sealed class MessageBodyPanelMeasureTests(ITestOutputHelper output)
         var translation = new TextBlock { Text = originalWraps ? "x" : "MMMMMMM MMMMMMM", FontSize = 16, TextWrapping = TextWrapping.Wrap };
         var panel = new MessageBodyPanel(original, translation,
             () => original.TextLayout.Baseline, () => translation.TextLayout.Baseline,
+            () => original.DesiredSize.Width,
             () => EmoticonTextBlock.HasSingleTextLine(original) && EmoticonTextBlock.HasSingleTextLine(translation))
         {
             AllowInline = true, HorizontalSpacing = 8, VerticalSpacing = 2
@@ -106,6 +111,59 @@ public sealed class MessageBodyPanelMeasureTests(ITestOutputHelper output)
             Dispatcher.UIThread.RunJobs();
             window.UpdateLayout();
             Assert.False(text.IsSingleTextLine);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>独立拼音行折成多行后，译文仍紧接实际正文底部，并随容器宽度更新。</summary>
+    [AvaloniaTheory]
+    [InlineData(13, 10)]
+    [InlineData(20, 10)]
+    [InlineData(19.5, 15)]
+    [InlineData(30, 15)]
+    public void WrappedSeparateLinePinyinDoesNotAddSpaceBeforeTranslation(double fontSize, double pinyinFontSize)
+    {
+        var content = new string('长', 24);
+        var original = new EmoticonTextBlock
+        {
+            ContentText = content, Annotations = new PinyinService().GetAnnotations(content),
+            PinyinLayout = PinyinLayoutMode.SeparateLine, FontSize = fontSize, PinyinFontSize = pinyinFontSize,
+            TextWrapping = TextWrapping.Wrap, LineSpacing = 1, VerticalAlignment = VerticalAlignment.Center
+        };
+        var translation = new TextBlock
+        {
+            Text = "Translation", TextWrapping = TextWrapping.Wrap, FontSize = fontSize,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var originalRegion = new StackPanel { Children = { new Grid { Children = { original } } } };
+        var translationRegion = new Grid { Children = { translation } };
+        var panel = new MessageBodyPanel(originalRegion, translationRegion,
+            () => original.TextLayout.Baseline, () => translation.TextLayout.Baseline,
+            () => original.InlineTextWidth,
+            () => original.IsSingleTextLine && EmoticonTextBlock.HasSingleTextLine(translation))
+        {
+            AllowInline = true, HorizontalSpacing = 8, VerticalSpacing = 2,
+            VerticalAlignment = VerticalAlignment.Top
+        };
+        var window = new Window { Width = 180, Height = 600, Content = panel };
+        try
+        {
+            window.Show();
+            foreach (var width in new[] { 180, 320, 140, 600 })
+            {
+                window.Width = width;
+                PinyinTextRenderingTests.Pump(window);
+                var presenter = Assert.Single(original.GetVisualDescendants().OfType<PinyinSeparateLinePresenter>());
+                Assert.True(presenter.PronunciationText.TextLayout.TextLines.Count > 1);
+                var originalBottom = presenter.OriginalText.TranslatePoint(default, panel)!.Value.Y +
+                                     presenter.OriginalText.Bounds.Height;
+                var gap = translation.TranslatePoint(default, panel)!.Value.Y - originalBottom;
+                output.WriteLine($"font={fontSize}/{pinyinFontSize}, width={width}: pronunciation={presenter.PronunciationText.Bounds}, original={presenter.OriginalText.Bounds}, outer={original.Bounds}, desired={original.DesiredSize}, layout={original.TextLayout.Height}, gap={gap}");
+                Assert.InRange(gap, panel.VerticalSpacing - 1, panel.VerticalSpacing + 1);
+            }
         }
         finally
         {

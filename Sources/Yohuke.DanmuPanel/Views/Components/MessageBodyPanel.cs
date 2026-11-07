@@ -9,9 +9,11 @@ internal sealed class MessageBodyPanel : Panel
     private readonly Control translation;
     private readonly Func<double> getOriginalBaseline;
     private readonly Func<double> getTranslationBaseline;
+    private readonly Func<double> getOriginalInlineWidth;
     private readonly Func<bool> canShareLine;
     private bool isInline;
     private double originalWidth;
+    private double translationX;
     private double originalBaseline;
     private double translationBaseline;
     private double inlineBaseline;
@@ -51,12 +53,13 @@ internal sealed class MessageBodyPanel : Panel
     }
 
     internal MessageBodyPanel(Control original, Control translation, Func<double> getOriginalBaseline,
-        Func<double> getTranslationBaseline, Func<bool> canShareLine)
+        Func<double> getTranslationBaseline, Func<double> getOriginalInlineWidth, Func<bool> canShareLine)
     {
         this.original = original;
         this.translation = translation;
         this.getOriginalBaseline = getOriginalBaseline;
         this.getTranslationBaseline = getTranslationBaseline;
+        this.getOriginalInlineWidth = getOriginalInlineWidth;
         this.canShareLine = canShareLine;
         Children.Add(original);
         Children.Add(translation);
@@ -72,7 +75,8 @@ internal sealed class MessageBodyPanel : Panel
         if (AllowInline && original.IsVisible && translation.IsVisible)
         {
             originalWidth = original.DesiredSize.Width;
-            var width = originalWidth + HorizontalSpacing + translation.DesiredSize.Width;
+            translationX = getOriginalInlineWidth() + HorizontalSpacing;
+            var width = translationX + translation.DesiredSize.Width;
             if (width <= availableSize.Width && canShareLine())
             {
                 isInline = true;
@@ -81,7 +85,7 @@ internal sealed class MessageBodyPanel : Panel
                 inlineBaseline = Math.Max(originalBaseline, translationBaseline);
                 var belowBaseline = Math.Max(original.DesiredSize.Height - originalBaseline,
                     translation.DesiredSize.Height - translationBaseline);
-                return new(width, inlineBaseline + belowBaseline);
+                return new(Math.Max(originalWidth, width), inlineBaseline + belowBaseline);
             }
         }
 
@@ -96,7 +100,6 @@ internal sealed class MessageBodyPanel : Panel
         {
             original.Arrange(new(0, inlineBaseline - originalBaseline,
                 originalWidth, original.DesiredSize.Height));
-            var translationX = originalWidth + HorizontalSpacing;
             translation.Arrange(new(translationX, inlineBaseline - translationBaseline,
                 Math.Max(0, finalSize.Width - translationX), translation.DesiredSize.Height));
         }
