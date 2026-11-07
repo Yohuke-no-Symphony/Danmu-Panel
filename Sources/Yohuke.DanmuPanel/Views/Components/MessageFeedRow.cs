@@ -14,11 +14,13 @@ using Yohuke.DanmuPanel.ViewModels;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
-[PseudoClasses(":alternate", ":specialAttention")]
+[PseudoClasses(":alternate", ":specialAttention", ":guardMedal")]
 internal sealed class MessageFeedRow : Button
 {
     private static readonly StyledProperty<bool> IsSpecialAttentionProperty =
         AvaloniaProperty.Register<MessageFeedRow, bool>(nameof(MessageItemViewModel.IsSpecialAttention));
+    private static readonly StyledProperty<bool> HasGuardMedalProperty =
+        AvaloniaProperty.Register<MessageFeedRow, bool>(nameof(MessageItemViewModel.HasGuardMedal));
     private static IMultiValueConverter InlineTranslationConverter { get; } =
         new FuncMultiValueConverter<string, bool>(texts => texts.All(text => text is not null && text.IndexOfAny(['\r', '\n']) < 0));
     private readonly bool canCopy;
@@ -55,6 +57,7 @@ internal sealed class MessageFeedRow : Button
         Grid? medalSlot = null;
         if (kind == MessageKind.Danmu)
         {
+            this.Bind(HasGuardMedalProperty, new Binding(nameof(MessageItemViewModel.HasGuardMedal)));
             var medal = BoundText(nameof(MessageItemViewModel.MedalName));
             medal.Classes.Add("danmuMedalText");
             var level = BoundText(nameof(MessageItemViewModel.MedalLevel));
@@ -66,7 +69,6 @@ internal sealed class MessageFeedRow : Button
             var medalFrame = new Border { Child = medalLayout };
             medalFrame.Classes.Add("danmuMedalBadge");
             medalFrame.Bind(IsVisibleProperty, new Binding(nameof(MessageItemViewModel.HasMedal)));
-            medalFrame.Bind(Border.BorderBrushProperty, new Binding(nameof(MessageItemViewModel.MedalBorderBrush)));
             medalFrame.Bind(ToolTip.TipProperty, new Binding(nameof(MessageItemViewModel.Medal)));
             var noMedal = Ui.Text("Panel.NoMedal");
             noMedal.Classes.Add("danmuMedalText");
@@ -342,6 +344,10 @@ internal sealed class MessageFeedRow : Button
         if (change.Property == IsSpecialAttentionProperty)
         {
             PseudoClasses.Set(":specialAttention", GetValue(IsSpecialAttentionProperty));
+        }
+        if (change.Property == HasGuardMedalProperty)
+        {
+            PseudoClasses.Set(":guardMedal", GetValue(HasGuardMedalProperty));
         }
     }
 

@@ -1,6 +1,7 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:components="clr-namespace:Yohuke.DanmuPanel.Views.Components">
+        xmlns:components="clr-namespace:Yohuke.DanmuPanel.Views.Components"
+        xmlns:viewModels="clr-namespace:Yohuke.DanmuPanel.ViewModels">
 
     <Style Selector="FlyoutPresenter.messageCopyPopup">
         <Setter Property="Padding" Value="8" />
@@ -967,6 +968,15 @@
         <Setter Property="BorderBrush" Value="{DynamicResource AppMutedTextBrush}" />
     </Style>
 
+    <Style Selector="Border.danmuMedalBadge">
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="5,2" />
+    </Style>
+
+    <Style Selector="Button:guardMedal Border.danmuMedalBadge" x:DataType="viewModels:MessageItemViewModel">
+        <Setter Property="Background" Value="{Binding MedalBackgroundBrush}" />
+    </Style>
+
     <Style Selector="TextBlock.danmuMedalText.danmuMedalPlaceholder">
         <Setter Property="TextAlignment" Value="Center" />
         <Setter Property="Foreground" Value="{DynamicResource AppMutedTextBrush}" />
@@ -985,6 +995,10 @@
     <Style Selector="TextBlock.danmuMedalLevel">
         <Setter Property="Width" Value="{DynamicResource MessageMedalLevelWidth}" />
         <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button:guardMedal Border.danmuMedalBadge TextBlock.danmuMedalText" x:DataType="viewModels:MessageItemViewModel">
+        <Setter Property="Foreground" Value="{Binding MedalForegroundBrush}" />
     </Style>
 
     <Style Selector="TextBlock.danmuFeedContent">

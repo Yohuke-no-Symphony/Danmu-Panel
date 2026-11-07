@@ -34,7 +34,8 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     private int filterStateVersion;
     private bool hasTranslatableContent;
     private IBrush borderBrush = Brushes.Transparent;
-    private IBrush medalBorderBrush = Brushes.Transparent;
+    private IBrush medalBackgroundBrush = Brushes.Transparent;
+    private IBrush medalForegroundBrush = Brushes.Black;
     private IReadOnlyList<DanmuEmoticon> emoticons = [];
     public MessageRecord Record { get; private set; }
     internal bool IsPresentationPending => isPresentationPending;
@@ -58,7 +59,12 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     public string Medal => medal;
     public string MedalName => medalName;
     public int MedalLevel => Record.MedalLevel;
-    public IBrush MedalBorderBrush => medalBorderBrush;
+    /// <summary>粉丝牌是否具有有效的舰队身份。</summary>
+    public bool HasGuardMedal => Record.MedalGuardLevel is >= 1 and <= 3;
+    /// <summary>舰队粉丝牌的等级底色，沿用全局舰队配色。</summary>
+    public IBrush MedalBackgroundBrush => medalBackgroundBrush;
+    /// <summary>根据舰队底色选择对比度更高的深色或浅色文字。</summary>
+    public IBrush MedalForegroundBrush => medalForegroundBrush;
     public string Time => time;
     public bool ShowPinBadge => Record.Kind == MessageKind.Danmu && Record.IsPinned;
     public bool ShowUnreadDot => Record.Kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard && !Record.IsRead;
@@ -189,6 +195,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         var nameWasPending = IsNamePinyinPending;
         var contentWasPending = IsContentPinyinPending;
         var hadMedal = HasMedal;
+        var hadGuardMedal = HasGuardMedal;
         var hadTranslation = HasTranslation;
         var wasTranslating = IsTranslating;
         var showedTranslation = ShowTranslation;
@@ -214,6 +221,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         NotifyChange(wasSpecialAttention, IsSpecialAttention, nameof(IsSpecialAttention));
         NotifyChange(previousSettings.ShowUserAvatars, settings.ShowUserAvatars, nameof(ShowUserAvatars));
         NotifyChange(previousSettings.ShowFanMedals, settings.ShowFanMedals, nameof(ShowFanMedals));
+        NotifyChange(hadGuardMedal, HasGuardMedal, nameof(HasGuardMedal));
         NotifyChange(previous.MedalLevel, record.MedalLevel, nameof(MedalLevel));
         NotifyChange(showedPin, ShowPinBadge, nameof(ShowPinBadge));
         NotifyChange(showedUnread, ShowUnreadDot, nameof(ShowUnreadDot));
@@ -276,13 +284,14 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         SetProperty(ref translation, !translationBlocked && record.TranslationFingerprint == settings.TranslationFingerprint
             ? record.Translation ?? "" : "", nameof(Translation));
         SetProperty(ref borderBrush, GetBorderBrush(), nameof(BorderBrush));
-        SetProperty(ref medalBorderBrush, record.MedalGuardLevel switch
+        SetProperty(ref medalBackgroundBrush, record.MedalGuardLevel switch
         {
             1 => settings.GetColor("GuardGovernorBrush", ColorSettingCatalog.GUARD_GOVERNOR_COLOR),
             2 => settings.GetColor("GuardAdmiralBrush", ColorSettingCatalog.GUARD_ADMIRAL_COLOR),
             3 => settings.GetColor("GuardCaptainBrush", ColorSettingCatalog.GUARD_CAPTAIN_COLOR),
             _ => Brushes.Transparent
-        }, nameof(MedalBorderBrush));
+        }, nameof(MedalBackgroundBrush));
+        SetProperty(ref medalForegroundBrush, GetMedalForegroundBrush(), nameof(MedalForegroundBrush));
         NotifyChange(hadNamePinyin, HasNamePinyin, nameof(HasNamePinyin));
         NotifyChange(hadDetailPinyin, HasDetailPinyin, nameof(HasDetailPinyin));
         NotifyChange(hadContentPinyin, HasContentPinyin, nameof(HasContentPinyin));
@@ -293,6 +302,22 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         NotifyChange(wasTranslating, IsTranslating, nameof(IsTranslating));
         NotifyChange(showedTranslation, ShowTranslation, nameof(ShowTranslation));
         NotifyChange(showedOriginal, ShowOriginal, nameof(ShowOriginal));
+    }
+
+    private IBrush GetMedalForegroundBrush()
+    {
+        var color = ((ISolidColorBrush)medalBackgroundBrush).Color;
+        var luminance = 0.2126 * LinearizeColorChannel(color.R) +
+            0.7152 * LinearizeColorChannel(color.G) + 0.0722 * LinearizeColorChannel(color.B);
+        var blackContrast = (luminance + 0.05) / 0.05;
+        var whiteContrast = 1.05 / (luminance + 0.05);
+        return blackContrast >= whiteContrast ? Brushes.Black : Brushes.White;
+    }
+
+    private static double LinearizeColorChannel(byte channel)
+    {
+        var value = channel / 255d;
+        return value <= 0.04045 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
     }
 
     private void NotifyChange<T>(T previous, T current, string propertyName)

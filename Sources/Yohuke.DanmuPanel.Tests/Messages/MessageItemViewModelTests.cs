@@ -24,7 +24,8 @@ public sealed class MessageItemViewModelTests(ITestOutputHelper output)
         };
         var model = new MessageItemViewModel(record, settings, new PinyinService());
         var border = model.BorderBrush;
-        var medalBorder = model.MedalBorderBrush;
+        var medalBackground = model.MedalBackgroundBrush;
+        var medalForeground = model.MedalForegroundBrush;
         var changes = new List<string?>();
         model.PropertyChanged += (_, args) => changes.Add(args.PropertyName);
         var restored = JsonSerializer.Deserialize<MessageRecord>(JsonSerializer.Serialize(record))!;
@@ -34,7 +35,8 @@ public sealed class MessageItemViewModelTests(ITestOutputHelper output)
         Assert.Empty(changes);
         Assert.Same(restored, model.Record);
         Assert.Same(border, model.BorderBrush);
-        Assert.Same(medalBorder, model.MedalBorderBrush);
+        Assert.Same(medalBackground, model.MedalBackgroundBrush);
+        Assert.Same(medalForeground, model.MedalForegroundBrush);
     }
 
     /// <summary>置顶只更新徽章与边框，不重绑原文、译文或图片。</summary>
@@ -143,18 +145,18 @@ public sealed class MessageItemViewModelTests(ITestOutputHelper output)
         var model = new MessageItemViewModel(record, settings, new PinyinService());
         var changes = new List<string?>();
         model.PropertyChanged += (_, args) => changes.Add(args.PropertyName);
-        var medalBorder = model.MedalBorderBrush;
+        var medalBackground = model.MedalBackgroundBrush;
         settings.ShowUserPinyin = true;
 
         model.Update(record, settings);
 
         Assert.True(model.HasNamePinyin);
-        Assert.Same(medalBorder, model.MedalBorderBrush);
-        Assert.DoesNotContain(nameof(MessageItemViewModel.MedalBorderBrush), changes);
+        Assert.Same(medalBackground, model.MedalBackgroundBrush);
+        Assert.DoesNotContain(nameof(MessageItemViewModel.MedalBackgroundBrush), changes);
         settings.ColorScheme.Overrides["GuardAdmiralBrush"] = "#123456";
         model.Update(record, settings);
         Assert.Contains(nameof(MessageItemViewModel.NamePinyin), changes);
-        Assert.Contains(nameof(MessageItemViewModel.MedalBorderBrush), changes);
+        Assert.Contains(nameof(MessageItemViewModel.MedalBackgroundBrush), changes);
         Assert.DoesNotContain(nameof(MessageItemViewModel.Detail), changes);
     }
 

@@ -144,7 +144,7 @@ public sealed class TestMessagesViewTests
         }
     }
 
-    /// <summary>粉丝牌输入仅在弹幕显示，批量生成与重新读取只为弹幕保留粉丝牌身份和边框。</summary>
+    /// <summary>粉丝牌输入仅在弹幕显示，批量生成与重新读取只为弹幕保留粉丝牌身份和底色。</summary>
     [AvaloniaTheory]
     [InlineData(0, 0, "Transparent")]
     [InlineData(1, 3, "#4F8FDD")]
@@ -194,7 +194,7 @@ public sealed class TestMessagesViewTests
                     var item = new MessageItemViewModel(record, runtime.Configuration.Settings, runtime.Pinyin);
                     Assert.Equal(supportsMedal, item.HasMedal);
                     Assert.Equal(Color.Parse(supportsMedal ? expectedColor : "Transparent"),
-                        Assert.IsAssignableFrom<ISolidColorBrush>(item.MedalBorderBrush).Color);
+                        Assert.IsAssignableFrom<ISolidColorBrush>(item.MedalBackgroundBrush).Color);
                 });
             }
         }
