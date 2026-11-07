@@ -30,14 +30,26 @@ public sealed class SqliteTranslationCache : ITranslationCache, IAsyncDisposable
         return EnqueueAsync(connection =>
         {
             using var command = connection.CreateCommand();
-            command.CommandText = "SELECT translation FROM translations WHERE cache_key=$key;";
+            command.CommandText = "SELECT translation,access_order FROM translations WHERE cache_key=$key;";
             command.Parameters.AddWithValue("$key", key);
-            var value = command.ExecuteScalar() as string;
-            if (value is not null)
+            string value;
+            long entryOrder;
+            using (var reader = command.ExecuteReader())
             {
+                if (!reader.Read())
+                {
+                    return null;
+                }
+                value = reader.GetString(0);
+                entryOrder = reader.GetInt64(1);
+            }
+            if (entryOrder < accessOrder)
+            {
+                var nextOrder = checked(accessOrder + 1);
                 command.CommandText = "UPDATE translations SET access_order=$order WHERE cache_key=$key;";
-                command.Parameters.AddWithValue("$order", ++accessOrder);
+                command.Parameters.AddWithValue("$order", nextOrder);
                 command.ExecuteNonQuery();
+                accessOrder = nextOrder;
             }
 
             return value;
@@ -55,7 +67,8 @@ public sealed class SqliteTranslationCache : ITranslationCache, IAsyncDisposable
             command.CommandText = """
                 INSERT INTO translations(cache_key,translation,access_order) VALUES($key,$translation,$order)
                 ON CONFLICT(cache_key) DO UPDATE SET translation=excluded.translation, access_order=excluded.access_order;
-                DELETE FROM translations WHERE cache_key NOT IN (SELECT cache_key FROM translations ORDER BY access_order DESC LIMIT $capacity);
+                DELETE FROM translations WHERE cache_key IN (
+                    SELECT cache_key FROM translations ORDER BY access_order DESC LIMIT -1 OFFSET $capacity);
                 """;
             command.Parameters.AddWithValue("$key", key);
             command.Parameters.AddWithValue("$translation", translation);

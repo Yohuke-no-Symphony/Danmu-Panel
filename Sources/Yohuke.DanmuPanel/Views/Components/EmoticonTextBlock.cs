@@ -1,4 +1,3 @@
-using Yohuke.DanmuPanel.I18n;
 using System.Globalization;
 using System.Text;
 using Avalonia;
@@ -6,6 +5,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Media.TextFormatting;
@@ -22,7 +22,9 @@ public sealed class EmoticonTextBlock : TextBlock
 {
     internal const double DEFAULT_EMOTICON_HEIGHT = 28;
     private const int MAX_CACHED_RUBY_INLINES = 64;
-    private readonly Dictionary<string, Bitmap> images = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, EmoticonBitmapLease> images = new(StringComparer.Ordinal);
+    private EmoticonBitmapCache? localBitmapCache;
+    private EmoticonBitmapCache? bitmapCache;
     private readonly Dictionary<Image, DanmuEmoticon> emoticonImages = [];
     private EmoticonImagePreview? imagePreview;
     private readonly List<PinyinRubySyllable> rubySyllables = [];
@@ -37,6 +39,15 @@ public sealed class EmoticonTextBlock : TextBlock
     private bool isVisibilityTracking;
     private bool isDataContextUpdating;
     private bool isContentUpdatePending;
+    private CancellationTokenSource? imageRequest;
+    private int contentRevision;
+
+    internal Task PendingImageLoad { get; private set; } = Task.CompletedTask;
+    internal Task PendingPreviewLoad => imagePreview?.PendingLoad ?? Task.CompletedTask;
+    internal static readonly RoutedEvent<RoutedEventArgs> AsyncContentUpdatingEvent =
+        RoutedEvent.Register<EmoticonTextBlock, RoutedEventArgs>("AsyncContentUpdating", RoutingStrategies.Bubble);
+    internal static readonly RoutedEvent<RoutedEventArgs> AsyncContentUpdatedEvent =
+        RoutedEvent.Register<EmoticonTextBlock, RoutedEventArgs>("AsyncContentUpdated", RoutingStrategies.Bubble);
 
     internal int HighlightedSourceStart { get; private set; } = -1;
     internal bool HasAnnotations => rubySyllables.Count > 0 || pronunciationRuns.Count > 0;
@@ -46,6 +57,28 @@ public sealed class EmoticonTextBlock : TextBlock
     internal bool HasHoveredEmoticon => imagePreview?.HasTarget == true;
     internal int CachedRubyInlineCount => rubyInlineCache.Count;
     internal event Action? EmoticonHoverChanged;
+
+    internal EmoticonBitmapCache? BitmapCache
+    {
+        get => bitmapCache;
+        set
+        {
+            if (ReferenceEquals(bitmapCache, value))
+            {
+                return;
+            }
+            if (isAttached && bitmapCache is not null)
+            {
+                bitmapCache.ImageChanged -= OnImageChanged;
+            }
+            bitmapCache = value;
+            if (isAttached && bitmapCache is not null)
+            {
+                bitmapCache.ImageChanged += OnImageChanged;
+            }
+            RebuildContent();
+        }
+    }
 
     /// <summary>内联表情的显示高度，独立于宽松和紧凑文字字号，并继承消息缩放。</summary>
     public static readonly AttachedProperty<double> EmoticonHeightProperty =
@@ -287,6 +320,10 @@ public sealed class EmoticonTextBlock : TextBlock
     {
         base.OnAttachedToVisualTree(e);
         isAttached = true;
+        if (BitmapCache is not null)
+        {
+            BitmapCache.ImageChanged += OnImageChanged;
+        }
         RebuildContent();
     }
 
@@ -295,8 +332,13 @@ public sealed class EmoticonTextBlock : TextBlock
     {
         base.OnDetachedFromVisualTree(e);
         isAttached = false;
+        if (BitmapCache is not null)
+        {
+            BitmapCache.ImageChanged -= OnImageChanged;
+        }
         UpdateVisibilityTracking(false);
         ReleaseContent();
+        localBitmapCache?.Clear();
     }
 
     /// <inheritdoc />
@@ -426,10 +468,39 @@ public sealed class EmoticonTextBlock : TextBlock
                                                      !string.IsNullOrWhiteSpace(emoticon.ImagePath))
             .OrderByDescending(emoticon => emoticon.Text.Length).ToArray() ?? [];
 
+        if (candidates.Length > 0)
+        {
+            var cache = BitmapCache ?? (localBitmapCache ??= new(0, 0));
+            var height = (int)Math.Ceiling(EmoticonHeight * (TopLevel.GetTopLevel(this)?.RenderScaling ?? 1));
+            var missing = new List<string>();
+            foreach (var path in candidates.Where(candidate => content.Contains(candidate.Text, StringComparison.Ordinal))
+                         .Select(candidate => candidate.ImagePath).Distinct(StringComparer.Ordinal))
+            {
+                var lease = cache.TryAcquire(path, height);
+                if (lease is not null)
+                {
+                    images.Add(path, lease);
+                }
+                else
+                {
+                    missing.Add(path);
+                }
+            }
+            if (missing.Count > 0)
+            {
+                imageRequest = new();
+                PendingImageLoad = LoadImagesAsync(cache, missing, height, candidates, contentRevision, imageRequest.Token);
+            }
+        }
+        RenderContent(content, candidates);
+    }
+
+    private void RenderContent(string content, IReadOnlyList<DanmuEmoticon> candidates)
+    {
         var hasAnnotations = Annotations is { Count: > 0 } &&
                              Annotations.Any(annotation => annotation.HasPinyin) &&
                              string.Concat(Annotations.Select(annotation => annotation.Text)) == content;
-        if (candidates.Length == 0 && !hasAnnotations)
+        if (candidates.Count == 0 && !hasAnnotations)
         {
             Inlines = null;
             Text = content;
@@ -478,6 +549,73 @@ public sealed class EmoticonTextBlock : TextBlock
         }
         UpdateTypography();
         AnnotationLayoutChanged?.Invoke();
+    }
+
+    private async Task LoadImagesAsync(EmoticonBitmapCache cache, IReadOnlyList<string> paths, int height,
+        IReadOnlyList<DanmuEmoticon> candidates, int revision, CancellationToken cancellationToken)
+    {
+        var tasks = paths.Select(path => cache.AcquireAsync(path, height, cancellationToken)).ToArray();
+        var accepted = false;
+        try
+        {
+            await Task.Yield();
+            var leases = await Task.WhenAll(tasks);
+            if (cancellationToken.IsCancellationRequested || revision != contentRevision || !isAttached || !IsEffectivelyVisible)
+            {
+                return;
+            }
+            for (var index = 0; index < leases.Length; index++)
+            {
+                if (leases[index] is { } lease)
+                {
+                    images.Add(paths[index], lease);
+                }
+            }
+            accepted = true;
+            UpdateContent(() =>
+            {
+                ReleaseInlines();
+                RenderContent(ContentText ?? "", candidates);
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            if (!accepted)
+            {
+                foreach (var task in tasks)
+                {
+                    if (task.IsCompletedSuccessfully)
+                    {
+                        task.Result?.Dispose();
+                    }
+                }
+            }
+        }
+    }
+
+    private void OnImageChanged(string path, int height)
+    {
+        var currentHeight = (int)Math.Ceiling(EmoticonHeight * (TopLevel.GetTopLevel(this)?.RenderScaling ?? 1));
+        if (isAttached && IsEffectivelyVisible && height == currentHeight && images.ContainsKey(path))
+        {
+            UpdateContent(RebuildContent);
+        }
+    }
+
+    private void UpdateContent(Action update)
+    {
+        RaiseEvent(new RoutedEventArgs(AsyncContentUpdatingEvent));
+        try
+        {
+            update();
+        }
+        finally
+        {
+            RaiseEvent(new RoutedEventArgs(AsyncContentUpdatedEvent));
+        }
     }
 
     private static IReadOnlyList<EmoticonTextSegment> ParseSegments(string content, IReadOnlyList<DanmuEmoticon> candidates)
@@ -675,28 +813,29 @@ public sealed class EmoticonTextBlock : TextBlock
 
     private Bitmap? GetImage(string path)
     {
-        if (images.TryGetValue(path, out var image))
+        if (images.TryGetValue(path, out var existing))
         {
-            return image;
+            return existing.Image;
         }
-
-        try
-        {
-            using var stream = File.OpenRead(path);
-            var scale = TopLevel.GetTopLevel(this)!.RenderScaling;
-            image = Bitmap.DecodeToHeight(stream, (int)Math.Ceiling(EmoticonHeight * scale));
-            images.Add(path, image);
-            return image;
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
-                                           ArgumentException or NotSupportedException or NullReferenceException)
-        {
-            System.Diagnostics.Trace.TraceWarning(Localization.Format("UI.EmoticonTextBlock.ImageDecodeFailed", exception.GetType().Name));
-            return null;
-        }
+        return null;
     }
 
     private void ReleaseContent()
+    {
+        contentRevision++;
+        imageRequest?.Cancel();
+        imageRequest?.Dispose();
+        imageRequest = null;
+        PendingImageLoad = Task.CompletedTask;
+        ReleaseInlines();
+        foreach (var image in images.Values)
+        {
+            image.Dispose();
+        }
+        images.Clear();
+    }
+
+    private void ReleaseInlines()
     {
         ClearEmoticonHover();
         emoticonImages.Clear();
@@ -719,11 +858,5 @@ public sealed class EmoticonTextBlock : TextBlock
         }
         Inlines?.Clear();
 
-        foreach (var image in images.Values)
-        {
-            image.Dispose();
-        }
-
-        images.Clear();
     }
 }

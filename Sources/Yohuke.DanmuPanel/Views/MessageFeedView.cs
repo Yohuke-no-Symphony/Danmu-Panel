@@ -33,6 +33,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     private int scheduledColumnWidthRevision = -1;
     internal Task PendingColumnWidthSave { get; private set; } = Task.CompletedTask;
     internal MessageCopyPopup? CopyPopup { get; private set; }
+    internal EmoticonBitmapCache EmoticonBitmaps { get; } = new();
     public FeedViewModel Model { get; }
 
     /// <summary>为每个停靠或浮动宿主创建独立的面板操作按钮。</summary>
@@ -52,6 +53,12 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             OnColumnResizeRequested(this, new(ratio, completed)));
         AddHandler(MessageFeedColumnLayout.ResizeStartedEvent, OnColumnResizeStarted);
         AddHandler(MessageFeedColumnLayout.ResizeRequestedEvent, OnColumnResizeRequested);
+        AddHandler(EmoticonTextBlock.AsyncContentUpdatingEvent, (_, _) => scroll?.BeginViewportUpdate());
+        AddHandler(EmoticonTextBlock.AsyncContentUpdatedEvent, (_, _) =>
+        {
+            scroll?.NotifyLayoutChanged();
+            scroll?.EndViewportUpdate();
+        });
         UpdateTextScale();
         UpdateBorderThickness();
         Model.Failed += reportError;
@@ -163,6 +170,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         ScheduleColumnWidthSave();
         runtime.Changed -= OnRuntimeChanged;
         runtime.MessageColumnsChanged -= OnMessageColumnsChanged;
+        EmoticonBitmaps.Clear();
         base.OnDetachedFromVisualTree(e);
     }
 
@@ -383,7 +391,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
 
     private MessageFeedRow CreateRow(MessageKind kind)
     {
-        var row = new MessageFeedRow(kind, runtime.UserAvatars);
+        var row = new MessageFeedRow(kind, runtime.UserAvatars, EmoticonBitmaps);
         row.Click += async (_, args) =>
         {
             args.Handled = true;

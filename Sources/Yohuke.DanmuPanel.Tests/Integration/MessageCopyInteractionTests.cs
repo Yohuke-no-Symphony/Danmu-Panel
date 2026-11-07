@@ -86,7 +86,15 @@ public sealed class MessageCopyInteractionTests
     [InlineData(MessageKind.SuperChat)]
     public async Task HoldingRequestsCopyWithoutActivatingTheMessage(MessageKind kind)
     {
-        var row = new MessageFeedRow(kind);
+        var row = new MessageFeedRow(kind)
+        {
+            DataContext = new MessageItemViewModel(Message(kind), new PanelSettings
+            {
+                CompactDanmuDisplay = false,
+                ShowUserPinyin = false,
+                ShowDanmuPinyin = false
+            }, new PinyinService())
+        };
         var requests = 0;
         var clicks = 0;
         row.CopyRequested += (_, _) => requests++;
@@ -96,7 +104,11 @@ public sealed class MessageCopyInteractionTests
         {
             window.Show();
             Pump(window);
-            var point = Center(row, window);
+            var original = Assert.Single(row.GetVisualDescendants().OfType<EmoticonTextBlock>(),
+                text => text.IsEffectivelyVisible && text.Classes.Contains("regularFeedContent") &&
+                        text.Classes.Contains("originalText"));
+            var point = Center(original, window);
+            Assert.DoesNotContain(window.GetVisualsAt(point), visual => visual is MessageColumnSplitter);
             window.MouseMove(point);
             window.MouseDown(point, MouseButton.Left);
             await WaitForHoldAsync(window);

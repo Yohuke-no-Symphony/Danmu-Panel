@@ -37,6 +37,11 @@ public sealed class HoverMarqueeTextBlock : UserControl
 
     internal double TextBaseline => textBlock.Padding.Top + textBlock.TextLayout.Baseline;
     internal bool IsSingleTextLine => textBlock.IsSingleTextLine;
+    internal EmoticonBitmapCache? BitmapCache
+    {
+        get => textBlock.BitmapCache;
+        set => textBlock.BitmapCache = value;
+    }
 
     /// <summary>
     /// 显示文本。

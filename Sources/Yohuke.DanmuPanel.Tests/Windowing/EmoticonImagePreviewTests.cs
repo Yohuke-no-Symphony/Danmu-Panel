@@ -7,7 +7,6 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
-using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Models.Workspace;
@@ -25,7 +24,7 @@ public sealed class EmoticonImagePreviewTests
     [InlineData(true, 640, 320)]
     [InlineData(false, 320, 640)]
     [InlineData(true, 320, 640)]
-    public void InlineAndTooltipPreserveTheImageAspectRatio(bool marquee, int width, int height)
+    public async Task InlineAndTooltipPreserveTheImageAspectRatio(bool marquee, int width, int height)
     {
         var path = CreateImageFile(width, height);
         var content = CreateContent(marquee, path);
@@ -34,7 +33,7 @@ public sealed class EmoticonImagePreviewTests
         try
         {
             window.Show();
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             var text = FindText(content);
             var inline = FindInlineImage(text);
             var small = Assert.IsType<Bitmap>(inline.Source);
@@ -42,7 +41,7 @@ public sealed class EmoticonImagePreviewTests
             Assert.InRange(Math.Abs(inline.Bounds.Width / inline.Bounds.Height - (double)width / height), 0, 0.01);
             Assert.False(ToolTip.GetIsOpen(PreviewHost(inline)));
 
-            var preview = OpenPreview(window, inline);
+            var preview = await OpenPreviewAsync(window, inline);
             var large = Assert.IsType<Bitmap>(preview.Source);
             Assert.NotSame(small, large);
             Assert.True(Math.Max(large.PixelSize.Width, large.PixelSize.Height) >
@@ -51,13 +50,13 @@ public sealed class EmoticonImagePreviewTests
             Assert.InRange(Math.Abs(preview.Bounds.Width / preview.Bounds.Height - (double)width / height), 0, 0.01);
 
             window.MouseMove(new(window.Width - 8, window.Height - 8));
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             Assert.False(ToolTip.GetIsOpen(PreviewHost(inline)));
             Assert.Null(preview.Source);
             AssertDisposed(large);
             Assert.True(small.PixelSize.Height > 0);
 
-            var reopened = OpenPreview(window, inline);
+            var reopened = await OpenPreviewAsync(window, inline);
             lastPreview = Assert.IsType<Bitmap>(reopened.Source);
             Assert.NotSame(large, lastPreview);
             Assert.True(lastPreview.PixelSize.Height > 0);
@@ -75,7 +74,7 @@ public sealed class EmoticonImagePreviewTests
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]
-    public void EmoticonHeightInheritsAndUpdatesWithTypography(bool marquee)
+    public async Task EmoticonHeightInheritsAndUpdatesWithTypography(bool marquee)
     {
         var path = CreateImageFile(640, 320);
         var content = CreateContent(marquee, path);
@@ -85,7 +84,7 @@ public sealed class EmoticonImagePreviewTests
         try
         {
             window.Show();
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             var text = FindText(content);
             Assert.Equal(42, text.EmoticonHeight);
             Assert.InRange(Math.Abs(FindInlineImage(text).Bounds.Height - 42), 0, 0.1);
@@ -99,7 +98,7 @@ public sealed class EmoticonImagePreviewTests
                 text.FontSize = 26;
             }
             host.SetValue(EmoticonTextBlock.EmoticonHeightProperty, 56d);
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
 
             var inline = FindInlineImage(text);
             Assert.Equal(26, text.FontSize);
@@ -107,7 +106,7 @@ public sealed class EmoticonImagePreviewTests
             Assert.InRange(Math.Abs(inline.Bounds.Height - 56), 0, 0.1);
             Assert.InRange(Math.Abs(inline.Bounds.Width - 112), 0, 0.1);
             Assert.True(Assert.IsType<Bitmap>(inline.Source).PixelSize.Height >= 56);
-            var preview = OpenPreview(window, inline);
+            var preview = await OpenPreviewAsync(window, inline);
             Assert.InRange(Math.Abs(Math.Max(preview.Bounds.Width, preview.Bounds.Height) - 160), 0, 0.5);
         }
         finally
@@ -126,7 +125,7 @@ public sealed class EmoticonImagePreviewTests
     [InlineData(false, "content")]
     [InlineData(true, "detach")]
     [InlineData(true, "window")]
-    public void PreviewClosesAndReleasesItsBitmapWhenTheOwnerChanges(bool marquee, string change)
+    public async Task PreviewClosesAndReleasesItsBitmapWhenTheOwnerChanges(bool marquee, string change)
     {
         var path = CreateImageFile(320, 320);
         var content = CreateContent(marquee, path);
@@ -135,10 +134,10 @@ public sealed class EmoticonImagePreviewTests
         try
         {
             window.Show();
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             var inline = FindInlineImage(FindText(content));
             var previewHost = PreviewHost(inline);
-            var preview = OpenPreview(window, inline);
+            var preview = await OpenPreviewAsync(window, inline);
             var bitmap = Assert.IsType<Bitmap>(preview.Source);
 
             switch (change)
@@ -165,7 +164,7 @@ public sealed class EmoticonImagePreviewTests
                     window.Close();
                     break;
             }
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
 
             Assert.False(ToolTip.GetIsOpen(previewHost));
             Assert.Null(preview.Source);
@@ -176,9 +175,9 @@ public sealed class EmoticonImagePreviewTests
                 host.IsVisible = true;
                 host.Child = content;
                 SetText(content, "[笑]");
-                Pump(window);
+                await EmoticonImageTestHelper.LoadAsync(window);
                 window.MouseMove(new(window.Width - 8, window.Height - 8));
-                var restored = OpenPreview(window, FindInlineImage(FindText(content)));
+                var restored = await OpenPreviewAsync(window, FindInlineImage(FindText(content)));
                 Assert.NotSame(bitmap, restored.Source);
                 Assert.True(Assert.IsType<Bitmap>(restored.Source).PixelSize.Height > 0);
             }
@@ -194,7 +193,7 @@ public sealed class EmoticonImagePreviewTests
     [AvaloniaTheory]
     [InlineData(PinyinLayoutMode.Ruby, false)]
     [InlineData(PinyinLayoutMode.SeparateLine, true)]
-    public void PreviewPreservesPinyinHoverAndParentButtonClicks(PinyinLayoutMode layout, bool marquee)
+    public async Task PreviewPreservesPinyinHoverAndParentButtonClicks(PinyinLayoutMode layout, bool marquee)
     {
         var path = CreateImageFile(320, 320);
         const string message = "你[笑]好";
@@ -222,10 +221,10 @@ public sealed class EmoticonImagePreviewTests
         try
         {
             window.Show();
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             var text = FindText(content);
             var inline = FindInlineImage(text);
-            OpenPreview(window, inline);
+            await OpenPreviewAsync(window, inline);
             var sourceStart = message.IndexOf('好');
             Point point;
             if (layout == PinyinLayoutMode.Ruby)
@@ -240,7 +239,7 @@ public sealed class EmoticonImagePreviewTests
                 point = original.TranslatePoint(original.TextLayout.HitTestTextPosition(2).Center, window)!.Value;
             }
             window.MouseMove(point);
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
 
             Assert.Equal(sourceStart, text.HighlightedSourceStart);
             Assert.False(ToolTip.GetIsOpen(PreviewHost(inline)));
@@ -248,7 +247,7 @@ public sealed class EmoticonImagePreviewTests
             window.MouseMove(imagePoint);
             window.MouseDown(imagePoint, MouseButton.Left);
             window.MouseUp(imagePoint, MouseButton.Left);
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             Assert.Equal(1, clicks);
         }
         finally
@@ -271,21 +270,21 @@ public sealed class EmoticonImagePreviewTests
         {
             window.Show();
             window.MouseMove(new(window.Width - 8, window.Height - 8));
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             var viewer = Assert.IsType<ScrollViewer>(marquee.Content);
             await WaitUntilAsync(() => viewer.Offset.X > 3, window);
             var inline = FindInlineImage(FindText(marquee));
-            var preview = OpenPreview(window, inline);
+            var preview = await OpenPreviewAsync(window, inline);
             var bitmap = Assert.IsType<Bitmap>(preview.Source);
             var offset = viewer.Offset.X;
 
             await Task.Delay(120);
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
 
             Assert.Equal(offset, viewer.Offset.X);
             Assert.True(ToolTip.GetIsOpen(PreviewHost(inline)));
             window.MouseMove(new(window.Width - 8, window.Height - 8));
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             Assert.False(ToolTip.GetIsOpen(PreviewHost(inline)));
             Assert.Null(preview.Source);
             AssertDisposed(bitmap);
@@ -300,7 +299,7 @@ public sealed class EmoticonImagePreviewTests
 
     /// <summary>预览期间点击图片不会吞掉父按钮动作，关闭后原文字提示及其绑定继续生效。</summary>
     [AvaloniaFact]
-    public void PreviewRestoresTheHostsTooltipBindingAndPreservesDirectImageClicks()
+    public async Task PreviewRestoresTheHostsTooltipBindingAndPreservesDirectImageClicks()
     {
         var path = CreateImageFile(320, 320);
         var content = CreateContent(true, path);
@@ -318,17 +317,17 @@ public sealed class EmoticonImagePreviewTests
         try
         {
             window.Show();
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             Assert.Equal("原来的文字提示", ToolTip.GetTip(content));
             Assert.True(ToolTip.GetServiceEnabled(content));
             var inline = FindInlineImage(FindText(content));
-            var preview = OpenPreview(window, inline);
+            var preview = await OpenPreviewAsync(window, inline);
             var bitmap = Assert.IsType<Bitmap>(preview.Source);
             var point = Center(inline, window);
 
             window.MouseDown(point, MouseButton.Left);
             window.MouseUp(point, MouseButton.Left);
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
 
             Assert.Equal(1, clicks);
             Assert.False(ToolTip.GetIsOpen(content));
@@ -338,7 +337,7 @@ public sealed class EmoticonImagePreviewTests
             Assert.True(ToolTip.GetServiceEnabled(content));
             window.MouseMove(new(window.Width - 8, window.Height - 8));
             content.DataContext = "数据更新后的文字提示";
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             Assert.Equal("数据更新后的文字提示", ToolTip.GetTip(content));
         }
         finally
@@ -360,13 +359,13 @@ public sealed class EmoticonImagePreviewTests
         try
         {
             window.Show();
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             var text = FindText(content);
             var inline = FindInlineImage(text);
             var bitmap = Assert.IsType<Bitmap>(inline.Source);
             ToolTip.SetShowDelay(inline, 200);
             window.MouseMove(Center(inline, window));
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             Assert.True(text.HasHoveredEmoticon);
             Assert.False(ToolTip.GetIsOpen(content));
 
@@ -378,13 +377,13 @@ public sealed class EmoticonImagePreviewTests
             {
                 SetText(content, "另一条没有表情的消息");
             }
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             Assert.False(text.HasHoveredEmoticon);
             Assert.Empty(text.GetVisualDescendants().OfType<Image>());
             AssertDisposed(bitmap);
 
             await Task.Delay(260);
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
 
             Assert.False(ToolTip.GetIsOpen(content));
             Assert.Null(ToolTip.GetTip(content));
@@ -437,12 +436,12 @@ public sealed class EmoticonImagePreviewTests
         return Assert.Single(text.GetVisualDescendants().OfType<Image>());
     }
 
-    private static Image OpenPreview(Window window, Image inline)
+    private static async Task<Image> OpenPreviewAsync(Window window, Image inline)
     {
         var host = PreviewHost(inline);
         ToolTip.SetShowDelay(inline, 0);
         window.MouseMove(Center(inline, window));
-        Pump(window);
+        await EmoticonImageTestHelper.LoadAsync(window);
         Assert.True(ToolTip.GetIsOpen(host));
         return Assert.IsType<Image>(Assert.IsType<ToolTip>(ToolTip.GetTip(host)).Content);
     }
@@ -504,18 +503,9 @@ public sealed class EmoticonImagePreviewTests
                 return;
             }
             await Task.Delay(10);
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
         }
         Assert.Fail("The marquee did not reach the expected scroll offset.");
     }
 
-    private static void Pump(Window window)
-    {
-        AvaloniaHeadlessPlatform.ForceRenderTimerTick(2);
-        Dispatcher.UIThread.RunJobs();
-        window.UpdateLayout();
-        AvaloniaHeadlessPlatform.ForceRenderTimerTick(2);
-        Dispatcher.UIThread.RunJobs();
-        window.UpdateLayout();
-    }
 }

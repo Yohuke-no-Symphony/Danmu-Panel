@@ -43,6 +43,7 @@ public sealed class SqliteTranslationCacheTests
         using var directory = new MessageStoreTestDirectory();
         await using var cache = new SqliteTranslationCache(directory.DatabasePath);
         await cache.SetAsync("seed", "value");
+        await cache.SetAsync("newest", "newest value");
         using var blocker = OpenConnection(directory.DatabasePath);
         var transaction = blocker.BeginTransaction(deferred: false);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

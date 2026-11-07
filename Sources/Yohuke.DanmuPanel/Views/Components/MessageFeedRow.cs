@@ -35,7 +35,7 @@ internal sealed class MessageFeedRow : Button
         PseudoClasses.Set(":alternate", (index & 1) != 0);
     }
 
-    internal MessageFeedRow(MessageKind kind, IUserAvatarService? avatars = null)
+    internal MessageFeedRow(MessageKind kind, IUserAvatarService? avatars = null, EmoticonBitmapCache? bitmapCache = null)
     {
         canCopy = kind is MessageKind.Danmu or MessageKind.SuperChat;
         Gestures.SetIsHoldingEnabled(this, canCopy);
@@ -104,7 +104,7 @@ internal sealed class MessageFeedRow : Button
         Grid.SetColumn(userName, 1);
         identity.Children.Add(userIdentity);
         identity.Classes.Add("danmuFeedIdentity");
-        var original = new EmoticonTextBlock { TextWrapping = TextWrapping.Wrap };
+        var original = new EmoticonTextBlock { TextWrapping = TextWrapping.Wrap, BitmapCache = bitmapCache };
         original.Classes.Add("danmuFeedContent");
         original.Classes.Add("regularFeedContent");
         original.Classes.Add("originalText");
@@ -119,7 +119,7 @@ internal sealed class MessageFeedRow : Button
         translation.Classes.Add("regularFeedContent");
         translation.Classes.Add("translatedText");
         translation.TextWrapping = TextWrapping.Wrap;
-        var originalMarquee = CreateMarquee(nameof(MessageItemViewModel.Detail));
+        var originalMarquee = CreateMarquee(nameof(MessageItemViewModel.Detail), bitmapCache);
         originalMarquee.Classes.Add("originalText");
         originalMarquee.Bind(HoverMarqueeTextBlock.EmoticonsProperty, new Binding(nameof(MessageItemViewModel.Emoticons)));
         originalMarquee.Bind(HoverMarqueeTextBlock.AnnotationsProperty, new Binding(nameof(MessageItemViewModel.ContentPinyin)));
@@ -240,9 +240,9 @@ internal sealed class MessageFeedRow : Button
         }
     }
 
-    private static HoverMarqueeTextBlock CreateMarquee(string property)
+    private static HoverMarqueeTextBlock CreateMarquee(string property, EmoticonBitmapCache? bitmapCache = null)
     {
-        var text = new HoverMarqueeTextBlock();
+        var text = new HoverMarqueeTextBlock { BitmapCache = bitmapCache };
         text.Classes.Add("compactFeedContent");
         text.Bind(HoverMarqueeTextBlock.TextProperty, new Binding(property));
         text.Bind(HoverMarqueeTextBlock.AutoScrollProperty, new Binding(nameof(MessageItemViewModel.AutoScrollLongMessages)));

@@ -21,6 +21,10 @@ internal sealed class MessageStoreOperationOfT<T>(Func<SqliteConnection, T> oper
         {
             completion.TrySetResult(operation(connection));
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            completion.TrySetCanceled(cancellationToken);
+        }
         catch (Exception error)
         {
             completion.TrySetException(error);

@@ -15,13 +15,13 @@ internal sealed class PinyinRubySyllable : StackPanel
     internal PinyinRubySyllable(PinyinAnnotation annotation)
     {
         Annotation = annotation;
-        OriginalText = new()
+        OriginalText = new PinyinGlyphTextBlock
         {
             Text = annotation.Text,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextWrapping = TextWrapping.NoWrap
         };
-        PronunciationText = new()
+        PronunciationText = new PinyinGlyphTextBlock
         {
             Text = annotation.Pinyin,
             HorizontalAlignment = HorizontalAlignment.Center,

@@ -5,7 +5,6 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.Workspace;
 
 namespace Yohuke.DanmuPanel.Views.Components;
@@ -21,10 +20,14 @@ internal sealed class EmoticonImagePreview
     private DanmuEmoticon? emoticon;
     private Image? previewImage;
     private ToolTip? toolTip;
-    private Bitmap? bitmap;
+    private readonly EmoticonBitmapCache bitmapCache = new(0, 0);
+    private EmoticonBitmapLease? bitmapLease;
+    private CancellationTokenSource? request;
+    private int revision;
 
     internal bool HasTarget => target is not null;
     internal event Action? TargetChanged;
+    internal Task PendingLoad { get; private set; } = Task.CompletedTask;
 
     internal EmoticonImagePreview()
     {
@@ -62,6 +65,11 @@ internal sealed class EmoticonImagePreview
     internal void Clear()
     {
         timer.Stop();
+        revision++;
+        request?.Cancel();
+        request?.Dispose();
+        request = null;
+        bitmapCache.Clear();
         var previous = target;
         var previousHost = host;
         target = null;
@@ -88,8 +96,8 @@ internal sealed class EmoticonImagePreview
             toolTip.Content = null;
             toolTip = null;
         }
-        bitmap?.Dispose();
-        bitmap = null;
+        bitmapLease?.Dispose();
+        bitmapLease = null;
         if (previous is not null)
         {
             TargetChanged?.Invoke();
@@ -104,15 +112,33 @@ internal sealed class EmoticonImagePreview
             Clear();
             return;
         }
+        var source = (Bitmap)target.Source!;
+        var scale = TopLevel.GetTopLevel(target)!.RenderScaling;
+        var pixels = (int)Math.Ceiling(PREVIEW_SIZE * scale);
+        var height = source.PixelSize.Width >= source.PixelSize.Height
+            ? (int)Math.Ceiling(pixels * source.PixelSize.Height / (double)source.PixelSize.Width) : pixels;
+        request = new();
+        PendingLoad = ShowAsync(emoticon!.ImagePath, height, revision, request.Token);
+    }
+
+    private async Task ShowAsync(string path, int height, int requestRevision, CancellationToken cancellationToken)
+    {
+        EmoticonBitmapLease? loaded = null;
         try
         {
-            var source = (Bitmap)target.Source!;
-            var scale = TopLevel.GetTopLevel(target)!.RenderScaling;
-            var pixels = (int)Math.Ceiling(PREVIEW_SIZE * scale);
-            using var stream = File.OpenRead(emoticon!.ImagePath);
-            bitmap = source.PixelSize.Width >= source.PixelSize.Height
-                ? Bitmap.DecodeToWidth(stream, pixels)
-                : Bitmap.DecodeToHeight(stream, pixels);
+            loaded = await bitmapCache.AcquireAsync(path, height, cancellationToken);
+            if (cancellationToken.IsCancellationRequested || requestRevision != revision)
+            {
+                return;
+            }
+            if (loaded is null || target is null || !target.IsEffectivelyVisible || target.GetVisualRoot() is null)
+            {
+                Clear();
+                return;
+            }
+            bitmapLease = loaded;
+            loaded = null;
+            var bitmap = bitmapLease.Image;
             var ratio = bitmap.PixelSize.Width / (double)bitmap.PixelSize.Height;
             previewImage = new()
             {
@@ -121,16 +147,17 @@ internal sealed class EmoticonImagePreview
                 Height = ratio >= 1 ? PREVIEW_SIZE / ratio : PREVIEW_SIZE,
                 Stretch = Stretch.Uniform
             };
-            AutomationProperties.SetName(previewImage, emoticon.Text);
+            AutomationProperties.SetName(previewImage, emoticon!.Text);
             toolTip = new() { Content = previewImage, IsHitTestVisible = false };
             host!.SetCurrentValue(ToolTip.TipProperty, toolTip);
             host.SetCurrentValue(ToolTip.IsOpenProperty, true);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
-                                         ArgumentException or NotSupportedException or NullReferenceException)
+        catch (OperationCanceledException)
         {
-            Clear();
-            System.Diagnostics.Trace.TraceWarning(Localization.Format("UI.EmoticonTextBlock.ImageDecodeFailed", exception.GetType().Name));
+        }
+        finally
+        {
+            loaded?.Dispose();
         }
     }
 

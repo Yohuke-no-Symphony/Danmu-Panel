@@ -129,7 +129,7 @@ public sealed class PinyinTextRenderingTests
     [AvaloniaTheory]
     [InlineData(PinyinLayoutMode.Ruby)]
     [InlineData(PinyinLayoutMode.SeparateLine)]
-    public void ImagesAndEmojiDoNotShiftFollowingHanziMappings(PinyinLayoutMode layout)
+    public async Task ImagesAndEmojiDoNotShiftFollowingHanziMappings(PinyinLayoutMode layout)
     {
         const string content = "A👩‍💻[笑哭]好\n你";
         var imagePath = Path.Combine(Path.GetTempPath(), $"pinyin-emoticon-{Guid.NewGuid():N}.png");
@@ -143,7 +143,7 @@ public sealed class PinyinTextRenderingTests
         try
         {
             window.Show();
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             Assert.Single(text.GetVisualDescendants().OfType<Image>());
             var sourceIndex = content.IndexOf('好');
             var renderedIndex = sourceIndex - "[笑哭]".Length + 1;
@@ -177,7 +177,7 @@ public sealed class PinyinTextRenderingTests
     [AvaloniaTheory]
     [InlineData(PinyinLayoutMode.Ruby)]
     [InlineData(PinyinLayoutMode.SeparateLine)]
-    public void EmoticonOnlyContentDoesNotCreateAnEmptyPronunciationRow(PinyinLayoutMode layout)
+    public async Task EmoticonOnlyContentDoesNotCreateAnEmptyPronunciationRow(PinyinLayoutMode layout)
     {
         var text = CreateText("[笑哭]", layout);
         text.Emoticons = [new DanmuEmoticon { Text = "[笑哭]", ImagePath = Path.Combine(Path.GetTempPath(),
@@ -186,7 +186,7 @@ public sealed class PinyinTextRenderingTests
         try
         {
             window.Show();
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             Assert.False(text.HasAnnotations);
             Assert.Empty(text.GetVisualDescendants().OfType<PinyinRubySyllable>());
             Assert.Empty(text.GetVisualDescendants().OfType<PinyinSeparateLinePresenter>());
@@ -427,7 +427,7 @@ public sealed class PinyinTextRenderingTests
     [AvaloniaTheory]
     [InlineData(1.0)]
     [InlineData(1.5)]
-    public void RubyLatinEmojiAndImagesShareTheOriginalTextBaseline(double scale)
+    public async Task RubyLatinEmojiAndImagesShareTheOriginalTextBaseline(double scale)
     {
         const string content = "nano好   打call   👩‍💻[笑哭]你";
         var imagePath = Path.Combine(Path.GetTempPath(), $"pinyin-baseline-{Guid.NewGuid():N}.png");
@@ -446,7 +446,7 @@ public sealed class PinyinTextRenderingTests
         try
         {
             window.Show();
-            Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             var line = Assert.Single(text.TextLayout.TextLines);
             var expectedBaseline = line.Baseline;
             var syllables = text.GetVisualDescendants().OfType<PinyinRubySyllable>().ToArray();

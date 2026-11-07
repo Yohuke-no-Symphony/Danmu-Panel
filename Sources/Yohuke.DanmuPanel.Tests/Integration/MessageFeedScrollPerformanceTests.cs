@@ -17,6 +17,7 @@ using Yohuke.DanmuPanel.Models.Workspace;
 using Yohuke.DanmuPanel.Services;
 using Yohuke.DanmuPanel.Services.Translation;
 using Yohuke.DanmuPanel.Tests.Messages;
+using Yohuke.DanmuPanel.Tests.Windowing;
 using Yohuke.DanmuPanel.ViewModels;
 using Yohuke.DanmuPanel.Views;
 using Yohuke.DanmuPanel.Views.Components;
@@ -92,6 +93,7 @@ public sealed class MessageFeedScrollPerformanceTests(ITestOutputHelper output)
                 item.Emoticons = [new DanmuEmoticon { Text = "[笑]", ImagePath = imagePath }];
             }
             window.Show();
+            await EmoticonImageTestHelper.LoadAsync(window);
             Pump(window);
             var list = Assert.Single(view.GetVisualDescendants().OfType<ListBox>(), item => item.Name == "ScrollingMessages");
             list.ContainerPrepared += (_, args) =>
@@ -132,6 +134,8 @@ public sealed class MessageFeedScrollPerformanceTests(ITestOutputHelper output)
             richBuilds = 0;
             layouts = 0;
             var payloadReads = runtime.Messages.PayloadRowsRead;
+            var decodeCountBefore = view.EmoticonBitmaps.DecodeCount;
+            var cacheHitsBefore = view.EmoticonBitmaps.HitCount;
             var originals = view.Model.Items.ToArray();
             var samples = new double[STEPS];
             var minimumOffset = viewer.Offset.Y;
@@ -163,6 +167,8 @@ public sealed class MessageFeedScrollPerformanceTests(ITestOutputHelper output)
                 pinyin, avatars, steps = STEPS, elapsedMs = elapsed, allocatedBytes = allocated,
                 p50Ms = samples[STEPS / 2], p95Ms = samples[(int)(STEPS * 0.95)], maxMs = samples[^1],
                 preparations, rowInstances = rows.Count, rebuilds, richBuilds, layouts,
+                imageDecodes = view.EmoticonBitmaps.DecodeCount - decodeCountBefore,
+                imageCacheHits = view.EmoticonBitmaps.HitCount - cacheHitsBefore,
                 upwardMoves, downwardMoves, minimumOffset, maximumOffset
             };
             var json = JsonSerializer.Serialize(result);
@@ -174,6 +180,8 @@ public sealed class MessageFeedScrollPerformanceTests(ITestOutputHelper output)
             }
             Assert.InRange(rows.Count, 1, 128);
             Assert.Equal(payloadReads, runtime.Messages.PayloadRowsRead);
+            Assert.Equal(decodeCountBefore, view.EmoticonBitmaps.DecodeCount);
+            Assert.True(view.EmoticonBitmaps.HitCount > cacheHitsBefore);
             Assert.Equal(originals, view.Model.Items);
             Assert.True(view.Model.IsReadingHistory);
             Assert.True(upwardMoves > 0 && downwardMoves > 0);

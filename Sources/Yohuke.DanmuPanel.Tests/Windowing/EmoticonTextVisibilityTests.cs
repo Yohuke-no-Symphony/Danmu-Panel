@@ -20,7 +20,7 @@ public sealed class EmoticonTextVisibilityTests
 {
     /// <summary>纯文本不因祖先显隐重新构建，隐藏期间启用、关闭及再次启用注音后仍同步恢复。</summary>
     [AvaloniaFact]
-    public void PlainTextVisibilityDoesNotRebuildAndHiddenRichTransitionsRecover()
+    public async Task PlainTextVisibilityDoesNotRebuildAndHiddenRichTransitionsRecover()
     {
         var text = new EmoticonTextBlock { ContentText = "你好" };
         var host = new Border { Child = text, IsVisible = false };
@@ -28,16 +28,18 @@ public sealed class EmoticonTextVisibilityTests
         try
         {
             window.Show();
-            PinyinTextRenderingTests.Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             var rebuilds = 0;
             text.AnnotationLayoutChanged += () => rebuilds++;
             host.IsVisible = true;
+            await EmoticonImageTestHelper.LoadAsync(window);
             host.IsVisible = false;
             Assert.Equal(0, rebuilds);
 
             text.Annotations = PinyinTextRenderingTests.Annotate("你好");
             AssertDeferred(text, "你好");
             host.IsVisible = true;
+            await EmoticonImageTestHelper.LoadAsync(window);
             Assert.True(text.HasAnnotations);
 
             text.Annotations = [];
@@ -45,11 +47,13 @@ public sealed class EmoticonTextVisibilityTests
             rebuilds = 0;
             host.IsVisible = false;
             host.IsVisible = true;
+            await EmoticonImageTestHelper.LoadAsync(window);
             Assert.Equal(0, rebuilds);
             host.IsVisible = false;
             text.Annotations = PinyinTextRenderingTests.Annotate("你好");
             AssertDeferred(text, "你好");
             host.IsVisible = true;
+            await EmoticonImageTestHelper.LoadAsync(window);
             Assert.True(text.HasAnnotations);
         }
         finally
@@ -64,7 +68,7 @@ public sealed class EmoticonTextVisibilityTests
     [InlineData(PinyinLayoutMode.Ruby, true)]
     [InlineData(PinyinLayoutMode.SeparateLine, false)]
     [InlineData(PinyinLayoutMode.SeparateLine, true)]
-    public void HiddenBindingChangesAreRenderedSynchronouslyWhenShown(PinyinLayoutMode layout, bool hideAncestor)
+    public async Task HiddenBindingChangesAreRenderedSynchronouslyWhenShown(PinyinLayoutMode layout, bool hideAncestor)
     {
         var text = new EmoticonTextBlock { PinyinLayout = layout };
         text.Bind(EmoticonTextBlock.ContentTextProperty, new Binding("Content"));
@@ -77,7 +81,7 @@ public sealed class EmoticonTextVisibilityTests
         try
         {
             window.Show();
-            PinyinTextRenderingTests.Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             AssertDeferred(text, "你好");
 
             text.DataContext = new { Content = "好你", Annotations = PinyinTextRenderingTests.Annotate("好你") };
@@ -125,7 +129,7 @@ public sealed class EmoticonTextVisibilityTests
 
     /// <summary>本地重新显示不能越过仍然隐藏的祖先，只有整个可见链恢复后才创建内容。</summary>
     [AvaloniaFact]
-    public void LocalVisibilityChangesRespectHiddenAncestors()
+    public async Task LocalVisibilityChangesRespectHiddenAncestors()
     {
         var text = new EmoticonTextBlock
         {
@@ -137,7 +141,7 @@ public sealed class EmoticonTextVisibilityTests
         try
         {
             window.Show();
-            PinyinTextRenderingTests.Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             Assert.True(text.HasAnnotations);
 
             outer.IsVisible = false;
@@ -158,7 +162,7 @@ public sealed class EmoticonTextVisibilityTests
 
     /// <summary>脱离旧祖先时释放内容，再挂载到隐藏的新祖先后仅由新的可见性恢复当前内容。</summary>
     [AvaloniaFact]
-    public void DetachedTextRebuildsOnlyUnderItsCurrentVisibleAncestors()
+    public async Task DetachedTextRebuildsOnlyUnderItsCurrentVisibleAncestors()
     {
         var text = new EmoticonTextBlock
         {
@@ -170,7 +174,7 @@ public sealed class EmoticonTextVisibilityTests
         try
         {
             window.Show();
-            PinyinTextRenderingTests.Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             Assert.True(text.HasAnnotations);
             oldHost.Child = null;
             Assert.False(text.HasAnnotations);
@@ -195,9 +199,9 @@ public sealed class EmoticonTextVisibilityTests
         }
     }
 
-    /// <summary>隐藏表情正文不解码图片，显示时同步载入，隐藏时释放，下一次显示重新载入。</summary>
+    /// <summary>隐藏表情正文不解码图片，显示时异步载入，隐藏时释放，下一次显示重新载入。</summary>
     [AvaloniaFact]
-    public void HiddenEmoticonsAreDecodedWhenShownAndReleasedWhenHidden()
+    public async Task HiddenEmoticonsAreDecodedWhenShownAndReleasedWhenHidden()
     {
         var imagePath = Path.Combine(Path.GetTempPath(), $"visibility-emoticon-{Guid.NewGuid():N}.png");
         using (var bitmap = new RenderTargetBitmap(new(8, 8), new(96, 96)))
@@ -213,10 +217,11 @@ public sealed class EmoticonTextVisibilityTests
         try
         {
             window.Show();
-            PinyinTextRenderingTests.Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             AssertDeferred(text, "[笑]");
 
             host.IsVisible = true;
+            await EmoticonImageTestHelper.LoadAsync(window);
             var image = Assert.IsType<Image>(Assert.Single(text.Inlines!.OfType<InlineUIContainer>()).Child);
             var decoded = Assert.IsType<Bitmap>(image.Source);
             Assert.True(decoded.PixelSize.Height > 0);
@@ -226,6 +231,7 @@ public sealed class EmoticonTextVisibilityTests
             Assert.Throws<NullReferenceException>(() => decoded.PixelSize);
 
             host.IsVisible = true;
+            await EmoticonImageTestHelper.LoadAsync(window);
             var restored = Assert.IsType<Image>(Assert.Single(text.Inlines!.OfType<InlineUIContainer>()).Child);
             Assert.NotSame(decoded, restored.Source);
         }
@@ -240,7 +246,7 @@ public sealed class EmoticonTextVisibilityTests
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]
-    public void MessageRowsBuildAnnotationsOnlyForTheVisibleBody(bool compact)
+    public async Task MessageRowsBuildAnnotationsOnlyForTheVisibleBody(bool compact)
     {
         var row = new MessageFeedRow(MessageKind.Danmu)
         {
@@ -258,7 +264,7 @@ public sealed class EmoticonTextVisibilityTests
         try
         {
             window.Show();
-            PinyinTextRenderingTests.Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
             var regular = Assert.Single(row.GetVisualDescendants().OfType<EmoticonTextBlock>(),
                 block => block.Classes.Contains("regularFeedContent"));
             var marquee = Assert.Single(row.GetVisualDescendants().OfType<HoverMarqueeTextBlock>(),
@@ -268,7 +274,7 @@ public sealed class EmoticonTextVisibilityTests
             Assert.Equal(compact, marqueeText.HasAnnotations);
 
             host.Classes.Set("compactDanmu", !compact);
-            PinyinTextRenderingTests.Pump(window);
+            await EmoticonImageTestHelper.LoadAsync(window);
 
             Assert.Equal(compact, regular.HasAnnotations);
             Assert.Equal(!compact, marqueeText.HasAnnotations);
