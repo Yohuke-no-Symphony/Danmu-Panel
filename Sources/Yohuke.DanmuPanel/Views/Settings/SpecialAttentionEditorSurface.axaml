@@ -3,7 +3,6 @@
              x:Class="Yohuke.DanmuPanel.Views.Settings.SpecialAttentionEditorSurface"
              x:CompileBindings="False">
     <StackPanel Spacing="12">
-        <TextBlock Text="{Loc Key=SpecialAttention.Help}" Classes="muted" TextWrapping="Wrap" />
         <Grid ColumnDefinitions="180,*" ColumnSpacing="14">
             <TextBlock Text="{Loc Key=SpecialAttention.Color}" VerticalAlignment="Center" />
             <ContentControl x:Name="SpecialAttentionColorInputHost" Grid.Column="1" />
