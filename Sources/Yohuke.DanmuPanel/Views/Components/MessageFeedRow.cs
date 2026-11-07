@@ -11,13 +11,15 @@ using Yohuke.DanmuPanel.ViewModels;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
-[PseudoClasses(":alternate", ":specialAttention", ":guardMedal")]
+[PseudoClasses(":alternate", ":specialAttention", ":guardMedal", ":captain", ":admiral", ":governor", ":roomAdmin")]
 internal sealed class MessageFeedRow : Button
 {
     private static readonly StyledProperty<bool> IsSpecialAttentionProperty =
         AvaloniaProperty.Register<MessageFeedRow, bool>(nameof(MessageItemViewModel.IsSpecialAttention));
     private static readonly StyledProperty<bool> HasGuardMedalProperty =
         AvaloniaProperty.Register<MessageFeedRow, bool>(nameof(MessageItemViewModel.HasGuardMedal));
+    private static readonly StyledProperty<MessageUserNameRole> UserNameRoleProperty =
+        AvaloniaProperty.Register<MessageFeedRow, MessageUserNameRole>(nameof(MessageItemViewModel.UserNameRole));
     private static MessageFeedRowTemplates Templates { get; } = new();
     private readonly bool canCopy;
     private bool isCopyHoldEligible;
@@ -41,6 +43,7 @@ internal sealed class MessageFeedRow : Button
         if (kind == MessageKind.Danmu)
         {
             this.Bind(HasGuardMedalProperty, new Binding(nameof(MessageItemViewModel.HasGuardMedal)));
+            this.Bind(UserNameRoleProperty, new Binding(nameof(MessageItemViewModel.UserNameRole)));
         }
         canCopy = kind is MessageKind.Danmu or MessageKind.SuperChat;
         Gestures.SetIsHoldingEnabled(this, canCopy);
@@ -142,6 +145,14 @@ internal sealed class MessageFeedRow : Button
         if (change.Property == HasGuardMedalProperty)
         {
             PseudoClasses.Set(":guardMedal", GetValue(HasGuardMedalProperty));
+        }
+        if (change.Property == UserNameRoleProperty)
+        {
+            var role = GetValue(UserNameRoleProperty);
+            PseudoClasses.Set(":captain", role == MessageUserNameRole.Captain);
+            PseudoClasses.Set(":admiral", role == MessageUserNameRole.Admiral);
+            PseudoClasses.Set(":governor", role == MessageUserNameRole.Governor);
+            PseudoClasses.Set(":roomAdmin", role == MessageUserNameRole.RoomAdmin);
         }
     }
 

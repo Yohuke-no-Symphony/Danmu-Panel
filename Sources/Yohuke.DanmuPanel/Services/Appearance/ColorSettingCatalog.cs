@@ -8,6 +8,10 @@ public static class ColorSettingCatalog
 {
     public const string SPECIAL_ATTENTION_USER_NAME_BRUSH = ColorSchemeSettings.SPECIAL_ATTENTION_USER_NAME_BRUSH;
     public const string SPECIAL_ATTENTION_CONTENT_BRUSH = ColorSchemeSettings.SPECIAL_ATTENTION_CONTENT_BRUSH;
+    public const string GUARD_CAPTAIN_USER_NAME_BRUSH = "GuardCaptainUserNameBrush";
+    public const string GUARD_ADMIRAL_USER_NAME_BRUSH = "GuardAdmiralUserNameBrush";
+    public const string GUARD_GOVERNOR_USER_NAME_BRUSH = "GuardGovernorUserNameBrush";
+    public const string ROOM_ADMIN_USER_NAME_BRUSH = "RoomAdminUserNameBrush";
     public const string GUARD_CAPTAIN_COLOR = "#4F8FDD";
     public const string GUARD_ADMIRAL_COLOR = "#A46EE8";
     public const string GUARD_GOVERNOR_COLOR = "#E9A23B";
@@ -41,6 +45,10 @@ public static class ColorSettingCatalog
         Define(SPECIAL_ATTENTION_USER_NAME_BRUSH, "Messages"),
         Define(SPECIAL_ATTENTION_CONTENT_BRUSH, "Messages"),
         Define("MessageUserNameBrush", "Messages", "AppTextBrush"),
+        Define(GUARD_CAPTAIN_USER_NAME_BRUSH, "Messages"),
+        Define(GUARD_ADMIRAL_USER_NAME_BRUSH, "Messages"),
+        Define(GUARD_GOVERNOR_USER_NAME_BRUSH, "Messages"),
+        Define(ROOM_ADMIN_USER_NAME_BRUSH, "Messages"),
         Define("MessagePinyinBrush", "Messages", "AppMutedTextBrush"),
         Define("MessageTimeBrush", "Messages", "AppMutedTextBrush"),
         Define("MedalBackgroundBrush", "Medals", "AppSidebarSelectedBrush"),

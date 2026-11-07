@@ -9,6 +9,13 @@ public sealed record MessageRecord
     public MessageKind Kind { get; init; }
     public long UserUid { get; init; }
     public string UserName { get; init; } = "";
+
+    /// <summary>消息发送者在本直播间的大航海档位，独立于所佩戴粉丝牌的身份。</summary>
+    public int RoomGuardLevel { get; init; }
+
+    /// <summary>消息发送者是否为本直播间的房管。</summary>
+    public bool IsRoomAdmin { get; init; }
+
     public string Content { get; init; } = "";
     public string MessageId { get; init; } = "";
     public DateTimeOffset Time { get; init; } = DateTimeOffset.UtcNow;

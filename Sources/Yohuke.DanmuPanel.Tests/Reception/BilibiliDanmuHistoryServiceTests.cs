@@ -82,6 +82,7 @@ public sealed class BilibiliDanmuHistoryServiceTests
         Assert.Equal(20, message.MedalLevel);
         Assert.Equal(3, message.MedalGuardLevel);
         Assert.True(message.IsRoomAdmin);
+        Assert.Equal(0, message.RoomGuardLevel);
         Assert.True(message.IsEmoticon);
         var emoticon = Assert.Single(message.Emoticons);
         Assert.Equal("[笑]", emoticon.Text);

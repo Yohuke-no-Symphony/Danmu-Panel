@@ -42,6 +42,10 @@
                     <SolidColorBrush x:Key="SpecialAttentionUserNameBrush" Color="#B45309" />
                     <SolidColorBrush x:Key="SpecialAttentionContentBrush" Color="#B45309" />
                     <SolidColorBrush x:Key="MessageUserNameBrush" Color="#111827" />
+                    <SolidColorBrush x:Key="GuardCaptainUserNameBrush" Color="#2563A6" />
+                    <SolidColorBrush x:Key="GuardAdmiralUserNameBrush" Color="#7C3EC3" />
+                    <SolidColorBrush x:Key="GuardGovernorUserNameBrush" Color="#8A570A" />
+                    <SolidColorBrush x:Key="RoomAdminUserNameBrush" Color="#166534" />
                     <SolidColorBrush x:Key="MessagePinyinBrush" Color="#627087" />
                     <SolidColorBrush x:Key="MessageTimeBrush" Color="#627087" Opacity="0.6" />
                     <SolidColorBrush x:Key="MedalBackgroundBrush" Color="{DynamicResource SystemAccentColor}" Opacity="0.14" />
@@ -82,6 +86,10 @@
                     <SolidColorBrush x:Key="SpecialAttentionUserNameBrush" Color="#FBBF24" />
                     <SolidColorBrush x:Key="SpecialAttentionContentBrush" Color="#FBBF24" />
                     <SolidColorBrush x:Key="MessageUserNameBrush" Color="#F2F4F8" />
+                    <SolidColorBrush x:Key="GuardCaptainUserNameBrush" Color="#78B5FF" />
+                    <SolidColorBrush x:Key="GuardAdmiralUserNameBrush" Color="#C69BFF" />
+                    <SolidColorBrush x:Key="GuardGovernorUserNameBrush" Color="#F3BD67" />
+                    <SolidColorBrush x:Key="RoomAdminUserNameBrush" Color="#4ADE80" />
                     <SolidColorBrush x:Key="MessagePinyinBrush" Color="#9AAAC2" />
                     <SolidColorBrush x:Key="MessageTimeBrush" Color="#9AAAC2" Opacity="0.6" />
                     <SolidColorBrush x:Key="MedalBackgroundBrush" Color="{DynamicResource SystemAccentColor}" Opacity="0.14" />

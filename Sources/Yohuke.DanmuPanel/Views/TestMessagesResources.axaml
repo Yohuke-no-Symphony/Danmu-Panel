@@ -45,6 +45,11 @@
                     <TextBlock Text="{Loc Key=TestMessages.MedalGuardLevel}" />
                     <ComboBox ItemTemplate="{StaticResource ChoiceTemplate}" x:Name="TestMedalGuardLevel" ItemsSource="{Binding MedalGuardChoices}" SelectedIndex="{Binding MedalGuardIndex, Mode=TwoWay}" HorizontalAlignment="Stretch" />
                 </StackPanel>
+                <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding ShowsRoomIdentity}">
+                    <TextBlock Text="{Loc Key=TestMessages.RoomGuardLevel}" />
+                    <ComboBox ItemTemplate="{StaticResource ChoiceTemplate}" x:Name="TestRoomGuardLevel" ItemsSource="{Binding MedalGuardChoices}" SelectedIndex="{Binding RoomGuardIndex, Mode=TwoWay}" HorizontalAlignment="Stretch" />
+                    <CheckBox x:Name="TestIsRoomAdmin" Content="{Loc Key=TestMessages.IsRoomAdmin}" IsChecked="{Binding IsRoomAdmin, Mode=TwoWay}" />
+                </StackPanel>
                 <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding ShowsText}">
                     <TextBlock Text="{Loc Key=TestMessages.Content}" />
                     <TextBox x:Name="TestMessageContent" Text="{Binding MessageContent, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="74" MaxHeight="160" />

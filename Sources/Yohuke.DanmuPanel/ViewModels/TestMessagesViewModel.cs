@@ -22,12 +22,14 @@ public sealed partial class TestMessagesViewModel : ObservableObject, IDisposabl
     private string statusRoom = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsMedal), nameof(ShowsText), nameof(ShowsGift), nameof(ShowsPrice), nameof(ShowsQuantity), nameof(ShowsGuard))]
+    [NotifyPropertyChangedFor(nameof(ShowsMedal), nameof(ShowsRoomIdentity), nameof(ShowsText), nameof(ShowsGift), nameof(ShowsPrice), nameof(ShowsQuantity), nameof(ShowsGuard))]
     private int kindIndex;
     [ObservableProperty] private string userName = Localization.Get("TestMessages.SampleUser");
     [ObservableProperty] private string medalName = "";
     [ObservableProperty] private decimal? medalLevel = 0;
     [ObservableProperty] private int medalGuardIndex;
+    [ObservableProperty] private int roomGuardIndex;
+    [ObservableProperty] private bool isRoomAdmin;
     [ObservableProperty] private string messageContent = Localization.Get("TestMessages.SampleContent");
     [ObservableProperty] private string giftName = Localization.Get("TestMessages.SampleGift");
     [ObservableProperty] private string translation = "";
@@ -42,6 +44,8 @@ public sealed partial class TestMessagesViewModel : ObservableObject, IDisposabl
     public IReadOnlyList<TestMessageChoice> MedalGuardChoices { get; } = [new("TestMessages.NoGuard"), new("Panel.Guard.3"), new("Panel.Guard.2"), new("Panel.Guard.1")];
     public decimal MaximumBatchCount => TestMessageRequest.MAX_BATCH_COUNT;
     public bool ShowsMedal => KindIndex == (int)MessageKind.Danmu;
+    /// <summary>仅普通弹幕允许设置本直播间的舰队身份和房管标记。</summary>
+    public bool ShowsRoomIdentity => KindIndex == (int)MessageKind.Danmu;
     public bool ShowsText => KindIndex is (int)MessageKind.Danmu or (int)MessageKind.SuperChat;
     public bool ShowsGift => KindIndex == (int)MessageKind.Gift;
     public bool ShowsPrice => KindIndex != (int)MessageKind.Danmu;
@@ -119,14 +123,8 @@ public sealed partial class TestMessagesViewModel : ObservableObject, IDisposabl
         {
             Kind = selectedKind, UserName = UserName!, Content = MessageContent ?? "",
             MedalName = MedalName ?? "", MedalLevel = decimal.ToInt32(MedalLevel ?? 0),
-            MedalGuardLevel = MedalGuardIndex switch
-            {
-                0 => 0,
-                1 => 3,
-                2 => 2,
-                3 => 1,
-                _ => throw new InvalidOperationException()
-            },
+            MedalGuardLevel = GuardLevelFromIndex(MedalGuardIndex),
+            RoomGuardLevel = GuardLevelFromIndex(RoomGuardIndex), IsRoomAdmin = IsRoomAdmin,
             GiftName = GiftName ?? "", UnitPrice = Price ?? 0,
             Quantity = decimal.ToInt32(Quantity ?? 1), GuardLevel = GuardIndex + 1,
             Translation = Translation ?? "", Count = count
@@ -136,6 +134,18 @@ public sealed partial class TestMessagesViewModel : ObservableObject, IDisposabl
             var added = await service.AddAsync(selectedRoom, request);
             SetStatus("TestMessages.Added", added, selectedRoom.Name);
         });
+    }
+
+    private static int GuardLevelFromIndex(int index)
+    {
+        return index switch
+        {
+            0 => 0,
+            1 => 3,
+            2 => 2,
+            3 => 1,
+            _ => throw new ArgumentOutOfRangeException(nameof(index))
+        };
     }
 
     private async Task ClearAsync()

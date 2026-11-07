@@ -41,6 +41,9 @@ public class BilibiliDanmuMessage
     /// </summary>
     public bool IsRoomAdmin { get; set; }
 
+    /// <summary>本直播间的大航海档位；0 为普通，1 为总督，2 为提督，3 为舰长。</summary>
+    public int RoomGuardLevel { get; set; }
+
     /// <summary>
     /// 用户佩戴的粉丝牌名称。
     /// </summary>

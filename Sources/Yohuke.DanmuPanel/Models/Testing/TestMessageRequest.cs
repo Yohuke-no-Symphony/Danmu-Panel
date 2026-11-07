@@ -11,6 +11,8 @@ public sealed record TestMessageRequest
     public string MedalName { get; init; } = "";
     public int MedalLevel { get; init; }
     public int MedalGuardLevel { get; init; }
+    public int RoomGuardLevel { get; init; }
+    public bool IsRoomAdmin { get; init; }
     public string Content { get; init; } = "";
     public string GiftName { get; init; } = "";
     public decimal UnitPrice { get; init; }

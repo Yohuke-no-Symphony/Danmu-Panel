@@ -45,6 +45,32 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     public long UserUid => Record.UserUid;
     /// <summary>当前普通弹幕是否来自全局特别关注名单中的用户。</summary>
     public bool IsSpecialAttention => Record.Kind == MessageKind.Danmu && settings.IsSpecialAttention(UserUid);
+    /// <summary>普通弹幕名称的有效身份，依次优先使用特别关注、房管和本直播间舰队身份。</summary>
+    public MessageUserNameRole UserNameRole
+    {
+        get
+        {
+            if (Record.Kind != MessageKind.Danmu)
+            {
+                return MessageUserNameRole.Regular;
+            }
+            if (IsSpecialAttention)
+            {
+                return MessageUserNameRole.SpecialAttention;
+            }
+            if (Record.IsRoomAdmin)
+            {
+                return MessageUserNameRole.RoomAdmin;
+            }
+            return Record.RoomGuardLevel switch
+            {
+                1 => MessageUserNameRole.Governor,
+                2 => MessageUserNameRole.Admiral,
+                3 => MessageUserNameRole.Captain,
+                _ => MessageUserNameRole.Regular
+            };
+        }
+    }
     /// <summary>是否显示消息用户头像。</summary>
     public bool ShowUserAvatars => settings.ShowUserAvatars;
     /// <summary>是否为弹幕保留粉丝牌显示区域。</summary>
@@ -200,6 +226,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         var showedPin = ShowPinBadge;
         var showedUnread = ShowUnreadDot;
         var wasSpecialAttention = IsSpecialAttention;
+        var previousUserNameRole = UserNameRole;
         Record = record;
         settings = currentSettings;
         translationPending = isTranslationPending;
@@ -216,6 +243,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         NotifyChange(previous.UserName, record.UserName, nameof(Name));
         NotifyChange(previous.UserUid, record.UserUid, nameof(UserUid));
         NotifyChange(wasSpecialAttention, IsSpecialAttention, nameof(IsSpecialAttention));
+        NotifyChange(previousUserNameRole, UserNameRole, nameof(UserNameRole));
         NotifyChange(previousSettings.ShowUserAvatars, settings.ShowUserAvatars, nameof(ShowUserAvatars));
         NotifyChange(previousSettings.ShowFanMedals, settings.ShowFanMedals, nameof(ShowFanMedals));
         NotifyChange(hadGuardMedal, HasGuardMedal, nameof(HasGuardMedal));

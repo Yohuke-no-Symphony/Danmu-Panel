@@ -1027,6 +1027,22 @@
         <Setter Property="Foreground" Value="{DynamicResource MessageTranslationBrush}" />
     </Style>
 
+    <Style Selector="Button:captain TextBlock.danmuFeedUser">
+        <Setter Property="Foreground" Value="{DynamicResource GuardCaptainUserNameBrush}" />
+    </Style>
+
+    <Style Selector="Button:admiral TextBlock.danmuFeedUser">
+        <Setter Property="Foreground" Value="{DynamicResource GuardAdmiralUserNameBrush}" />
+    </Style>
+
+    <Style Selector="Button:governor TextBlock.danmuFeedUser">
+        <Setter Property="Foreground" Value="{DynamicResource GuardGovernorUserNameBrush}" />
+    </Style>
+
+    <Style Selector="Button:roomAdmin TextBlock.danmuFeedUser">
+        <Setter Property="Foreground" Value="{DynamicResource RoomAdminUserNameBrush}" />
+    </Style>
+
     <Style Selector="Button:specialAttention TextBlock.danmuFeedUser">
         <Setter Property="Foreground" Value="{DynamicResource SpecialAttentionUserNameBrush}" />
         <Setter Property="FontWeight" Value="Bold" />

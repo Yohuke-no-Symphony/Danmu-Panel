@@ -205,6 +205,57 @@ public sealed class TestMessagesViewTests
         }
     }
 
+    /// <summary>本直播间舰队身份和房管标记独立于粉丝牌输入，仅普通弹幕保存这些身份。</summary>
+    [AvaloniaTheory]
+    [InlineData(0, 0, false)]
+    [InlineData(1, 3, true)]
+    [InlineData(2, 2, false)]
+    [InlineData(3, 1, true)]
+    public async Task RoomIdentityInputsRemainIndependentOfTheMedal(int index, int level, bool isRoomAdmin)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var runtime = new PanelRuntime(new(directory.Path), new());
+        using var view = new TestMessagesView(runtime, exception => throw exception);
+        var window = new Window { Content = view, Width = 600, Height = 950 };
+        var room = new RoomTabState { Id = "room", RoomId = "123" };
+        try
+        {
+            window.Show();
+            view.SelectRoom(room);
+            Pump(window);
+            var membership = Find<ComboBox>(view, "TestRoomGuardLevel");
+            var admin = Find<CheckBox>(view, "TestIsRoomAdmin");
+            Assert.Equal(0, membership.SelectedIndex);
+            Assert.Equal(4, membership.ItemCount);
+            Assert.False(admin.IsChecked);
+            membership.SelectedIndex = index;
+            admin.IsChecked = isRoomAdmin;
+            Find<ComboBox>(view, "TestMedalGuardLevel").SelectedIndex = 2;
+            foreach (var kind in Enum.GetValues<MessageKind>())
+            {
+                Find<ComboBox>(view, "TestKind").SelectedIndex = (int)kind;
+                Pump(window);
+                Assert.Equal(kind == MessageKind.Danmu, membership.IsEffectivelyVisible);
+                Assert.Equal(kind == MessageKind.Danmu, admin.IsEffectivelyVisible);
+                await view.AddSingleCommand.ExecuteAsync(null);
+            }
+            await using var reopened = new SqliteMessageStore(directory.DatabasePath);
+            foreach (var kind in Enum.GetValues<MessageKind>())
+            {
+                var record = Assert.Single(await reopened.LoadPageAsync(room.Id, kind, 0, 10));
+                Assert.Equal(kind == MessageKind.Danmu ? level : 0, record.RoomGuardLevel);
+                Assert.Equal(kind == MessageKind.Danmu && isRoomAdmin, record.IsRoomAdmin);
+                Assert.Equal(kind == MessageKind.Danmu ? 2 : 0, record.MedalGuardLevel);
+                Assert.Equal("", record.MedalName);
+            }
+        }
+        finally
+        {
+            await view.FinishPendingAsync();
+            window.Close();
+        }
+    }
+
     private static T Find<T>(Control root, string name) where T : Control
     {
         return Assert.Single(root.GetVisualDescendants().OfType<T>(), control => control.Name == name);

@@ -17,6 +17,7 @@ public sealed class RoomMessageMapperTests
         {
             RoomId = "123", MessageId = "message", Timestamp = 1700000000, Uid = 88,
             UserName = "viewer", Content = "你好[笑]", MedalName = "粉丝牌", MedalLevel = 20, MedalGuardLevel = 3,
+            RoomGuardLevel = 2, IsRoomAdmin = true,
             Emoticons = [new() { Text = "[笑]", Url = "https://example.invalid/emoticon.png" }]
         };
         var record = RoomMessageMapper.Map(source, "tab", 9, true);
@@ -30,6 +31,8 @@ public sealed class RoomMessageMapperTests
         Assert.Equal(source.MedalName, record.MedalName);
         Assert.Equal(source.MedalLevel, record.MedalLevel);
         Assert.Equal(source.MedalGuardLevel, record.MedalGuardLevel);
+        Assert.Equal(source.RoomGuardLevel, record.RoomGuardLevel);
+        Assert.True(record.IsRoomAdmin);
     }
 
     /// <summary>礼物价格从千分元转为元，连击 ID 与累计量独立保留。</summary>

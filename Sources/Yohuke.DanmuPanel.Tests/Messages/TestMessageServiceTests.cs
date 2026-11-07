@@ -42,7 +42,8 @@ public sealed class TestMessageServiceTests
             {
                 Kind = kind, UserName = "viewer", Content = "test message", GiftName = "gift",
                 UnitPrice = 2, Quantity = 5, GuardLevel = 2, Count = 3,
-                MedalName = " 测试粉丝牌 ", MedalLevel = 28, MedalGuardLevel = 2
+                MedalName = " 测试粉丝牌 ", MedalLevel = 28, MedalGuardLevel = 2,
+                RoomGuardLevel = 1, IsRoomAdmin = true
             }));
             Assert.Equal(new[] { room.Id }, changed);
             var rows = await store.LoadPageAsync(room.Id, kind, 0, 10);
@@ -56,6 +57,8 @@ public sealed class TestMessageServiceTests
                 Assert.Equal(supportsMedal ? "测试粉丝牌" : "", row.MedalName);
                 Assert.Equal(supportsMedal ? 28 : 0, row.MedalLevel);
                 Assert.Equal(supportsMedal ? 2 : 0, row.MedalGuardLevel);
+                Assert.Equal(supportsMedal ? 1 : 0, row.RoomGuardLevel);
+                Assert.Equal(supportsMedal, row.IsRoomAdmin);
                 Assert.Equal(kind != MessageKind.Danmu, row.IsPriority);
                 Assert.Equal(kind is MessageKind.Gift or MessageKind.Guard ? 5 : 1, row.Quantity);
                 Assert.Equal(kind is MessageKind.Gift or MessageKind.Guard ? 10 : kind == MessageKind.SuperChat ? 2 : 0, row.TotalPrice);
@@ -87,6 +90,8 @@ public sealed class TestMessageServiceTests
             Assert.Equal(supportsMedal ? "测试粉丝牌" : "", row.MedalName);
             Assert.Equal(supportsMedal ? 28 : 0, row.MedalLevel);
             Assert.Equal(supportsMedal ? 2 : 0, row.MedalGuardLevel);
+            Assert.Equal(supportsMedal ? 1 : 0, row.RoomGuardLevel);
+            Assert.Equal(supportsMedal, row.IsRoomAdmin);
         });
         Assert.Equal(shouldTranslate ? 3 : 0, (await reopened.GetPendingAsync(10)).Count);
     }
@@ -147,6 +152,24 @@ public sealed class TestMessageServiceTests
         }));
 
         Assert.Empty(await store.LoadPageAsync(room.Id, MessageKind.Danmu, 0, 10));
+    }
+
+    /// <summary>无效的本房间舰队身份在任何消息写入前被拒绝。</summary>
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(4)]
+    public async Task InvalidRoomGuardLevelDoesNotWriteMessages(int level)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var store = new SqliteMessageStore(directory.DatabasePath);
+        var service = new TestMessageService(store, () => new(), _ => { }, () => { });
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.AddAsync(new() { Id = "room" }, new()
+        {
+            UserName = "viewer", Content = "message", RoomGuardLevel = level
+        }));
+
+        Assert.Empty(await store.LoadPageAsync("room", MessageKind.Danmu, 0, 10));
     }
 
     /// <summary>人工译文不重复请求模型；修改翻译配置后仍可通过普通入口重新排队。</summary>

@@ -15,6 +15,7 @@ public static class RoomMessageMapper
             Kind = MessageKind.Danmu, MessageId = value.MessageId, Time = Time(value.Timestamp),
             HasSourceTimestamp = value.Timestamp > 0,
             UserUid = value.Uid, UserName = value.UserName, Content = value.Content,
+            RoomGuardLevel = value.RoomGuardLevel, IsRoomAdmin = value.IsRoomAdmin,
             IsHistory = history, MedalName = value.MedalName, MedalLevel = value.MedalLevel,
             MedalGuardLevel = value.MedalGuardLevel,
             Emoticons = value.Emoticons.Select(item => new MessageEmoticon { Text = item.Text, Url = item.Url }).ToArray()
