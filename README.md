@@ -26,8 +26,6 @@
 - **Update checks**: checks for new official releases after startup. Settings → Updates provides a startup toggle and manual check; update prompts open the GitHub release page for downloads.
 - **Settings backup and sharing**: Settings → Data imports and exports `.dnsettings.json` files containing appearance, color schemes, reading, translation, glossaries and update preferences, including the full API key. Accounts, workspaces, layouts and message history stay separate. Confirmed imports take effect immediately and close the settings window.
 
-![](Screenshots/1.gif)
-
 ## Development Quick Start
 
 Install the **.NET 10 SDK**, then run from the repository root:
