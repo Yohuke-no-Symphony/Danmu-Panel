@@ -175,10 +175,15 @@ public partial class BilibiliApi : BaseApi
     public Task<ApiResponse<BilibiliUserCardContainerData>> GetUserCardContainerAsync(
         long uid,
         TimeSpan? timeout = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? cookie = null)
     {
         var headers = CreateDefaultHeaders();
         headers["Referer"] = $"https://space.bilibili.com/{uid}";
+        if (!string.IsNullOrWhiteSpace(cookie))
+        {
+            headers["Cookie"] = ApiCookieHelper.CreateBilibiliCookie(cookie);
+        }
 
         return GetJsonAsync<ApiResponse<BilibiliUserCardContainerData>>(
             "https://api.bilibili.com/x/web-interface/card",
@@ -338,6 +343,33 @@ public partial class BilibiliApi : BaseApi
                 ["csrf"] = GetCsrf(number)
             },
             CreateAccountHeaders(number),
+            timeout,
+            cancellationToken);
+    }
+
+    /// <summary>根据昵称分页搜索全部用户，不要求用户开通直播间。</summary>
+    public Task<ApiResponse<BilibiliUserSearchData>> SearchUsersAsync(
+        string keyword,
+        int pageSize = 20,
+        string cookie = "",
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default,
+        int page = 1)
+    {
+        var headers = CreateDefaultHeaders();
+        headers["Cookie"] = ApiCookieHelper.CreateBilibiliCookie(cookie);
+        headers["Origin"] = "https://search.bilibili.com";
+        headers["Referer"] = "https://search.bilibili.com/";
+        return GetJsonAsync<ApiResponse<BilibiliUserSearchData>>(
+            "https://api.bilibili.com/x/web-interface/search/type",
+            new Dictionary<string, object?>
+            {
+                ["keyword"] = keyword,
+                ["search_type"] = "bili_user",
+                ["page_size"] = pageSize,
+                ["page"] = page
+            },
+            headers,
             timeout,
             cancellationToken);
     }

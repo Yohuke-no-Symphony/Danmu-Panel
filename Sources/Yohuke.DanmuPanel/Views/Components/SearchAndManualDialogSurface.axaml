@@ -1,0 +1,69 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
+             xmlns:converters="clr-namespace:Avalonia.Data.Converters;assembly=Avalonia.Base"
+             x:Class="Yohuke.DanmuPanel.Views.Components.SearchAndManualDialogSurface"
+             x:DataType="components:SearchAndManualDialogSurface"
+             x:Name="Root"
+             x:CompileBindings="True">
+    <UserControl.Styles>
+        <Style Selector="TabControl.lookupDialogTabs">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="TabControl.lookupDialogTabs TabItem">
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="12,6" />
+            <Setter Property="FontSize" Value="{DynamicResource AppFontSizeBody}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        </Style>
+    </UserControl.Styles>
+    <Border Background="{DynamicResource AppCardBrush}" Padding="20">
+        <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
+            <ContentPresenter x:Name="HeaderContentHost"
+                              Content="{Binding HeaderContent, ElementName=Root}"
+                              IsVisible="{Binding HeaderContent, ElementName=Root, Converter={x:Static converters:ObjectConverters.IsNotNull}}"
+                              HorizontalContentAlignment="Stretch"
+                              Margin="0,0,0,12" />
+            <ContentPresenter x:Name="SharedContentHost" Grid.Row="1"
+                              Content="{Binding SharedContent, ElementName=Root}"
+                              IsVisible="{Binding SharedContent, ElementName=Root, Converter={x:Static converters:ObjectConverters.IsNotNull}}"
+                              HorizontalContentAlignment="Stretch"
+                              Margin="0,0,0,12" />
+            <TabControl x:Name="SearchAndManualTabs" Grid.Row="2" Classes="lookupDialogTabs"
+                        SelectionChanged="Modes_OnSelectionChanged">
+                <TabItem x:Name="AutomaticSearchTab" Header="{Loc Key=LookupDialog.AutomaticSearch}"
+                         IsEnabled="{Binding IsSearchEnabled, ElementName=Root}">
+                    <ContentPresenter Content="{Binding SearchContent, ElementName=Root}"
+                                      IsVisible="{Binding SearchContent, ElementName=Root, Converter={x:Static converters:ObjectConverters.IsNotNull}}"
+                                      HorizontalContentAlignment="Stretch"
+                                      VerticalContentAlignment="Stretch" />
+                </TabItem>
+                <TabItem x:Name="ManualEntryTab" Header="{Loc Key=LookupDialog.ManualAdd}">
+                    <ScrollViewer x:Name="ManualContentScrollViewer"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  AllowAutoHide="False">
+                        <ContentPresenter Content="{Binding ManualContent, ElementName=Root}"
+                                          IsVisible="{Binding ManualContent, ElementName=Root, Converter={x:Static converters:ObjectConverters.IsNotNull}}"
+                                          HorizontalContentAlignment="Stretch"
+                                          VerticalContentAlignment="Stretch" />
+                    </ScrollViewer>
+                </TabItem>
+            </TabControl>
+            <ContentPresenter x:Name="StatusContentHost" Grid.Row="3"
+                              Content="{Binding StatusContent, ElementName=Root}"
+                              IsVisible="{Binding StatusContent, ElementName=Root, Converter={x:Static converters:ObjectConverters.IsNotNull}}"
+                              HorizontalContentAlignment="Stretch"
+                              Margin="0,12,0,0" />
+            <ContentPresenter x:Name="FooterContentHost" Grid.Row="4"
+                              Content="{Binding FooterContent, ElementName=Root}"
+                              IsVisible="{Binding FooterContent, ElementName=Root, Converter={x:Static converters:ObjectConverters.IsNotNull}}"
+                              HorizontalContentAlignment="Stretch"
+                              Margin="0,12,0,0" />
+        </Grid>
+    </Border>
+</UserControl>

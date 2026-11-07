@@ -479,6 +479,27 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
             retry.IsEnabled = runtime.Configuration.Settings.Translation.Enabled;
             menu.Opened += (_, _) => retry.IsEnabled = runtime.Configuration.Settings.Translation.Enabled;
         }
+        if (kind == MessageKind.Danmu)
+        {
+            var attention = AddAction(menu, "SpecialAttention.Add", LucideIconKind.Star, async () =>
+            {
+                if (row.DataContext is MessageItemViewModel item && item.UserUid > 0)
+                {
+                    var followed = runtime.Configuration.Settings.SpecialAttention.Users.Any(user => user.UserUid == item.UserUid);
+                    await runtime.SetSpecialAttentionAsync(item.UserUid, item.Name, !followed);
+                }
+            });
+            attention.Name = "ToggleSpecialAttentionMenuItem";
+            void RefreshAttention()
+            {
+                attention.IsEnabled = row.DataContext is MessageItemViewModel { UserUid: > 0 };
+                var followed = row.DataContext is MessageItemViewModel item &&
+                    runtime.Configuration.Settings.SpecialAttention.Users.Any(user => user.UserUid == item.UserUid);
+                menu.SetHeader(attention, followed ? "SpecialAttention.Remove" : "SpecialAttention.Add");
+            }
+            RefreshAttention();
+            menu.Opened += (_, _) => RefreshAttention();
+        }
         menu.Items.Add(new Separator());
         AddPanelActions(menu);
         return menu;

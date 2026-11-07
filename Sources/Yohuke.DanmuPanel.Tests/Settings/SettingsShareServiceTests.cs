@@ -447,6 +447,7 @@ public sealed class SettingsShareServiceTests
             AutoScrollLongMessages = false,
             HideEmoticonDanmu = true,
             DanmuRegexFilter = new() { Enabled = false, Patterns = ["^广告", "机器人$"] },
+            SpecialAttention = new() { Users = [new() { UserUid = 123456789, DisplayName = "特别关注用户" }] },
             DefaultAccountId = "local-account",
             SelectedWorkspaceId = "local-workspace"
         };

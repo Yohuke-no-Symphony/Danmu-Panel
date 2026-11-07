@@ -40,6 +40,7 @@ public sealed class ConfigurationService
         ColorSchemeService.Validate(configuration.Settings.ColorScheme);
         MessageBorderSettingsValidator.Validate(configuration.Settings.MessageBorders);
         DanmuRegexFilter.Validate(configuration.Settings.DanmuRegexFilter);
+        SpecialAttentionSettingsValidator.Validate(configuration.Settings.SpecialAttention);
         MessageColumnSettingsValidator.Validate(configuration.Settings.MessageColumns);
         MessageRetentionSettingsValidator.Validate(configuration.Settings.MessageRetentionCount);
         var snapshots = new Dictionary<string, string>
@@ -105,6 +106,7 @@ public sealed class ConfigurationService
                 ColorSchemeService.Validate(settings.ColorScheme);
                 MessageBorderSettingsValidator.Validate(settings.MessageBorders);
                 DanmuRegexFilter.Validate(settings.DanmuRegexFilter);
+                SpecialAttentionSettingsValidator.Validate(settings.SpecialAttention);
                 MessageColumnSettingsValidator.Validate(settings.MessageColumns);
                 MessageRetentionSettingsValidator.Validate(settings.MessageRetentionCount);
             }

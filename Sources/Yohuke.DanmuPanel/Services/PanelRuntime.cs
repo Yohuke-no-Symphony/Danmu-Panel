@@ -8,7 +8,7 @@ using Yohuke.DanmuPanel.Services.Translation;
 namespace Yohuke.DanmuPanel.Services;
 
 /// <summary>组合监听、消息数据库及翻译调度，管理它们的退出顺序。</summary>
-public sealed class PanelRuntime : IAsyncDisposable
+public sealed partial class PanelRuntime : IAsyncDisposable
 {
     private readonly Dictionary<string, RoomReceptionSession> sessions = new();
     private readonly ConcurrentDictionary<string, string> statuses = new();
@@ -125,6 +125,7 @@ public sealed class PanelRuntime : IAsyncDisposable
         await scheduler.UpdateSettingsAsync(Configuration.Settings.Translation);
         DanmuFilter = danmuFilter;
         Volatile.Write(ref receptionSettings, nextReceptionSettings);
+        SpecialAttentionChanged?.Invoke();
         Changed?.Invoke("");
     }
 

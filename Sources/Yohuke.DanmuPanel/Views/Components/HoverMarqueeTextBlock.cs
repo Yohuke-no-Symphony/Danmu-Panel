@@ -100,6 +100,7 @@ public sealed class HoverMarqueeTextBlock : UserControl
             Path = nameof(FontSize),
             Source = this
         });
+        textBlock.Bind(TextBlock.FontWeightProperty, new Binding(nameof(FontWeight)) { Source = this });
         textBlock.Bind(TextBlock.ForegroundProperty, new Binding
         {
             Path = nameof(Foreground),

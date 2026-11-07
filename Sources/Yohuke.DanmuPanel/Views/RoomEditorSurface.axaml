@@ -1,154 +1,90 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             
+             xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
              xmlns:workspace="using:Yohuke.DanmuPanel.Models.Workspace"
              x:Class="Yohuke.DanmuPanel.Views.RoomEditorSurface"
-             
              x:CompileBindings="False"
              x:Name="Root">
-    <Border x:Name="DialogSurface"
-            Background="{DynamicResource AppCardBrush}"
-            Padding="22"
-            >
-        <Grid RowDefinitions="Auto,*,Auto"
-              RowSpacing="14">
+    <components:SearchAndManualDialogSurface x:Name="LookupDialog">
+        <components:SearchAndManualDialogSurface.HeaderContent>
             <StackPanel Spacing="6">
-                <TextBlock Text="{Binding AddDialogTitle}"
-                           FontSize="26"
-                           FontWeight="SemiBold"
-                           HorizontalAlignment="Center" />
-                <TextBlock Text="{Binding AddDialogDescription}"
-                           Classes="muted"
-                           HorizontalAlignment="Center"
-                           TextWrapping="Wrap" />
+                <TextBlock Text="{Binding AddDialogTitle}" FontSize="20" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding AddDialogDescription}" Classes="muted" TextWrapping="Wrap" />
             </StackPanel>
-
-            <ScrollViewer Grid.Row="1"
-                          AllowAutoHide="False"
-                          VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Disabled">
-                <StackPanel>
-                    <Grid RowDefinitions="Auto,Auto,Auto,Auto"
-                          RowSpacing="10"
-                          >
-                        <Grid ColumnDefinitions="*,Auto"
-                              ColumnSpacing="8">
-                            <TextBox x:Name="LiveRoomSearchTextBox"
-                                     Watermark="{Loc Key=Panel.RoomSearchHint}"
-                                     Text="{Binding LiveRoomSearchText}"
-                                     KeyDown="LiveRoomSearch_OnKeyDown" />
-                            <Button Grid.Column="1"
-                                    Content="{Loc Key=Panel.Search}"
-                                    Command="{Binding SearchLiveRoomsCommand}" />
-                        </Grid>
-                        <TextBlock Grid.Row="1"
-                                   Text="{Binding LiveRoomSearchStatus}"
-                                   Classes="muted"
-                                   TextWrapping="Wrap" />
-                        <StackPanel Grid.Row="2" Spacing="8">
-                            <ScrollViewer MaxHeight="240"
-                                          AllowAutoHide="False"
-                                          VerticalScrollBarVisibility="Auto"
-                                          HorizontalScrollBarVisibility="Disabled">
-                                <ItemsControl x:Name="LiveRoomSearchResultsControl"
-                                              ItemsSource="{Binding LiveRoomSearchResults}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="workspace:LiveRoomSearchResult">
-                                            <Border Margin="0,0,0,8"
-                                                    Padding="10"
-                                                    BorderThickness="1"
-                                                    BorderBrush="{DynamicResource AppBorderBrush}"
-                                                    CornerRadius="8">
-                                                <Grid ColumnDefinitions="*,*,2*,Auto,Auto" ColumnSpacing="10">
-                                                    <TextBlock Text="{Binding OwnerName}"
-                                                               FontWeight="SemiBold"
-                                                               VerticalAlignment="Center"
-                                                               MaxLines="1"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               ToolTip.Tip="{Binding OwnerName}" />
-                                                    <TextBlock Grid.Column="1"
-                                                               Text="{Binding Title}"
-                                                               VerticalAlignment="Center"
-                                                               MaxLines="1"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               ToolTip.Tip="{Binding Title}" />
-                                                    <TextBlock Grid.Column="2"
-                                                               Text="{Binding DetailLine}"
-                                                               Classes="muted"
-                                                               VerticalAlignment="Center"
-                                                               MaxLines="1"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               ToolTip.Tip="{Binding DetailLine}" />
-                                                    <TextBlock Grid.Column="3"
-                                                               Text="{Binding SourceLabel}"
-                                                               Classes="muted"
-                                                               VerticalAlignment="Center"
-                                                               MaxLines="1" />
-                                                    <Button Grid.Column="4"
-                                                            x:Name="AddSearchedRoomButton"
-                                                            Classes="primaryButton"
-                                                            Content="{Loc Key=Workspace.Add}"
-                                                            VerticalAlignment="Center"
-                                                            Command="{Binding #Root.DataContext.AddSearchedRoomCommand}"
-                                                            CommandParameter="{Binding}" />
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-                            <Button Content="{Loc Key=Workspace.LoadMore}"
-                                    HorizontalAlignment="Center"
-                                    IsVisible="{Binding HasMoreLiveRoomSearchResults}"
-                                    Command="{Binding LoadMoreLiveRoomsCommand}" />
-                        </StackPanel>
-                        <StackPanel Grid.Row="3" Spacing="10">
-                            <TextBlock Text="{Loc Key=Panel.Account}" />
-                            <ComboBox ItemsSource="{Binding AccountChoices}" SelectedItem="{Binding SelectedAccount}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-                            <TextBlock Text="{Loc Key=Workspace.ManualRoom}"
-                                       Classes="sectionTitle" />
-                            <TextBlock Text="{Loc Key=Workspace.ManualHint}"
-                                       Classes="muted" TextWrapping="Wrap" />
-                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto"
-                                  ColumnSpacing="10" RowSpacing="10">
-                                <TextBlock Text="{Loc Key=Panel.Name}"
-                                           VerticalAlignment="Center" />
-                                <TextBox Grid.Column="1" x:Name="ManualRoomNameTextBox"
-                                         Watermark="{Loc Key=Panel.Name}"
-                                         Text="{Binding NewRoomName}" />
-                                <TextBlock Grid.Row="1" Text="{Loc Key=Panel.RoomId}"
-                                           VerticalAlignment="Center" />
-                                <TextBox Grid.Row="1" Grid.Column="1" x:Name="ManualRoomIdTextBox"
-                                         Watermark="{Loc Key=Panel.RoomId}"
-                                         Text="{Binding NewRoomId}" IsReadOnly="{Binding IsExisting}" />
-                                <TextBlock Grid.Row="2" Text="{Loc Key=Workspace.OwnerUid}"
-                                           VerticalAlignment="Center" />
-                                <TextBox Grid.Row="2" Grid.Column="1" x:Name="ManualRoomOwnerUidTextBox"
-                                         Watermark="{Loc Key=Workspace.OwnerUid}"
-                                         Text="{Binding NewRoomOwnerUid}" />
-                                <Button Grid.Row="3" Grid.Column="1"
-                                        x:Name="ManualRoomConfirmButton"
-                                        Classes="primaryButton"
-                                        Content="{Binding AddDialogPrimaryText}"
-                                        HorizontalAlignment="Right"
-                                        Command="{Binding ConfirmCommand}" />
-                            </Grid>
-                        </StackPanel>
-                    </Grid>
-                </StackPanel>
-            </ScrollViewer>
-
-            <Grid Grid.Row="2"
-                  ColumnDefinitions="*,Auto"
-                  ColumnSpacing="8">
-                <TextBlock Text="{Binding AddDialogWorkspaceName}"
-                           Classes="muted"
-                           VerticalAlignment="Center"
-                            />
-                <Button Grid.Column="1"
-                        Content="{Loc Key=Panel.Cancel}"
-                        Command="{Binding CancelCommand}" />
+        </components:SearchAndManualDialogSurface.HeaderContent>
+        <components:SearchAndManualDialogSurface.SharedContent>
+            <StackPanel Spacing="6">
+                <TextBlock Text="{Loc Key=Panel.Account}" />
+                <ComboBox x:Name="RoomAccountSelector" ItemsSource="{Binding AccountChoices}"
+                          SelectedItem="{Binding SelectedAccount}" HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+        </components:SearchAndManualDialogSurface.SharedContent>
+        <components:SearchAndManualDialogSurface.SearchContent>
+            <Grid RowDefinitions="Auto,*" RowSpacing="12">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBox x:Name="LiveRoomSearchTextBox" Watermark="{Loc Key=Panel.RoomSearchHint}"
+                             Text="{Binding LiveRoomSearchText}" KeyDown="LiveRoomSearch_OnKeyDown" />
+                    <Button Grid.Column="1" Content="{Loc Key=Panel.Search}" Command="{Binding SearchLiveRoomsCommand}" />
+                </Grid>
+                <ScrollViewer Grid.Row="1" AllowAutoHide="False" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="8">
+                        <ItemsControl x:Name="LiveRoomSearchResultsControl" ItemsSource="{Binding LiveRoomSearchResults}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="workspace:LiveRoomSearchResult">
+                                    <Border Margin="0,0,0,8" Padding="10" BorderThickness="1"
+                                            BorderBrush="{DynamicResource AppBorderBrush}" CornerRadius="8">
+                                        <Grid ColumnDefinitions="*,*,2*,Auto,Auto" ColumnSpacing="10">
+                                            <TextBlock Text="{Binding OwnerName}" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                       MaxLines="1" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding OwnerName}" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center"
+                                                       MaxLines="1" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}" />
+                                            <TextBlock Grid.Column="2" Text="{Binding DetailLine}" Classes="muted" VerticalAlignment="Center"
+                                                       MaxLines="1" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DetailLine}" />
+                                            <TextBlock Grid.Column="3" Text="{Binding SourceLabel}" Classes="muted"
+                                                       VerticalAlignment="Center" MaxLines="1" />
+                                            <Button x:Name="AddSearchedRoomButton" Grid.Column="4" Classes="primaryButton"
+                                                    Content="{Loc Key=Workspace.Add}" VerticalAlignment="Center"
+                                                    Command="{Binding #Root.DataContext.AddSearchedRoomCommand}" CommandParameter="{Binding}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Content="{Loc Key=Workspace.LoadMore}" HorizontalAlignment="Center"
+                                IsVisible="{Binding HasMoreLiveRoomSearchResults}" Command="{Binding LoadMoreLiveRoomsCommand}" />
+                    </StackPanel>
+                </ScrollViewer>
             </Grid>
-        </Grid>
-    </Border>
+        </components:SearchAndManualDialogSurface.SearchContent>
+        <components:SearchAndManualDialogSurface.ManualContent>
+            <StackPanel Spacing="12">
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="10">
+                    <TextBlock Text="{Loc Key=Panel.Name}" VerticalAlignment="Center" />
+                    <TextBox x:Name="ManualRoomNameTextBox" Grid.Column="1"
+                             Watermark="{Loc Key=Panel.Name}" Text="{Binding NewRoomName}" />
+                    <TextBlock Grid.Row="1" Text="{Loc Key=Panel.RoomId}" VerticalAlignment="Center" />
+                    <TextBox x:Name="ManualRoomIdTextBox" Grid.Row="1" Grid.Column="1"
+                             Watermark="{Loc Key=Panel.RoomId}" Text="{Binding NewRoomId}" IsReadOnly="{Binding IsExisting}" />
+                    <TextBlock Grid.Row="2" Text="{Loc Key=Workspace.OwnerUid}" VerticalAlignment="Center" />
+                    <TextBox x:Name="ManualRoomOwnerUidTextBox" Grid.Row="2" Grid.Column="1"
+                             Text="{Binding NewRoomOwnerUid}" Watermark="{Loc Key=Workspace.OwnerUid}" />
+                    <Button x:Name="ManualRoomConfirmButton" Grid.Row="3" Grid.Column="1" Classes="primaryButton"
+                            Content="{Binding AddDialogPrimaryText}" HorizontalAlignment="Right" Command="{Binding ConfirmCommand}" />
+                </Grid>
+            </StackPanel>
+        </components:SearchAndManualDialogSurface.ManualContent>
+        <components:SearchAndManualDialogSurface.StatusContent>
+            <TextBlock Text="{Binding LiveRoomSearchStatus}" Classes="muted" TextWrapping="Wrap" />
+        </components:SearchAndManualDialogSurface.StatusContent>
+        <components:SearchAndManualDialogSurface.FooterContent>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBlock Text="{Binding AddDialogWorkspaceName}" Classes="muted" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Content="{Loc Key=Panel.Cancel}" Command="{Binding CancelCommand}" />
+            </Grid>
+        </components:SearchAndManualDialogSurface.FooterContent>
+    </components:SearchAndManualDialogSurface>
 </UserControl>

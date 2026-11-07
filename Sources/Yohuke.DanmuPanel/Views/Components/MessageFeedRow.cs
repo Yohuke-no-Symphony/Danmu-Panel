@@ -14,9 +14,11 @@ using Yohuke.DanmuPanel.ViewModels;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
-[PseudoClasses(":alternate")]
+[PseudoClasses(":alternate", ":specialAttention")]
 internal sealed class MessageFeedRow : Button
 {
+    private static readonly StyledProperty<bool> IsSpecialAttentionProperty =
+        AvaloniaProperty.Register<MessageFeedRow, bool>(nameof(MessageItemViewModel.IsSpecialAttention));
     private static IMultiValueConverter InlineTranslationConverter { get; } =
         new FuncMultiValueConverter<string, bool>(texts => texts.All(text => text is not null && text.IndexOfAny(['\r', '\n']) < 0));
     private readonly bool canCopy;
@@ -37,6 +39,7 @@ internal sealed class MessageFeedRow : Button
 
     internal MessageFeedRow(MessageKind kind, IUserAvatarService? avatars = null, EmoticonBitmapCache? bitmapCache = null)
     {
+        this.Bind(IsSpecialAttentionProperty, new Binding(nameof(MessageItemViewModel.IsSpecialAttention)));
         canCopy = kind is MessageKind.Danmu or MessageKind.SuperChat;
         Gestures.SetIsHoldingEnabled(this, canCopy);
         Gestures.SetIsHoldWithMouseEnabled(this, canCopy);
@@ -319,6 +322,16 @@ internal sealed class MessageFeedRow : Button
     {
         CancelCopyInteraction();
         base.OnDataContextChanged(e);
+    }
+
+    /// <inheritdoc />
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsSpecialAttentionProperty)
+        {
+            PseudoClasses.Set(":specialAttention", GetValue(IsSpecialAttentionProperty));
+        }
     }
 
     /// <inheritdoc />

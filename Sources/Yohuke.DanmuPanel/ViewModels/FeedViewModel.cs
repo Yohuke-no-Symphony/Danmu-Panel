@@ -95,6 +95,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         refreshTimer.Tick += OnRefreshTimer;
         runtime.Changed += OnChanged;
         runtime.MessagesChanged += OnMessagesChanged;
+        runtime.SpecialAttentionChanged += OnSpecialAttentionChanged;
     }
 
     /// <summary>切换阅读房间，取消旧房间的图片回写。</summary>
@@ -388,6 +389,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         Volatile.Write(ref room, null);
         runtime.Changed -= OnChanged;
         runtime.MessagesChanged -= OnMessagesChanged;
+        runtime.SpecialAttentionChanged -= OnSpecialAttentionChanged;
         refreshTimer.Stop();
         refreshTimer.Tick -= OnRefreshTimer;
         lifetime.Cancel();

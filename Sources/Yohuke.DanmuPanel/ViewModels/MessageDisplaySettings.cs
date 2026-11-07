@@ -12,6 +12,7 @@ internal sealed class MessageDisplaySettings
 {
     private readonly Dictionary<string, string> colors;
     private readonly Dictionary<string, IBrush> brushes = new(StringComparer.Ordinal);
+    private readonly HashSet<long> specialAttentionUids;
 
     internal string TranslationFingerprint { get; }
     internal bool TranslationEnabled { get; }
@@ -45,6 +46,7 @@ internal sealed class MessageDisplaySettings
         CultureName = CultureInfo.CurrentCulture.Name;
         PresentationOptions = new(ShowUserPinyin, ShowGiftPinyin, ShowDanmuPinyin, ShowSuperChatPinyin, CultureName);
         colors = new(settings.ColorScheme.Overrides, StringComparer.Ordinal);
+        specialAttentionUids = settings.SpecialAttention.Users.Select(user => user.UserUid).ToHashSet();
     }
 
     internal static MessageDisplaySettings Capture(PanelSettings settings, MessageDisplaySettings? previous = null)
@@ -61,11 +63,17 @@ internal sealed class MessageDisplaySettings
             previous.ShowSuperChatPinyin == settings.ShowSuperChatPinyin &&
             previous.PinyinLayout == settings.PinyinLayout &&
             previous.AutoScrollLongMessages == settings.AutoScrollLongMessages && previous.LanguageId == languageId &&
-            previous.CultureName == CultureInfo.CurrentCulture.Name && previous.HasSameColors(settings))
+            previous.CultureName == CultureInfo.CurrentCulture.Name && previous.HasSameColors(settings) &&
+            previous.HasSameSpecialAttention(settings))
         {
             return previous;
         }
         return new(settings, fingerprint, languageId);
+    }
+
+    internal bool IsSpecialAttention(long userUid)
+    {
+        return userUid > 0 && specialAttentionUids.Contains(userUid);
     }
 
     internal string GetColorOverride(string key, string fallback)
@@ -94,6 +102,23 @@ internal sealed class MessageDisplaySettings
         foreach (var (key, value) in colors)
         {
             if (!overrides.TryGetValue(key, out var current) || current != value)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private bool HasSameSpecialAttention(PanelSettings settings)
+    {
+        var users = settings.SpecialAttention.Users;
+        if (specialAttentionUids.Count != users.Count)
+        {
+            return false;
+        }
+        foreach (var user in users)
+        {
+            if (!specialAttentionUids.Contains(user.UserUid))
             {
                 return false;
             }

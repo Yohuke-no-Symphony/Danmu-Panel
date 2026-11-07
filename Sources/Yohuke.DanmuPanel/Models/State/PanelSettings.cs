@@ -72,6 +72,9 @@ public sealed class PanelSettings
 
     public DanmuRegexFilterSettings DanmuRegexFilter { get; set; } = new();
 
+    /// <summary>跨直播间共用的特别关注用户，旧配置默认使用空名单。</summary>
+    public SpecialAttentionSettings SpecialAttention { get; set; } = new();
+
     public string? DefaultAccountId { get; set; }
     public string? SelectedWorkspaceId { get; set; }
 }

@@ -28,6 +28,7 @@ public sealed class SettingsView : UserControl
 {
     private readonly SettingsDialogSurface surface = new();
     private readonly ColorSchemeEditor colorSchemeEditor;
+    internal SpecialAttentionEditor SpecialAttentionEditor { get; }
     private readonly PanelRuntime runtime;
     private readonly SettingsShareService sharing = new();
     private readonly ISettingsTransferDialogs transferDialogs;
@@ -97,7 +98,8 @@ public sealed class SettingsView : UserControl
     }
 
     internal SettingsView(PanelRuntime runtime, Control accountsView, bool supportsNativeMenus,
-        ISettingsTransferDialogs? transferDialogs = null)
+        ISettingsTransferDialogs? transferDialogs = null, IBilibiliUserSearchService? userSearch = null,
+        IUserAvatarService? userAvatars = null)
     {
         Content = surface;
         status = surface.FindControl<TextBlock>("SaveStatus")!;
@@ -105,7 +107,9 @@ public sealed class SettingsView : UserControl
         this.transferDialogs = transferDialogs ?? new SettingsTransferDialogs();
         this.accountsView = accountsView;
         var settings = runtime.Configuration.Settings;
-        colorSchemeEditor = new(settings, runtime.Colors);
+        colorSchemeEditor = new(settings, runtime.Colors,
+            new HashSet<string>(StringComparer.Ordinal) { ColorSettingCatalog.SPECIAL_ATTENTION_MESSAGE_BRUSH });
+        SpecialAttentionEditor = new(runtime, colorSchemeEditor.GetInput(ColorSettingCatalog.SPECIAL_ATTENTION_MESSAGE_BRUSH), userSearch, userAvatars);
         superChatBorderThickness = CreateBorderThicknessInput("SuperChatBorderThicknessInput", settings.MessageBorders.SuperChat);
         giftBorderThickness = CreateBorderThicknessInput("GiftBorderThicknessInput", settings.MessageBorders.Gift);
         guardBorderThickness = CreateBorderThicknessInput("GuardBorderThicknessInput", settings.MessageBorders.Guard);
@@ -238,6 +242,7 @@ public sealed class SettingsView : UserControl
                 WithHint(danmuPinyin, "Settings.PinyinHelp"),
                 WithHint(superChatPinyin, "Settings.PinyinHelp"),
                 WithHint(Row("Settings.PinyinLayout", pinyinLayout), "Settings.PinyinHelp", "Settings.PinyinScrollHelp"))));
+        AddSection("Settings.SpecialAttention", "Settings.SpecialAttentionDescription", Card("SpecialAttention.Title", SpecialAttentionEditor));
         AddSection("Settings.Translation", "Settings.TranslationDescription", BuildTranslation());
         AddSection("Settings.Accounts", "Settings.AccountsDescription", accountsView);
         AddSection("Settings.Data", "Settings.DataDescription", BuildData());
@@ -254,6 +259,8 @@ public sealed class SettingsView : UserControl
         {
             return false;
         }
+        SpecialAttentionSettings? previousAttention = null;
+        SpecialAttentionSettings? appliedAttention = null;
         try
         {
             await Task.WhenAll(PendingMenuPreferenceSave, PendingUpdatePreferenceSave);
@@ -261,7 +268,9 @@ public sealed class SettingsView : UserControl
             {
                 return false;
             }
+            previousAttention = runtime.Configuration.Settings.SpecialAttention;
             sharing.ApplyTo(runtime.Configuration.Settings, draft);
+            appliedAttention = runtime.Configuration.Settings.SpecialAttention;
             if (accountsView is AccountSettingsView accountSettings)
             {
                 await accountSettings.SaveEditsAsync();
@@ -273,6 +282,10 @@ public sealed class SettingsView : UserControl
         }
         catch (Exception exception)
         {
+            if (appliedAttention is not null && ReferenceEquals(runtime.Configuration.Settings.SpecialAttention, appliedAttention))
+            {
+                runtime.Configuration.Settings.SpecialAttention = previousAttention!;
+            }
             SetStatus(Localization.Get("Settings.SaveFailed") + " · " + exception.GetType().Name);
             return false;
         }
@@ -488,7 +501,8 @@ public sealed class SettingsView : UserControl
             CompactSuperChatWrap = compactSuperChatWrap.IsChecked == true,
             AutoScrollLongMessages = autoScrollLongMessages.IsChecked == true,
             HideEmoticonDanmu = hideEmoticonDanmu.IsChecked == true,
-            DanmuRegexFilter = new() { Enabled = danmuRegexEnabled.IsChecked == true, Patterns = patterns }
+            DanmuRegexFilter = new() { Enabled = danmuRegexEnabled.IsChecked == true, Patterns = patterns },
+            SpecialAttention = SpecialAttentionEditor.Model.CreateSnapshot(settings.SpecialAttention)
         };
         return true;
     }

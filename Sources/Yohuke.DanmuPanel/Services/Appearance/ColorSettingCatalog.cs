@@ -5,6 +5,7 @@ namespace Yohuke.DanmuPanel.Services.Appearance;
 /// <summary>集中描述界面与消息中允许覆盖的颜色。</summary>
 public static class ColorSettingCatalog
 {
+    public const string SPECIAL_ATTENTION_MESSAGE_BRUSH = "SpecialAttentionMessageBrush";
     public const string GUARD_CAPTAIN_COLOR = "#4F8FDD";
     public const string GUARD_ADMIRAL_COLOR = "#A46EE8";
     public const string GUARD_GOVERNOR_COLOR = "#E9A23B";
@@ -35,6 +36,7 @@ public static class ColorSettingCatalog
         Define("AppDanmuAlternateRowBrush", "Messages"),
         Define("MessageOriginalBrush", "Messages", "AppTextBrush"),
         Define("MessageTranslationBrush", "Messages", "AppTextBrush"),
+        Define(SPECIAL_ATTENTION_MESSAGE_BRUSH, "Messages"),
         Define("MessageUserNameBrush", "Messages", "AppTextBrush"),
         Define("MessagePinyinBrush", "Messages", "AppMutedTextBrush"),
         Define("MessageTimeBrush", "Messages", "AppMutedTextBrush"),

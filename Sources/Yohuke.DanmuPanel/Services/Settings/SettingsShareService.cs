@@ -65,6 +65,7 @@ public sealed class SettingsShareService
         target.AutoScrollLongMessages = settings.AutoScrollLongMessages;
         target.HideEmoticonDanmu = settings.HideEmoticonDanmu;
         target.DanmuRegexFilter = settings.DanmuRegexFilter;
+        target.SpecialAttention = settings.SpecialAttention;
     }
 
     /// <summary>将包含原始 API Key 的设置快照写入调用方持有的流。</summary>
@@ -128,6 +129,7 @@ public sealed class SettingsShareService
         ColorSchemeService.Validate(settings.ColorScheme);
         MessageBorderSettingsValidator.Validate(settings.MessageBorders);
         DanmuRegexFilter.Validate(settings.DanmuRegexFilter);
+        SpecialAttentionSettingsValidator.Validate(settings.SpecialAttention);
         MessageColumnSettingsValidator.Validate(settings.MessageColumns);
         MessageRetentionSettingsValidator.Validate(settings.MessageRetentionCount);
         var reading = settings.Reading;

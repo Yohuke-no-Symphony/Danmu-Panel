@@ -1016,6 +1016,16 @@
         <Setter Property="Foreground" Value="{DynamicResource MessageTranslationBrush}" />
     </Style>
 
+    <Style Selector="Button:specialAttention TextBlock.danmuFeedUser, Button:specialAttention TextBlock.originalText, Button:specialAttention TextBlock.translatedText">
+        <Setter Property="Foreground" Value="{DynamicResource SpecialAttentionMessageBrush}" />
+        <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+
+    <Style Selector="Button:specialAttention components|HoverMarqueeTextBlock.originalText, Button:specialAttention components|HoverMarqueeTextBlock.translatedText">
+        <Setter Property="Foreground" Value="{DynamicResource SpecialAttentionMessageBrush}" />
+        <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+
 
     <Style Selector="components|HoverMarqueeTextBlock.compactFeedContent">
         <Setter Property="IsVisible" Value="False" />

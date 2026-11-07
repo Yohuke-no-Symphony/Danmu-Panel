@@ -30,7 +30,7 @@ public sealed class ColorSchemeEditor : UserControl
     public event Action? Changed;
 
     /// <summary>创建针对现有全局设置的颜色编辑器，保存由设置宿主统一执行。</summary>
-    public ColorSchemeEditor(PanelSettings settings, ColorSchemeService colors)
+    public ColorSchemeEditor(PanelSettings settings, ColorSchemeService colors, IReadOnlySet<string>? detachedColorKeys = null)
     {
         this.settings = settings;
         this.colors = colors;
@@ -79,7 +79,10 @@ public sealed class ColorSchemeEditor : UserControl
                 var input = new ColorInput { Name = "ColorInput_" + definition.Key };
                 input.ValueChanged += value => OnColorChanged(definition.Key, value);
                 inputs.Add(definition.Key, input);
-                rows.Children.Add(Row(definition.NameKey, input));
+                if (detachedColorKeys?.Contains(definition.Key) != true)
+                {
+                    rows.Children.Add(Row(definition.NameKey, input));
+                }
             }
             var groupTitle = Label(group.Key);
             groupTitle.Classes.Add("sectionTitle");
@@ -148,6 +151,11 @@ public sealed class ColorSchemeEditor : UserControl
         {
             input.RefreshDefault(colors.GetDefaultColor(Application.Current!, key));
         }
+    }
+
+    internal ColorInput GetInput(string key)
+    {
+        return inputs[key];
     }
 
     private void OnColorChanged(string key, string? value)
