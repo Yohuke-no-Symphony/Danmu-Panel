@@ -25,15 +25,36 @@ internal static class WindowsChromeGeometry
             checked(ToPixels(clientSize.Height, dpi) + frame.Bottom));
     }
 
-    internal static WindowsRect GetClientRect(WindowsRect outer, WindowsFrameInsets frame, bool maximized)
+    internal static WindowsRect GetClientRect(WindowsRect outer, WindowsFrameInsets frame)
     {
         return new()
         {
             Left = checked(outer.Left + frame.Left),
-            Top = checked(outer.Top + (maximized ? frame.Top : 0)),
+            Top = outer.Top,
             Right = checked(outer.Right - frame.Right),
             Bottom = checked(outer.Bottom - frame.Bottom)
         };
+    }
+
+    internal static Thickness GetContentInsets(WindowsFrameInsets frame, uint dpi, bool maximized)
+    {
+        ArgumentOutOfRangeException.ThrowIfZero(dpi);
+        return maximized ? new(0, frame.Top * STANDARD_DPI / dpi, 0, 0) : default;
+    }
+
+    internal static double GetTitleBarHeight(double minimumHeight, Rect captionAperture, Thickness contentInsets)
+    {
+        if (!double.IsFinite(minimumHeight) || minimumHeight <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(minimumHeight));
+        }
+
+        return Math.Max(minimumHeight, captionAperture.Bottom - contentInsets.Top);
+    }
+
+    internal static int GetExtendedFrameTop(double titleBarHeight, Thickness contentInsets, uint dpi)
+    {
+        return ToPixels(titleBarHeight + contentInsets.Top, dpi);
     }
 
     internal static WindowsPoint GetScreenPoint(nint coordinates)

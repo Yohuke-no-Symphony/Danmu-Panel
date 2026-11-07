@@ -41,7 +41,7 @@ public static class WindowChrome
         window.SystemDecorations = SystemDecorations.Full;
         if (OperatingSystem.IsWindows() && window.TryGetPlatformHandle() is { HandleDescriptor: "HWND" })
         {
-            return new WindowsWindowChrome(window, titleBar);
+            return new WindowsWindowChrome(window, titleBar, (Control)window.Content!);
         }
 
         if (OperatingSystem.IsMacOS() && window.TryGetPlatformHandle() is IPlatformHandle { HandleDescriptor: "NSWindow", Handle: not 0 })

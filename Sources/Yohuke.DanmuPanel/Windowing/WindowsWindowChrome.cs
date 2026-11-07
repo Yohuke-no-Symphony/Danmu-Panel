@@ -22,6 +22,7 @@ internal sealed class WindowsWindowChrome : IWindowChrome
     private readonly Win32Properties.CustomWndProcHookCallback callback;
     private readonly double minimumTitleBarHeight;
     private readonly WindowsCaptionSurface captionSurface;
+    private readonly WindowContentInsets contentInsets;
     private readonly WindowContentSizing contentSizing;
     private Size? openingClientSize;
     private Size? deferredClientSize;
@@ -33,7 +34,7 @@ internal sealed class WindowsWindowChrome : IWindowChrome
     private TextBox? invalidatedCompositionInput;
     private TextBox? deferredCompositionInput;
 
-    internal WindowsWindowChrome(Window window, IWindowTitleBar titleBar)
+    internal WindowsWindowChrome(Window window, IWindowTitleBar titleBar, Control contentRoot)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(titleBar);
@@ -60,6 +61,7 @@ internal sealed class WindowsWindowChrome : IWindowChrome
 
         window.SystemDecorations = SystemDecorations.Full;
         window.ExtendClientAreaToDecorationsHint = false;
+        contentInsets = new(contentRoot);
         captionSurface = new(window);
         callback = WindowProcedure;
         Win32Properties.AddWndProcHookCallback(window, callback);
@@ -156,6 +158,7 @@ internal sealed class WindowsWindowChrome : IWindowChrome
         titleBar.View.PropertyChanged -= OnTitleBarPropertyChanged;
         contentSizing.Dispose();
         captionSurface.Dispose();
+        contentInsets.Dispose();
     }
 
     private unsafe nint WindowProcedure(nint nativeWindow, uint message, nint wParam, nint lParam, ref bool handled)
@@ -184,17 +187,15 @@ internal sealed class WindowsWindowChrome : IWindowChrome
                     if (window.WindowState != WindowState.FullScreen && WindowsNativeMethods.IsIconic(handle) == 0)
                     {
                         var frame = ReadFrameInsets();
-                        var maximized = WindowsNativeMethods.IsZoomed(handle) != 0;
                         if (wParam != 0)
                         {
                             var parameters = (WindowsNccalcSizeParameters*)lParam;
-                            parameters->NewWindow = WindowsChromeGeometry.GetClientRect(parameters->NewWindow, frame,
-                                maximized);
+                            parameters->NewWindow = WindowsChromeGeometry.GetClientRect(parameters->NewWindow, frame);
                         }
                         else
                         {
                             var rect = (WindowsRect*)lParam;
-                            *rect = WindowsChromeGeometry.GetClientRect(*rect, frame, maximized);
+                            *rect = WindowsChromeGeometry.GetClientRect(*rect, frame);
                         }
 
                         handled = true;
@@ -344,6 +345,9 @@ internal sealed class WindowsWindowChrome : IWindowChrome
         applyingFrame = true;
         try
         {
+            var dpi = ReadDpi();
+            var maximized = window.WindowState != WindowState.FullScreen && WindowsNativeMethods.IsZoomed(handle) != 0;
+            contentInsets.Update(WindowsChromeGeometry.GetContentInsets(ReadFrameInsets(), dpi, maximized));
             CheckWin32(WindowsNativeMethods.SetWindowPos(handle, 0, 0, 0, 0, 0,
                 WindowsNativeMethods.SWP_NOMOVE | WindowsNativeMethods.SWP_NOSIZE | WindowsNativeMethods.SWP_NOZORDER |
                 WindowsNativeMethods.SWP_NOACTIVATE | WindowsNativeMethods.SWP_FRAMECHANGED));
@@ -361,7 +365,7 @@ internal sealed class WindowsWindowChrome : IWindowChrome
             {
                 TopHeight = window.WindowState == WindowState.FullScreen
                     ? 0
-                    : WindowsChromeGeometry.ToPixels(titleBar.View.Height, ReadDpi())
+                    : WindowsChromeGeometry.GetExtendedFrameTop(titleBar.View.Height, contentInsets.Insets, dpi)
             };
             Marshal.ThrowExceptionForHR(WindowsNativeMethods.DwmExtendFrameIntoClientArea(handle, in margins));
             Marshal.ThrowExceptionForHR(WindowsNativeMethods.DwmGetWindowAttribute(handle,
@@ -403,9 +407,9 @@ internal sealed class WindowsWindowChrome : IWindowChrome
         var dpi = ReadDpi();
         titleBar.CaptionInsets = WindowsChromeGeometry.GetCaptionInsets(outer, origin, client.Right - client.Left,
             bounds, dpi);
-        var captionBottom = (long)outer.Top + bounds.Bottom - origin.Y;
-        titleBar.View.Height = Math.Max(minimumTitleBarHeight, captionBottom * WindowsChromeGeometry.STANDARD_DPI / dpi);
-        captionSurface.Update(WindowsChromeGeometry.GetCaptionAperture(outer, origin, window.ClientSize, bounds, dpi));
+        var aperture = WindowsChromeGeometry.GetCaptionAperture(outer, origin, window.ClientSize, bounds, dpi);
+        titleBar.View.Height = WindowsChromeGeometry.GetTitleBarHeight(minimumTitleBarHeight, aperture, contentInsets.Insets);
+        captionSurface.Update(aperture);
     }
 
     private void QueueRefresh(bool frame)

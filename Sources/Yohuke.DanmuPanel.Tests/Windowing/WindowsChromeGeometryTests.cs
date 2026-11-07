@@ -32,7 +32,7 @@ public sealed class WindowsChromeGeometryTests
     public void RestoredClientUsesEntireTopAndPreservesNativeSideBorders()
     {
         var outer = new WindowsRect { Left = -1900, Top = -90, Right = -900, Bottom = 610 };
-        var client = WindowsChromeGeometry.GetClientRect(outer, new(8, 8, 8, 8), false);
+        var client = WindowsChromeGeometry.GetClientRect(outer, new(8, 8, 8, 8));
 
         Assert.Equal(-1892, client.Left);
         Assert.Equal(-90, client.Top);
@@ -41,16 +41,16 @@ public sealed class WindowsChromeGeometryTests
     }
 
     /// <summary>
-    /// 最大化窗口的客户区排除屏幕外边框。
+    /// 最大化窗口保留连续的顶部客户区，供系统按钮处理鼠标输入。
     /// </summary>
     [Fact]
-    public void MaximizedClientExcludesOffscreenFrameOnEverySide()
+    public void MaximizedClientKeepsNativeTopForSystemCaptionButtons()
     {
         var outer = new WindowsRect { Left = -8, Top = -8, Right = 1928, Bottom = 1048 };
-        var client = WindowsChromeGeometry.GetClientRect(outer, new(8, 8, 8, 8), true);
+        var client = WindowsChromeGeometry.GetClientRect(outer, new(8, 8, 8, 8));
 
         Assert.Equal(0, client.Left);
-        Assert.Equal(0, client.Top);
+        Assert.Equal(-8, client.Top);
         Assert.Equal(1920, client.Right);
         Assert.Equal(1040, client.Bottom);
     }
@@ -64,7 +64,7 @@ public sealed class WindowsChromeGeometryTests
         var frame = new WindowsFrameInsets(12, 12, 12, 12);
         var outerSize = WindowsChromeGeometry.GetOuterSize(new(320.5, 201.25), 144, frame);
         var outer = new WindowsRect { Right = outerSize.Width, Bottom = outerSize.Height };
-        var client = WindowsChromeGeometry.GetClientRect(outer, frame, false);
+        var client = WindowsChromeGeometry.GetClientRect(outer, frame);
         var restoredSize = new Size((client.Right - client.Left) / 1.5, (client.Bottom - client.Top) / 1.5);
 
         Assert.Equal(outerSize, WindowsChromeGeometry.GetOuterSize(restoredSize, 144, frame));
@@ -130,17 +130,97 @@ public sealed class WindowsChromeGeometryTests
     }
 
     /// <summary>
-    /// 最大化时透明区域裁剪到可见客户区。
+    /// 最大化时透明区域包含屏幕外的顶部客户区，并裁剪到实际客户区宽度。
     /// </summary>
     [Fact]
-    public void CaptionApertureClampsMaximizedBoundsToVisibleClient()
+    public void MaximizedCaptionApertureIncludesOffscreenClientTop()
     {
         var window = new WindowsRect { Left = -8, Top = -8, Right = 1928, Bottom = 1088 };
-        var origin = new WindowsPoint();
+        var origin = new WindowsPoint
+        {
+            Y = -8
+        };
         var buttons = new WindowsRect { Left = 1782, Top = 0, Right = 1936, Bottom = 40 };
 
-        Assert.Equal(new Rect(1774, 0, 146, 32),
-            WindowsChromeGeometry.GetCaptionAperture(window, origin, new(1920, 1080), buttons, 96));
+        Assert.Equal(new Rect(1774, 0, 146, 40),
+            WindowsChromeGeometry.GetCaptionAperture(window, origin, new(1920, 1088), buttons, 96));
+    }
+
+    /// <summary>
+    /// 最大化保留系统顶部客户区，同时让标题、按钮透明区域与玻璃范围在不同缩放下对齐。
+    /// </summary>
+    [Theory]
+    [InlineData(96U, 8, 0, 0)]
+    [InlineData(120U, 10, 0, 0)]
+    [InlineData(144U, 12, 0, 0)]
+    [InlineData(192U, 16, 0, 0)]
+    [InlineData(96U, 8, -1920, -1080)]
+    [InlineData(120U, 10, -2560, -1440)]
+    [InlineData(144U, 12, -2560, -1440)]
+    [InlineData(192U, 16, -3840, -2160)]
+    public void MaximizedCaptionAndContentStayAlignedAcrossDpiAndMonitors(uint dpi, int framePixels,
+        int screenLeft, int screenTop)
+    {
+        var scale = dpi / WindowsChromeGeometry.STANDARD_DPI;
+        var width = WindowsChromeGeometry.ToPixels(1000, dpi);
+        var height = WindowsChromeGeometry.ToPixels(700, dpi);
+        var captionWidth = WindowsChromeGeometry.ToPixels(138, dpi);
+        var captionHeight = WindowsChromeGeometry.ToPixels(20, dpi);
+        var frame = new WindowsFrameInsets(framePixels, framePixels, framePixels, framePixels);
+        var outer = new WindowsRect
+        {
+            Left = screenLeft - framePixels,
+            Top = screenTop - framePixels,
+            Right = screenLeft + width + framePixels,
+            Bottom = screenTop + height + framePixels
+        };
+        var client = WindowsChromeGeometry.GetClientRect(outer, frame);
+        var origin = new WindowsPoint
+        {
+            X = client.Left,
+            Y = client.Top
+        };
+        var buttons = new WindowsRect
+        {
+            Left = framePixels + width - captionWidth,
+            Top = framePixels,
+            Right = framePixels + width,
+            Bottom = framePixels + captionHeight
+        };
+        var clientSize = new Size((client.Right - client.Left) / scale, (client.Bottom - client.Top) / scale);
+        var insets = WindowsChromeGeometry.GetContentInsets(frame, dpi, true);
+        var aperture = WindowsChromeGeometry.GetCaptionAperture(outer, origin, clientSize, buttons, dpi);
+        var titleHeight = WindowsChromeGeometry.GetTitleBarHeight(20, aperture, insets);
+
+        Assert.Equal(outer.Top, client.Top);
+        Assert.Equal(screenTop, client.Top + WindowsChromeGeometry.ToPixels(insets.Top, dpi));
+        Assert.Equal(screenLeft, client.Left);
+        Assert.Equal(screenLeft + width, client.Right);
+        Assert.Equal(screenTop + height, client.Bottom);
+        Assert.Equal(new Thickness(0, 8, 0, 0), insets);
+        Assert.Equal(width - captionWidth, aperture.Left * scale, 8);
+        Assert.Equal(captionWidth, WindowsChromeGeometry.ToPixels(aperture.Width, dpi));
+        Assert.Equal(0, aperture.Top);
+        Assert.Equal(28, aperture.Height);
+        Assert.Equal(20, titleHeight);
+        Assert.Equal(42, WindowsChromeGeometry.GetTitleBarHeight(42, aperture, insets));
+        Assert.Equal(framePixels + captionHeight,
+            WindowsChromeGeometry.GetExtendedFrameTop(titleHeight, insets, dpi));
+        var captionInsets = WindowsChromeGeometry.GetCaptionInsets(outer, origin, width, buttons, dpi);
+        Assert.Equal(captionWidth, WindowsChromeGeometry.ToPixels(captionInsets.Right, dpi));
+    }
+
+    /// <summary>
+    /// 普通或全屏窗口不需要最大化边框补偿。
+    /// </summary>
+    [Theory]
+    [InlineData(96U)]
+    [InlineData(120U)]
+    [InlineData(144U)]
+    [InlineData(192U)]
+    public void NonMaximizedContentHasNoFrameCompensation(uint dpi)
+    {
+        Assert.Equal(default, WindowsChromeGeometry.GetContentInsets(new(8, 8, 8, 8), dpi, false));
     }
 
     /// <summary>
