@@ -53,10 +53,11 @@ public sealed class AppearanceRenderingTests
             floating.UpdateLayout();
             foreach (var view in new[] { first, second })
             {
-                var original = view.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("originalText"));
-                var translation = view.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("translatedText"));
-                var originalMarquee = view.GetVisualDescendants().OfType<HoverMarqueeTextBlock>().Single(text => text.Classes.Contains("originalText"));
-                var translationMarquee = view.GetVisualDescendants().OfType<HoverMarqueeTextBlock>().Single(text => text.Classes.Contains("translatedText"));
+                var body = Assert.Single(view.GetVisualDescendants().OfType<MessageBodyPanel>(), control => control.IsEffectivelyVisible);
+                var original = body.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("originalText"));
+                var translation = body.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("translatedText"));
+                var originalMarquee = body.GetVisualDescendants().OfType<HoverMarqueeTextBlock>().Single(text => text.Classes.Contains("originalText"));
+                var translationMarquee = body.GetVisualDescendants().OfType<HoverMarqueeTextBlock>().Single(text => text.Classes.Contains("translatedText"));
                 AssertColor("#123456", original.Foreground);
                 AssertColor("#80654321", translation.Foreground);
                 AssertColor("#123456", originalMarquee.Foreground);

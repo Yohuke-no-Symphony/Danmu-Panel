@@ -3,6 +3,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.VisualTree;
+using Yohuke.DanmuPanel.Services;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
@@ -74,6 +75,7 @@ internal sealed partial class MessageBodyPanel : Panel
                 (pendingTranslation.IsVisible ? pendingTranslation.IsSingleTextLine : translatedText.IsVisible
                     ? EmoticonTextBlock.HasSingleTextLine(translatedText) : translationMarquee.IsSingleTextLine));
         originalText.AnnotationLayoutChanged += () => InvalidateTextMetrics(originalText);
+        translatedText.AnnotationLayoutChanged += () => InvalidateTextMetrics(translatedText);
         originalMarquee.TextMetricsChanged += InvalidateTextMetrics;
         translationMarquee.TextMetricsChanged += InvalidateTextMetrics;
         ObserveText(translatedText);
@@ -100,10 +102,14 @@ internal sealed partial class MessageBodyPanel : Panel
         canShareLine = canShareLineProvider;
     }
 
-    internal void SetBitmapCache(EmoticonBitmapCache? bitmapCache)
+    internal void SetServices(IUserAvatarService? avatars, EmoticonBitmapCache? bitmapCache)
     {
         this.FindControl<EmoticonTextBlock>("OriginalText")!.BitmapCache = bitmapCache;
         this.FindControl<HoverMarqueeTextBlock>("OriginalMarquee")!.BitmapCache = bitmapCache;
+        this.FindControl<EmoticonTextBlock>("OriginalText")!.AvatarService = avatars;
+        this.FindControl<HoverMarqueeTextBlock>("OriginalMarquee")!.AvatarService = avatars;
+        this.FindControl<MessageTranslationTextBlock>("TranslatedText")!.AvatarService = avatars;
+        this.FindControl<HoverMarqueeTextBlock>("TranslationMarquee")!.AvatarService = avatars;
     }
 
     internal void ObserveText(Control text)

@@ -66,7 +66,7 @@ public sealed class UserNameIdentityRenderingTests
             window.Show();
             Pump(window);
             var name = Assert.Single(row.GetVisualDescendants().OfType<EmoticonTextBlock>(),
-                text => text.Classes.Contains("danmuFeedUser"));
+                text => text.Classes.Contains("danmuFeedUser") && text.IsEffectivelyVisible);
             var original = FindOriginal(row, compact, wrap);
             var translated = FindTranslated(row, compact, wrap);
             var regularName = name.Foreground;
@@ -178,7 +178,7 @@ public sealed class UserNameIdentityRenderingTests
             for (var index = 0; index < cases.Length; index++)
             {
                 var name = rows.Children[index].GetVisualDescendants().OfType<EmoticonTextBlock>()
-                    .Single(text => text.Classes.Contains("danmuFeedUser"));
+                    .Single(text => text.Classes.Contains("danmuFeedUser") && text.IsEffectivelyVisible);
                 var color = Assert.IsAssignableFrom<ISolidColorBrush>(name.Foreground).Color;
                 foreach (var background in dark ? new[] { "#1C222D", "#252D3A" } : new[] { "#FFFFFF", "#F2F4F8" })
                 {
@@ -203,10 +203,11 @@ public sealed class UserNameIdentityRenderingTests
         if (compact && !wrap)
         {
             var marquee = row.GetVisualDescendants().OfType<HoverMarqueeTextBlock>()
-                .Single(text => text.Classes.Contains("originalText"));
+                .Single(text => text.Classes.Contains("originalText") && text.IsEffectivelyVisible);
             return Assert.Single(marquee.GetVisualDescendants().OfType<EmoticonTextBlock>());
         }
-        return row.GetVisualDescendants().OfType<EmoticonTextBlock>().Single(text => text.Classes.Contains("originalText"));
+        return row.GetVisualDescendants().OfType<EmoticonTextBlock>()
+            .Single(text => text.Classes.Contains("originalText") && text.IsEffectivelyVisible);
     }
 
     private static TextBlock FindTranslated(MessageFeedRow row, bool compact, bool wrap)
@@ -214,10 +215,10 @@ public sealed class UserNameIdentityRenderingTests
         if (compact && !wrap)
         {
             var marquee = row.GetVisualDescendants().OfType<HoverMarqueeTextBlock>()
-                .Single(text => text.Classes.Contains("translatedText"));
+                .Single(text => text.Classes.Contains("translatedText") && text.IsEffectivelyVisible);
             return Assert.Single(marquee.GetVisualDescendants().OfType<EmoticonTextBlock>());
         }
-        return Assert.Single(row.GetVisualDescendants().OfType<MessageTranslationTextBlock>());
+        return Assert.Single(row.GetVisualDescendants().OfType<MessageTranslationTextBlock>(), text => text.IsEffectivelyVisible);
     }
 
     private static void Pump(Window window)

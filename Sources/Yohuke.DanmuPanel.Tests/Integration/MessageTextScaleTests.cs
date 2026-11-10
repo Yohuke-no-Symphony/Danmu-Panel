@@ -112,7 +112,8 @@ public sealed class MessageTextScaleTests
         Assert.True(name.IsEffectivelyVisible);
         Assert.True(body.IsEffectivelyVisible);
         var metadata = Assert.Single(row.GetVisualDescendants().OfType<TextBlock>(),
-            text => text.Classes.Contains("danmuFeedMeta"));
+            text => text.Classes.Contains("danmuFeedMeta") &&
+                !text.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any());
         Assert.Equal(11 * scale, metadata.FontSize);
         Assert.Equal(!compact, metadata.IsEffectivelyVisible);
         Assert.False(string.IsNullOrEmpty(metadata.Text));
@@ -184,7 +185,7 @@ public sealed class MessageTextScaleTests
     private static EmoticonTextBlock FindName(Button row)
     {
         return Assert.Single(row.GetVisualDescendants().OfType<EmoticonTextBlock>(),
-            control => control.Classes.Contains("danmuFeedUser"));
+            control => control.Classes.Contains("danmuFeedUser") && control.IsEffectivelyVisible);
     }
 
     private static EmoticonTextBlock FindBody(Button row, bool compact)

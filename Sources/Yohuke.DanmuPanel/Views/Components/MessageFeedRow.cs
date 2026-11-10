@@ -4,6 +4,7 @@ using Avalonia.Controls.Metadata;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Services;
@@ -11,11 +12,13 @@ using Yohuke.DanmuPanel.ViewModels;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
-[PseudoClasses(":alternate", ":specialAttention", ":guardMedal", ":captain", ":admiral", ":governor", ":roomAdmin")]
+[PseudoClasses(":alternate", ":specialAttention", ":guardMedal", ":captain", ":admiral", ":governor", ":roomAdmin", ":pinged")]
 internal sealed class MessageFeedRow : Button
 {
     private static readonly StyledProperty<bool> IsSpecialAttentionProperty =
         AvaloniaProperty.Register<MessageFeedRow, bool>(nameof(MessageItemViewModel.IsSpecialAttention));
+    private static readonly StyledProperty<bool> IsPingedProperty =
+        AvaloniaProperty.Register<MessageFeedRow, bool>(nameof(MessageItemViewModel.IsPinged));
     private static readonly StyledProperty<bool> HasGuardMedalProperty =
         AvaloniaProperty.Register<MessageFeedRow, bool>(nameof(MessageItemViewModel.HasGuardMedal));
     private static readonly StyledProperty<MessageUserNameRole> UserNameRoleProperty =
@@ -40,6 +43,7 @@ internal sealed class MessageFeedRow : Button
     internal MessageFeedRow(MessageKind kind, IUserAvatarService? avatars = null, EmoticonBitmapCache? bitmapCache = null)
     {
         this.Bind(IsSpecialAttentionProperty, new Binding(nameof(MessageItemViewModel.IsSpecialAttention)));
+        this.Bind(IsPingedProperty, new Binding(nameof(MessageItemViewModel.IsPinged)));
         if (kind == MessageKind.Danmu)
         {
             this.Bind(HasGuardMedalProperty, new Binding(nameof(MessageItemViewModel.HasGuardMedal)));
@@ -54,13 +58,17 @@ internal sealed class MessageFeedRow : Button
         {
             avatar.AvatarService = avatars;
         }
-        content.GetVisualDescendants().OfType<MessageBodyPanel>().Single().SetBitmapCache(bitmapCache);
+        foreach (var body in content.GetVisualDescendants().OfType<MessageBodyPanel>())
+        {
+            body.SetServices(avatars, bitmapCache);
+        }
         Content = content;
         HorizontalAlignment = HorizontalAlignment.Stretch;
         HorizontalContentAlignment = HorizontalAlignment.Stretch;
         Classes.Add(kind == MessageKind.SuperChat ? "scFeedButton" : "danmuFeedButton");
         if (kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard)
         {
+            RenderTransform = new TranslateTransform();
             Classes.Add("messageCardButton");
         }
     }
@@ -134,7 +142,9 @@ internal sealed class MessageFeedRow : Button
     protected override void OnDataContextChanged(EventArgs e)
     {
         CancelCopyInteraction();
+        PseudoClasses.Set(":pinged", false);
         base.OnDataContextChanged(e);
+        UpdatePingState();
     }
 
     /// <inheritdoc />
@@ -144,6 +154,10 @@ internal sealed class MessageFeedRow : Button
         if (change.Property == IsSpecialAttentionProperty)
         {
             PseudoClasses.Set(":specialAttention", GetValue(IsSpecialAttentionProperty));
+        }
+        if (change.Property == IsPingedProperty || change.Property == IsVisibleProperty)
+        {
+            UpdatePingState();
         }
         if (change.Property == HasGuardMedalProperty)
         {
@@ -160,10 +174,24 @@ internal sealed class MessageFeedRow : Button
     }
 
     /// <inheritdoc />
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        UpdatePingState();
+    }
+
+    /// <inheritdoc />
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         CancelCopyInteraction();
+        PseudoClasses.Set(":pinged", false);
         base.OnDetachedFromVisualTree(e);
+    }
+
+    private void UpdatePingState()
+    {
+        PseudoClasses.Set(":pinged", this.GetVisualRoot() is not null && IsEffectivelyVisible &&
+            DataContext is MessageItemViewModel { IsPinged: true });
     }
 
     private void OnHolding(object? sender, HoldingRoutedEventArgs e)

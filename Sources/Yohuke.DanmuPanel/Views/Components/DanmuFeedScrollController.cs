@@ -128,6 +128,35 @@ internal sealed class DanmuFeedScrollController : IDisposable
         CaptureReadingAnchor();
     }
 
+    /// <summary>定位指定的真实条目，并以新的可见位置替换旧阅读锚点。</summary>
+    public void ScrollToItem(object item)
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+        if (items is null || !itemsControl.Items.Contains(item))
+        {
+            return;
+        }
+        CancelPendingFollow();
+        hasUserScrolledSinceReset = true;
+        userScrollRevision++;
+        canFollowFromUserScroll = false;
+        hasUserScrollInput = false;
+        scrollingPointer = null;
+        readingItem = null;
+        SetFollowingLatest(false);
+        isUpdatingScroll = true;
+        try
+        {
+            itemsControl.ScrollIntoView(item);
+            scrollViewer.UpdateLayout();
+        }
+        finally
+        {
+            isUpdatingScroll = false;
+        }
+        CaptureReadingAnchor();
+    }
+
     private void MoveToTop()
     {
         isUpdatingScroll = true;

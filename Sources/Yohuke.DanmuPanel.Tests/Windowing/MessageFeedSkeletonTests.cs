@@ -62,19 +62,21 @@ public sealed class MessageFeedSkeletonTests
             Pump(window);
             var real = Assert.IsType<MessageFeedListBoxItem>(list.ContainerFromItem(message)).Row;
             var placeholder = Assert.IsType<MessageLoadingListBoxItem>(list.ContainerFromItem(rows[1])).Skeleton;
-            var realLayout = Assert.Single(real.GetVisualDescendants().OfType<Grid>(), control => control.Classes.Contains("danmuFeedLayout"));
+            var realLayout = Assert.Single(real.GetVisualDescendants().OfType<Grid>(), control =>
+                control.Classes.Contains("danmuFeedLayout") && control.IsEffectivelyVisible);
             var skeletonLayout = Assert.Single(placeholder.GetVisualDescendants().OfType<Grid>(), control => control.Classes.Contains("danmuFeedLayout"));
             Assert.Equal(realLayout.ColumnDefinitions[0].Width, skeletonLayout.ColumnDefinitions[0].Width);
             Assert.Equal(realLayout.ColumnDefinitions[1].Width, skeletonLayout.ColumnDefinitions[1].Width);
             Assert.Equal(realLayout.ColumnSpacing, skeletonLayout.ColumnSpacing);
-            var realBody = Assert.Single(real.GetVisualDescendants().OfType<Panel>(), control => control.Classes.Contains("messageBody"));
-            var skeletonBody = Assert.Single(placeholder.GetVisualDescendants().OfType<StackPanel>(), control => control.Classes.Contains("messageBody"));
+            var realBody = Assert.Single(real.GetVisualDescendants().OfType<Panel>(), control => control.Classes.Contains("messageBody") && control.IsEffectivelyVisible);
+            var skeletonBody = Assert.Single(placeholder.GetVisualDescendants().OfType<StackPanel>(), control => control.Classes.Contains("messageBody") && control.IsEffectivelyVisible);
             Assert.InRange(Math.Abs(realBody.TranslatePoint(default, list)!.Value.X -
                 skeletonBody.TranslatePoint(default, list)!.Value.X), 0, 1);
             var realMedal = Assert.Single(real.GetVisualDescendants().OfType<Grid>(), control => control.Classes.Contains("danmuMedalSlot"));
             var skeletonMedal = Assert.Single(placeholder.GetVisualDescendants().OfType<Grid>(), control => control.Classes.Contains("danmuMedalSlot"));
             Assert.Equal(realMedal.Bounds.Width, skeletonMedal.Bounds.Width);
-            var realName = Assert.Single(real.GetVisualDescendants().OfType<TextBlock>(), control => control.Classes.Contains("danmuFeedUser"));
+            var realName = Assert.Single(real.GetVisualDescendants().OfType<TextBlock>(), control =>
+                control.Classes.Contains("danmuFeedUser") && control.IsEffectivelyVisible);
             var skeletonName = Assert.Single(placeholder.GetVisualDescendants().OfType<TextBlock>(), control => control.Classes.Contains("danmuFeedUser"));
             Assert.Equal(realName.FontSize, skeletonName.FontSize);
             Assert.Equal(real.Padding, placeholder.Padding);

@@ -58,7 +58,7 @@ public sealed class ContentPinyinFeedTests
             Pump(window);
             var presenter = Assert.Single(view.GetVisualDescendants().OfType<PinyinSeparateLinePresenter>(),
                 control => control.IsEffectivelyVisible);
-            var body = Assert.Single(view.GetVisualDescendants().OfType<MessageBodyPanel>());
+            var body = Assert.Single(view.GetVisualDescendants().OfType<MessageBodyPanel>(), value => value.IsEffectivelyVisible);
             var translation = Assert.Single(view.GetVisualDescendants().OfType<TextBlock>(),
                 control => control.Text == "Translation" && control.IsEffectivelyVisible);
             Assert.Single(presenter.OriginalText.TextLayout.TextLines);
@@ -117,7 +117,8 @@ public sealed class ContentPinyinFeedTests
             var item = Assert.Single(view.Model.Items);
             var original = Original(view);
             var marquee = view.GetVisualDescendants().OfType<HoverMarqueeTextBlock>()
-                .Single(control => control.Classes.Contains("originalText"));
+                .Single(control => control.Classes.Contains("originalText") &&
+                    !control.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any());
             Assert.Empty(original.Annotations!);
 
             settings.ShowDanmuPinyin = kind == MessageKind.Danmu;
@@ -389,10 +390,11 @@ public sealed class ContentPinyinFeedTests
     private static void AssertVerticallyCentered(Button row)
     {
         var layout = row.GetVisualDescendants().OfType<Grid>()
-            .Single(control => control.Classes.Contains("danmuFeedLayout"));
+            .Single(control => control.Classes.Contains("danmuFeedLayout") && control.IsEffectivelyVisible);
         var controls = row.GetVisualDescendants().OfType<Control>().Where(control =>
-            control.Classes.Contains("danmuFeedIdentity") || control.Classes.Contains("danmuFeedUser") ||
-            control.Classes.Contains("danmuMedalBadge") || control.Classes.Contains("messageBody")).ToArray();
+            control.IsEffectivelyVisible && (control.Classes.Contains("danmuFeedIdentity") ||
+                control.Classes.Contains("danmuFeedUser") || control.Classes.Contains("danmuMedalBadge") ||
+                control.Classes.Contains("messageBody"))).ToArray();
         Assert.Equal(4, controls.Length);
         foreach (var control in controls)
         {
@@ -406,7 +408,8 @@ public sealed class ContentPinyinFeedTests
     private static EmoticonTextBlock Original(MessageFeedView view)
     {
         return view.GetVisualDescendants().OfType<EmoticonTextBlock>()
-            .Single(control => control.Classes.Contains("originalText"));
+            .Single(control => control.Classes.Contains("originalText") &&
+                !control.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any());
     }
 
     private static void Pump(Window window)

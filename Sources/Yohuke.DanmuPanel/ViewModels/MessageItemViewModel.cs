@@ -1,4 +1,5 @@
 using System.Globalization;
+using Avalonia;
 using Avalonia.Media;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.Messages;
@@ -38,9 +39,21 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     private IBrush borderBrush = Brushes.Transparent;
     private IBrush medalBackgroundBrush = Brushes.Transparent;
     private IReadOnlyList<DanmuEmoticon> emoticons = [];
+    private MessageReply? reply;
+    private bool isPinged;
     public MessageRecord Record { get; private set; }
-    /// <summary>是否仅在普通弹幕时间线中提示付费事件，不提供阅读确认。</summary>
+    /// <summary>当前导航定位的动态提示状态，只在界面内保留。</summary>
+    public bool IsPinged
+    {
+        get => isPinged;
+        internal set => SetProperty(ref isPinged, value);
+    }
+    /// <summary>是否在普通弹幕时间线中展示付费事件，点击用于导航。</summary>
     public bool IsEventSummary { get; }
+    /// <summary>是否显示付费事件的类型和金额标题。</summary>
+    public bool HasSummaryHeader => IsEventSummary && Record.Kind != MessageKind.Gift;
+    /// <summary>是否在时间线事件中显示完整正文。</summary>
+    public bool HasSummaryBody => IsEventSummary && Record.Kind is MessageKind.SuperChat or MessageKind.Gift;
     /// <summary>付费事件的类型、礼物名称或大航海档位。</summary>
     public string SummaryLabel => summaryLabel;
     /// <summary>事件的人民币价值；缺少大航海价格时明确显示未知。</summary>
@@ -51,6 +64,10 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     public string Name => Record.UserName;
     /// <summary>当前消息用户的稳定身份，用于独立于消息行缓存头像。</summary>
     public long UserUid => Record.UserUid;
+    /// <summary>正文前内联显示的回复对象，神秘人只显示匿名头像。</summary>
+    public MessageReply? Reply => reply;
+    /// <summary>仅显示译文时随译文呈现的回复对象。</summary>
+    public MessageReply? TranslationReply => ShowOriginal ? null : Reply;
     /// <summary>当前普通弹幕是否来自全局特别关注名单中的用户。</summary>
     public bool IsSpecialAttention => Record.Kind == MessageKind.Danmu && settings.IsSpecialAttention(UserUid);
     /// <summary>普通弹幕名称的有效身份，依次优先使用特别关注、房管和本直播间舰队身份。</summary>
@@ -99,7 +116,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     public string Time => time;
     public bool ShowPinBadge => Record.Kind == MessageKind.Danmu && Record.IsPinned;
     public bool ShowUnreadDot => !IsEventSummary && Record.Kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard && !Record.IsRead;
-    public string Detail => IsEventSummary ? "" : detail ??= FormatDetail();
+    public string Detail => detail ??= FormatDetail();
     public string DetailPinyin => detailPinyin;
     public bool HasDetailPinyin => DetailPinyin.Length > 0;
     public IReadOnlyList<PinyinAnnotation> ContentPinyin => contentPinyin;
@@ -117,6 +134,8 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     public bool HasMedal => Medal.Length > 0;
     public bool AutoScrollLongMessages => settings.AutoScrollLongMessages;
     public IBrush BorderBrush => borderBrush;
+    /// <summary>按消息类型配置的完整边框粗细。</summary>
+    public Thickness BorderThickness => new(settings.GetBorderThickness(Record.Kind));
     public IReadOnlyList<DanmuEmoticon> Emoticons
     {
         get => emoticons;
@@ -137,7 +156,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         this.settings = settings;
         this.pinyin = pinyin;
         IsEventSummary = isEventSummary && record.Kind != MessageKind.Danmu;
-        this.deferPresentation = deferPresentation || IsEventSummary;
+        this.deferPresentation = deferPresentation;
         Update(record, settings, true, isTranslationPending);
     }
 
@@ -233,15 +252,29 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         var wasTranslating = IsTranslating;
         var showedTranslation = ShowTranslation;
         var showedOriginal = ShowOriginal;
+        var previousTranslationReply = TranslationReply;
         var showedPin = ShowPinBadge;
         var showedUnread = ShowUnreadDot;
+        var hadSummaryHeader = HasSummaryHeader;
+        var hadSummaryBody = HasSummaryBody;
         var wasSpecialAttention = IsSpecialAttention;
         var previousUserNameRole = UserNameRole;
+        var previousBorderThickness = BorderThickness;
         Record = record;
         settings = currentSettings;
         translationPending = isTranslationPending;
         filterStateVersion = settings.DanmuFilter.StateVersion;
         translationBlocked = settings.IsTranslationBlocked(record);
+
+        if (initialize || previous.Kind != record.Kind || previous.ReplyUid != record.ReplyUid ||
+            previous.ReplyUserName != record.ReplyUserName || previous.ReplyUserNameColor != record.ReplyUserNameColor ||
+            previous.ReplyIsMystery != record.ReplyIsMystery)
+        {
+            SetProperty(ref reply, record.Kind == MessageKind.Danmu &&
+                !string.IsNullOrWhiteSpace(record.ReplyUserName)
+                ? new(record.ReplyIsMystery ? 0 : record.ReplyUid, record.ReplyUserName, record.ReplyUserNameColor)
+                : null, nameof(Reply));
+        }
 
         if (!deferPresentation && (initialize || previous.Kind != record.Kind || previous.Content != record.Content ||
             !previous.Emoticons.SequenceEqual(record.Emoticons)))
@@ -260,6 +293,8 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         NotifyChange(previous.MedalLevel, record.MedalLevel, nameof(MedalLevel));
         NotifyChange(showedPin, ShowPinBadge, nameof(ShowPinBadge));
         NotifyChange(showedUnread, ShowUnreadDot, nameof(ShowUnreadDot));
+        NotifyChange(hadSummaryHeader, HasSummaryHeader, nameof(HasSummaryHeader));
+        NotifyChange(hadSummaryBody, HasSummaryBody, nameof(HasSummaryBody));
         NotifyChange(previousSettings.AutoScrollLongMessages, settings.AutoScrollLongMessages, nameof(AutoScrollLongMessages));
         NotifyChange(previousSettings.PinyinLayout, settings.PinyinLayout, nameof(PinyinLayout));
 
@@ -283,7 +318,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
             SetProperty(ref contentPinyin, IsContentPinyinEnabled(record.Kind, settings)
                 ? GetContentAnnotations(record) : [], nameof(ContentPinyin));
         }
-        if (!IsEventSummary && deferPresentation && presentation?.Matches(record, settings.PresentationOptions) != true)
+        if (deferPresentation && presentation?.Matches(record, settings.PresentationOptions) != true)
         {
             SetProperty(ref namePinyin, "", nameof(NamePinyin));
             SetProperty(ref nameAnnotations, Array.Empty<PinyinAnnotation>(), nameof(NameAnnotations));
@@ -304,10 +339,10 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         {
             SetProperty(ref time, record.Time.ToLocalTime().ToString("HH:mm:ss"), nameof(Time));
         }
-        if (!IsEventSummary && (initialize || previous.Kind != record.Kind || previous.Content != record.Content ||
+        if (initialize || previous.Kind != record.Kind || previous.Content != record.Content ||
             previous.GiftName != record.GiftName || previous.Quantity != record.Quantity ||
             previous.TotalPrice != record.TotalPrice || previous.GuardLevel != record.GuardLevel ||
-            previousSettings.LanguageId != settings.LanguageId || cultureChanged))
+            previousSettings.LanguageId != settings.LanguageId || cultureChanged)
         {
             SetProperty(ref detail, record.Kind != MessageKind.Guard || Localization.IsInitialized
                 ? FormatDetail() : null, nameof(Detail));
@@ -325,9 +360,10 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         {
             UpdateEventSummary();
         }
-        SetProperty(ref translation, !IsEventSummary && !translationBlocked && record.TranslationFingerprint == settings.TranslationFingerprint
+        SetProperty(ref translation, !translationBlocked && record.TranslationFingerprint == settings.TranslationFingerprint
             ? record.Translation ?? "" : "", nameof(Translation));
         SetProperty(ref borderBrush, GetBorderBrush(), nameof(BorderBrush));
+        NotifyChange(previousBorderThickness, BorderThickness, nameof(BorderThickness));
         SetProperty(ref medalBackgroundBrush, record.MedalGuardLevel switch
         {
             1 => settings.GetColor("MedalGovernorBackgroundBrush", ColorSettingCatalog.GUARD_GOVERNOR_COLOR),
@@ -344,6 +380,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         NotifyChange(hadTranslation, HasTranslation, nameof(HasTranslation));
         NotifyChange(wasTranslating, IsTranslating, nameof(IsTranslating));
         NotifyChange(showedTranslation, ShowTranslation, nameof(ShowTranslation));
+        NotifyChange(previousTranslationReply, TranslationReply, nameof(TranslationReply));
         NotifyChange(showedOriginal, ShowOriginal, nameof(ShowOriginal));
     }
 

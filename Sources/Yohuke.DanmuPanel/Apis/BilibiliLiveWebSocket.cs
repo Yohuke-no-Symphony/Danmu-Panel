@@ -444,17 +444,22 @@ public class BilibiliLiveWebSocket : BaseApi, ILiveDanmuSocket
         var modernUid = ReadInteger(ReadObjectProperty(modernUser, "uid"));
         var modernName = ReadScalarText(ReadObjectProperty(ReadObjectProperty(modernUser, "base"), "name"));
         var content = ReadScalarText(ReadArrayItem(info, 1));
+        var danmuExtra = ReadDanmuExtra(metadata);
 
         return new()
         {
             RoomId = roomId,
-            MessageId = ReadScalarText(json["msg_id"] ?? json["id"] ?? ReadDanmuExtra(metadata)?["id_str"]),
+            MessageId = ReadScalarText(json["msg_id"] ?? json["id"] ?? danmuExtra?["id_str"]),
             Timestamp = ReadServerTimestamp(ReadArrayItem(metadata, 4), json["send_time"]),
             Uid = modernUid > 0 ? modernUid : ReadInteger(ReadArrayItem(legacyUser, 0)),
             UserName = string.IsNullOrWhiteSpace(modernName)
                 ? ReadScalarText(ReadArrayItem(legacyUser, 1))
                 : modernName,
             Content = content,
+            ReplyUid = Math.Max(0, ReadInteger(danmuExtra?["reply_mid"])),
+            ReplyUserName = ReadScalarText(danmuExtra?["reply_uname"]),
+            ReplyUserNameColor = ReadScalarText(danmuExtra?["reply_uname_color"]),
+            ReplyIsMystery = ReadBoolean(danmuExtra?["reply_is_mystery"]),
             IsRoomAdmin = ReadBoolean(ReadArrayItem(legacyUser, 2)),
             RoomGuardLevel = roomGuardLevel is >= 1 and <= 3 ? roomGuardLevel : 0,
             MedalName = modernMedal is not null
@@ -466,14 +471,13 @@ public class BilibiliLiveWebSocket : BaseApi, ILiveDanmuSocket
             MedalGuardLevel = medalGuardLevel is >= 1 and <= 3 ? medalGuardLevel : 0,
             UserLevel = ReadNonNegativeInt(ReadArrayItem(ReadArrayItem(info, 4), 0)),
             IsEmoticon = IsProtocolEmoticon(metadata, content),
-            Emoticons = ParseDanmuEmoticons(metadata, content)
+            Emoticons = ParseDanmuEmoticons(metadata, content, danmuExtra)
         };
     }
 
-    private static List<BilibiliDanmuEmoticon> ParseDanmuEmoticons(JToken? metadata, string content)
+    private static List<BilibiliDanmuEmoticon> ParseDanmuEmoticons(JToken? metadata, string content, JObject? danmuExtra)
     {
         var result = new List<BilibiliDanmuEmoticon>();
-        var danmuExtra = ReadDanmuExtra(metadata);
         var emots = danmuExtra?["emots"] as JObject ??
                     ReadObjectProperty(ReadArrayItem(metadata, 15), "emots") as JObject;
 

@@ -86,7 +86,8 @@ public sealed class PinyinLoadingPlaceholderTests
             await view.Model.SelectRoomAsync(room).WaitAsync(TimeSpan.FromSeconds(5));
             await pinyin.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Pump(window);
-            var waiting = view.GetVisualDescendants().OfType<PinyinLoadingPlaceholder>().ToArray();
+            var waiting = view.GetVisualDescendants().OfType<PinyinLoadingPlaceholder>()
+                .Where(control => !control.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any()).ToArray();
             Assert.Equal(2, waiting.Length);
             Assert.All(waiting, control =>
             {
@@ -98,10 +99,12 @@ public sealed class PinyinLoadingPlaceholderTests
                 Assert.InRange(control.Bounds.Width, 1, 80);
             });
             var original = Assert.Single(view.GetVisualDescendants().OfType<EmoticonTextBlock>(),
-                control => control.Classes.Contains("regularFeedContent") && control.Classes.Contains("originalText"));
+                control => control.Classes.Contains("regularFeedContent") && control.Classes.Contains("originalText") &&
+                    !control.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any());
             Assert.Equal("你好，拼音正在后台准备", original.ContentText);
             Assert.Equal(compact, view.GetVisualDescendants().OfType<HoverMarqueeTextBlock>()
-                .Single(control => control.Classes.Contains("originalText")).IsEffectivelyVisible);
+                .Single(control => control.Classes.Contains("originalText") &&
+                    !control.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any()).IsEffectivelyVisible);
             var previewDirectory = Path.Combine(Path.GetTempPath(), "danmaku-panel-previews");
             Directory.CreateDirectory(previewDirectory);
             using (var preview = window.CaptureRenderedFrame())

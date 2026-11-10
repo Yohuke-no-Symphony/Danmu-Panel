@@ -67,7 +67,8 @@ public sealed class TranslationColumnResizePerformanceTests(ITestOutputHelper ou
             var item = Assert.Single(view.Model.PinnedItems);
             var row = Assert.Single(view.GetVisualDescendants().OfType<MessageFeedRow>(), candidate =>
                 candidate.DataContext is MessageItemViewModel current && current.Record.Id == pinned.Id);
-            var splitter = Assert.Single(row.GetVisualDescendants().OfType<Thumb>(), control => control.Classes.Contains("messageColumnSplitter"));
+            var splitter = Assert.Single(row.GetVisualDescendants().OfType<Thumb>(), control =>
+                control.Classes.Contains("messageColumnSplitter") && control.IsEffectivelyVisible);
             var point = splitter.TranslatePoint(new(splitter.Bounds.Width / 2, splitter.Bounds.Height / 2), window)!.Value;
             window.MouseMove(point);
             window.MouseDown(point, MouseButton.Left);
@@ -97,7 +98,7 @@ public sealed class TranslationColumnResizePerformanceTests(ITestOutputHelper ou
             Pump(window);
             await view.PendingColumnWidthSave;
             Assert.Same(item, Assert.Single(view.Model.PinnedItems));
-            var body = Assert.Single(row.GetVisualDescendants().OfType<Panel>(), panel => panel.Classes.Contains("messageBody"));
+            var body = Assert.Single(row.GetVisualDescendants().OfType<Panel>(), panel => panel.Classes.Contains("messageBody") && panel.IsEffectivelyVisible);
             Assert.True(body.Bounds.Width > 0);
             Assert.Equal(translated, body.Children[1].IsVisible);
             Array.Sort(samples);

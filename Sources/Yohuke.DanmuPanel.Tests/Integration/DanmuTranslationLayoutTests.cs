@@ -130,7 +130,7 @@ public sealed class DanmuTranslationLayoutTests
             var item = Assert.Single(view.Model.Items);
             var row = FindRow(view, message.Id);
             var body = FindBody(row);
-            var placeholder = Assert.Single(row.GetVisualDescendants().OfType<ShimmerTextBlock>());
+            var placeholder = Assert.Single(body.GetVisualDescendants().OfType<ShimmerTextBlock>());
             Assert.True(placeholder.IsEffectivelyVisible);
             AssertInline(body);
 
@@ -142,7 +142,7 @@ public sealed class DanmuTranslationLayoutTests
 
             Assert.Same(item, Assert.Single(view.Model.Items));
             Assert.Same(row, FindRow(view, message.Id));
-            Assert.Same(placeholder, Assert.Single(row.GetVisualDescendants().OfType<ShimmerTextBlock>()));
+            Assert.Same(placeholder, Assert.Single(body.GetVisualDescendants().OfType<ShimmerTextBlock>()));
             Assert.False(placeholder.IsEffectivelyVisible);
             Assert.False(placeholder.IsShimmering);
             if (mode == TranslationDisplayMode.Bilingual)
@@ -429,7 +429,7 @@ public sealed class DanmuTranslationLayoutTests
 
     private static Panel FindBody(MessageFeedRow row)
     {
-        return Assert.Single(row.GetVisualDescendants().OfType<Panel>(), panel => panel.Classes.Contains("messageBody"));
+        return Assert.Single(row.GetVisualDescendants().OfType<Panel>(), panel => panel.Classes.Contains("messageBody") && panel.IsEffectivelyVisible);
     }
 
     private static void AssertInline(Panel body)

@@ -50,7 +50,8 @@ public sealed class TranslationPlaceholderTests
             Pump(window);
             var item = Assert.Single(view.Model.Items);
             var row = FindRow(view, message.Id);
-            var placeholder = Assert.Single(row.GetVisualDescendants().OfType<ShimmerTextBlock>());
+            var placeholder = Assert.Single(row.GetVisualDescendants().OfType<ShimmerTextBlock>(),
+                value => !value.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any());
             Assert.False(placeholder.IsEffectivelyVisible);
 
             settings.Translation.Enabled = true;
@@ -140,7 +141,7 @@ public sealed class TranslationPlaceholderTests
             Pump(window);
             var item = Assert.Single(view.Model.Items);
             var row = FindRow(view, message.Id);
-            var body = row.GetVisualDescendants().OfType<Panel>().Single(panel => panel.Classes.Contains("messageBody"));
+            var body = row.GetVisualDescendants().OfType<Panel>().Single(panel => panel.Classes.Contains("messageBody") && panel.IsEffectivelyVisible);
             var pendingHeight = body.Bounds.Height;
             Assert.True(item.IsTranslating);
 
@@ -153,9 +154,9 @@ public sealed class TranslationPlaceholderTests
             Assert.Same(row, FindRow(view, message.Id));
             Assert.False(item.IsTranslating);
             Assert.True(item.ShowOriginal);
-            var translationLine = row.GetVisualDescendants().OfType<Grid>().Single(grid => grid.Classes.Contains("translationLine"));
+            var translationLine = body.GetVisualDescendants().OfType<Grid>().Single(grid => grid.Classes.Contains("translationLine"));
             Assert.False(translationLine.IsVisible);
-            Assert.False(Assert.Single(row.GetVisualDescendants().OfType<ShimmerTextBlock>()).IsShimmering);
+            Assert.False(Assert.Single(body.GetVisualDescendants().OfType<ShimmerTextBlock>()).IsShimmering);
             Assert.Single(row.GetVisualDescendants().OfType<Control>(), control =>
                 control.Classes.Contains("originalText") && control.IsEffectivelyVisible);
             Assert.DoesNotContain(row.GetVisualDescendants().OfType<Control>(), control =>

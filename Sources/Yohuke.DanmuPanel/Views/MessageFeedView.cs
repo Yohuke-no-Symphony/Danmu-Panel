@@ -13,11 +13,12 @@ using Yohuke.DanmuPanel.Views.Components;
 namespace Yohuke.DanmuPanel.Views;
 
 /// <summary>使用虚拟化容器展示可点击的消息行。</summary>
-public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWorkbenchHeaderBadge, IWorkbenchHeaderTabs
+public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWorkbenchHeaderBadge, IWorkbenchHeaderTabs
 {
     private readonly PanelRuntime runtime;
     private readonly Action<Exception> reportError;
     private readonly MessageKind messageKind;
+    private readonly Func<MessageRecord, Task>? navigateToMessage;
     private readonly ListBox list;
     private readonly ListBox pinnedList;
     private readonly MessageColumnResizeController columnResize;
@@ -31,6 +32,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     internal MessageCopyPopup? CopyPopup { get; private set; }
     internal EmoticonBitmapCache EmoticonBitmaps { get; } = new();
     public FeedViewModel Model { get; }
+    internal MessageKind Kind => messageKind;
     public MessageFeedHeaderViewModel Header { get; }
 
     /// <summary>为每个停靠或浮动宿主创建独立的面板操作按钮。</summary>
@@ -43,11 +45,13 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     public IDataTemplate? HeaderTabsTemplate { get; }
 
     /// <summary>创建指定消息面板。</summary>
-    public MessageFeedView(PanelRuntime runtime, MessageKind kind, Action<Exception> reportError)
+    public MessageFeedView(PanelRuntime runtime, MessageKind kind, Action<Exception> reportError,
+        Func<MessageRecord, Task>? navigateToMessage = null)
     {
         this.runtime = runtime;
         this.reportError = reportError;
         messageKind = kind;
+        this.navigateToMessage = navigateToMessage;
         Model = new(runtime, kind);
         Header = new(Model, () => ClearAsync(kind), ScrollToLatestAsync, ScrollToTopAsync, reportError);
         columnResize = new(this, (ratio, completed) =>
@@ -101,6 +105,10 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
         {
             if (args.PropertyName is nameof(FeedViewModel.SelectedRoom) or nameof(FeedViewModel.ReadFilter) or nameof(FeedViewModel.SortOrder))
             {
+                if (args.PropertyName == nameof(FeedViewModel.SelectedRoom) || pingedItem is not null)
+                {
+                    CancelPing();
+                }
                 isScrollToTopPending = false;
                 CancelColumnResizes();
                 CopyPopup?.Hide();
@@ -129,6 +137,13 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
                 scroll?.NotifyLayoutChanged();
             }
         };
+        Model.Items.CollectionChanged += (_, _) =>
+        {
+            if (pingedItem is not null && !Model.Items.Contains(pingedItem))
+            {
+                CancelPing();
+            }
+        };
         Content = surface;
         UpdateColumnRatio();
     }
@@ -146,6 +161,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     /// <inheritdoc />
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
+        CancelPing();
         CancelColumnResizes();
         ScheduleColumnWidthSave();
         runtime.Changed -= OnRuntimeChanged;
@@ -464,6 +480,10 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
     {
         if (item.IsEventSummary)
         {
+            if (navigateToMessage is not null)
+            {
+                await navigateToMessage(item.Record);
+            }
             return;
         }
         var record = item.Record;

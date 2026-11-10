@@ -887,6 +887,28 @@
         <Setter Property="Background" Value="{DynamicResource AppSidebarHoverBrush}" />
     </Style>
 
+    <Style Selector="Button.messageCardButton:pinged">
+        <Style.Animations>
+            <Animation Duration="0:0:0.9" IterationCount="1" FillMode="None">
+                <KeyFrame Cue="0%">
+                    <Setter Property="TranslateTransform.X" Value="0" />
+                </KeyFrame>
+                <KeyFrame Cue="25%" KeySpline="0.4,0,0.2,1">
+                    <Setter Property="TranslateTransform.X" Value="6" />
+                </KeyFrame>
+                <KeyFrame Cue="50%" KeySpline="0.4,0,0.2,1">
+                    <Setter Property="TranslateTransform.X" Value="0" />
+                </KeyFrame>
+                <KeyFrame Cue="75%" KeySpline="0.4,0,0.2,1">
+                    <Setter Property="TranslateTransform.X" Value="3" />
+                </KeyFrame>
+                <KeyFrame Cue="100%" KeySpline="0.4,0,0.2,1">
+                    <Setter Property="TranslateTransform.X" Value="0" />
+                </KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+
     <Style Selector="Border.messageCard">
         <Setter Property="Padding" Value="8,6" />
         <Setter Property="CornerRadius" Value="7" />
@@ -956,7 +978,7 @@
         <Setter Property="Foreground" Value="{DynamicResource MessageTimeBrush}" />
     </Style>
 
-    <Style Selector="Grid.danmuMedalSlot">
+    <Style Selector="Grid.danmuMedalSlot, Grid.eventSummaryMedalSlot">
         <Setter Property="Width" Value="{DynamicResource MessageMedalSlotWidth}" />
         <Setter Property="Margin" Value="0,0,6,0" />
         <Setter Property="HorizontalAlignment" Value="Left" />

@@ -17,6 +17,19 @@ public sealed record MessageRecord
     public bool IsRoomAdmin { get; init; }
 
     public string Content { get; init; } = "";
+
+    /// <summary>被回复用户的 UID，旧记录或协议缺失时为 0。</summary>
+    public long ReplyUid { get; init; }
+
+    /// <summary>被回复用户的显示名称。</summary>
+    public string ReplyUserName { get; init; } = "";
+
+    /// <summary>协议提供的被回复用户名颜色。</summary>
+    public string ReplyUserNameColor { get; init; } = "";
+
+    /// <summary>被回复用户是否为神秘人。</summary>
+    public bool ReplyIsMystery { get; init; }
+
     public string MessageId { get; init; } = "";
     public DateTimeOffset Time { get; init; } = DateTimeOffset.UtcNow;
     public bool HasSourceTimestamp { get; init; } = true;

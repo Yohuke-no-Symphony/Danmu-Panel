@@ -65,11 +65,13 @@ public sealed class MessageColumnDragContinuityTests(ITestOutputHelper output)
             var source = row.DataContext;
             var detached = 0;
             row.DetachedFromVisualTree += (_, _) => detached++;
-            var body = Assert.Single(row.GetVisualDescendants().OfType<Panel>(), panel => panel.Classes.Contains("messageBody"));
+            var body = Assert.Single(row.GetVisualDescendants().OfType<Panel>(), panel => panel.Classes.Contains("messageBody") && panel.IsEffectivelyVisible);
             Assert.True(body.Children[1].Bounds.X > 0);
-            var layout = Assert.Single(row.GetVisualDescendants().OfType<MessageFeedColumnLayout>());
+            var layout = Assert.Single(row.GetVisualDescendants().OfType<MessageFeedColumnLayout>(),
+                value => value.IsEffectivelyVisible);
             var adjustableWidth = layout.ColumnDefinitions[1].ActualWidth + layout.ColumnDefinitions[3].ActualWidth;
-            var splitter = Assert.Single(row.GetVisualDescendants().OfType<MessageColumnSplitter>());
+            var splitter = Assert.Single(row.GetVisualDescendants().OfType<MessageColumnSplitter>(),
+                value => value.IsEffectivelyVisible);
             var start = splitter.TranslatePoint(new(splitter.Bounds.Width / 2, splitter.Bounds.Height / 2), window)!.Value;
             pointerPosition = start;
             window.MouseMove(start);
@@ -95,7 +97,7 @@ public sealed class MessageColumnDragContinuityTests(ITestOutputHelper output)
                 Assert.Same(pendingSave, view.PendingColumnWidthSave);
                 previous = ratio;
             }
-            Assert.Contains(view.GetVisualDescendants().OfType<Panel>(), panel => panel.Classes.Contains("messageBody") &&
+            Assert.Contains(view.GetVisualDescendants().OfType<Panel>(), panel => panel.Classes.Contains("messageBody") && panel.IsEffectivelyVisible &&
                 panel.Children[1].IsVisible && panel.Children[1].Bounds.Y > panel.Children[0].Bounds.Bottom);
             pointerPosition -= new Vector(16, 0);
             window.MouseMove(pointerPosition, RawInputModifiers.LeftMouseButton);

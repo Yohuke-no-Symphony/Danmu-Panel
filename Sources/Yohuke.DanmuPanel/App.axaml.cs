@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Yohuke.DanmuPanel.I18n;
+using Yohuke.DanmuPanel.Layouts;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Services;
@@ -68,7 +69,7 @@ public partial class App : Application
                 var panels = new Dictionary<string, Control> { ["workspace"] = workspace };
                 foreach (var (id, kind) in new[] { ("danmu", MessageKind.Danmu), ("superChat", MessageKind.SuperChat), ("gift", MessageKind.Gift), ("guard", MessageKind.Guard) })
                 {
-                    var view = new MessageFeedView(runtime, kind, ReportFailure);
+                    var view = new MessageFeedView(runtime, kind, ReportFailure, NavigateToMessageAsync);
                     feeds.Add(view);
                     panels.Add(id, view);
                 }
@@ -151,6 +152,27 @@ public partial class App : Application
     {
         testMessages?.SelectRoom(room);
         return Task.WhenAll(feeds.Select(feed => feed.Model.SelectRoomAsync(room)));
+    }
+
+    private async Task NavigateToMessageAsync(MessageRecord record)
+    {
+        if (shell is null || workspace?.SelectedRoom?.Id != record.RoomTabId)
+        {
+            return;
+        }
+        var panelId = record.Kind switch
+        {
+            MessageKind.SuperChat => WorkbenchPanelIds.SUPER_CHAT,
+            MessageKind.Gift => WorkbenchPanelIds.GIFT,
+            MessageKind.Guard => WorkbenchPanelIds.GUARD,
+            _ => null
+        };
+        if (panelId is null)
+        {
+            return;
+        }
+        shell.ShowPanel(panelId);
+        await feeds.Single(feed => feed.Kind == record.Kind).PingAsync(record);
     }
 
     private async void RefreshLanguage(object? sender, EventArgs args)

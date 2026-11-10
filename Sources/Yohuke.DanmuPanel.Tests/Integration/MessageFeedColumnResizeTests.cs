@@ -110,7 +110,8 @@ public sealed class MessageFeedColumnResizeTests
             Pump(window);
             Assert.Equal(before, GetRatio(runtime.Configuration.Settings, MessageKind.Danmu, true));
 
-            var splitter = Assert.Single(row.GetVisualDescendants().OfType<MessageColumnSplitter>());
+            var splitter = Assert.Single(row.GetVisualDescendants().OfType<MessageColumnSplitter>(),
+                value => value.IsEffectivelyVisible);
             Assert.True(splitter.Focus());
             window.KeyPress(Key.Right, RawInputModifiers.None, PhysicalKey.ArrowRight, null);
             window.KeyRelease(Key.Right, RawInputModifiers.None, PhysicalKey.ArrowRight, null);
@@ -575,7 +576,8 @@ public sealed class MessageFeedColumnResizeTests
 
     private static MessageFeedColumnLayout Layout(Visual owner)
     {
-        return Assert.Single(owner.GetVisualDescendants().OfType<MessageFeedColumnLayout>());
+        return Assert.Single(owner.GetVisualDescendants().OfType<MessageFeedColumnLayout>(),
+            value => value.IsEffectivelyVisible);
     }
 
     private static Control Column(MessageFeedColumnLayout layout, int column)
@@ -615,7 +617,7 @@ public sealed class MessageFeedColumnResizeTests
     private static Point SplitterPoint(MessageFeedRow row, Window window)
     {
         var splitter = Assert.Single(row.GetVisualDescendants().OfType<Thumb>(),
-            candidate => candidate.Classes.Contains("messageColumnSplitter"));
+            candidate => candidate.Classes.Contains("messageColumnSplitter") && candidate.IsEffectivelyVisible);
         Assert.True(splitter.Bounds.Width > 0 && splitter.Bounds.Height > 0);
         return splitter.TranslatePoint(new Point(splitter.Bounds.Width / 2, splitter.Bounds.Height / 2), window)!.Value;
     }

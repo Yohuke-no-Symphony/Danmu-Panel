@@ -108,7 +108,7 @@ public sealed class MessageFeedMedalTests
     private static Grid Layout(MessageFeedRow row)
     {
         return Assert.Single(row.GetVisualDescendants().OfType<Grid>(),
-            grid => grid.Classes.Contains("danmuFeedLayout"));
+            grid => grid.Classes.Contains("danmuFeedLayout") && grid.IsEffectivelyVisible);
     }
 
     private static void Pump(Window window)

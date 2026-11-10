@@ -47,7 +47,7 @@ public sealed class MessageFeedTextLayoutStabilityTests(ITestOutputHelper output
             window.Show();
             Pump(window);
             var row = Assert.IsType<MessageFeedListBoxItem>(list.ContainerFromItem(item)).Row;
-            var body = Assert.Single(row.GetVisualDescendants().OfType<MessageBodyPanel>());
+            var body = Assert.Single(row.GetVisualDescendants().OfType<MessageBodyPanel>(), value => value.IsEffectivelyVisible);
             var initialSize = body.Children[0].DesiredSize;
             foreach (var length in new[] { 10, 12, 11, 10 })
             {
@@ -130,7 +130,7 @@ public sealed class MessageFeedTextLayoutStabilityTests(ITestOutputHelper output
                     {
                         continue;
                     }
-                    var body = Assert.Single(row.GetVisualDescendants().OfType<MessageBodyPanel>());
+                    var body = Assert.Single(row.GetVisualDescendants().OfType<MessageBodyPanel>(), value => value.IsEffectivelyVisible);
                     var glyph = layout == PinyinLayoutMode.SeparateLine
                         ? Assert.Single(original.GetVisualDescendants().OfType<PinyinSeparateLinePresenter>()).OriginalText
                         : original.GetVisualDescendants().OfType<PinyinRubySyllable>().First().OriginalText;
@@ -188,7 +188,8 @@ public sealed class MessageFeedTextLayoutStabilityTests(ITestOutputHelper output
             window.Show();
             Pump(window);
             var row = Assert.IsType<MessageFeedListBoxItem>(list.ContainerFromItem(item)).Row;
-            var placeholders = row.GetVisualDescendants().OfType<PinyinLoadingPlaceholder>().ToArray();
+            var placeholders = row.GetVisualDescendants().OfType<PinyinLoadingPlaceholder>()
+                .Where(value => !value.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any()).ToArray();
             Assert.Equal(2, placeholders.Length);
             Assert.All(placeholders, placeholder => Assert.True(placeholder.IsEffectivelyVisible));
             var nameRegion = Assert.IsType<StackPanel>(placeholders.Single(control => control.Classes.Contains("namePinyinPending")).Parent);
@@ -252,9 +253,9 @@ public sealed class MessageFeedTextLayoutStabilityTests(ITestOutputHelper output
             window.Show();
             Pump(window);
             var row = Assert.IsType<MessageFeedListBoxItem>(list.ContainerFromItem(item)).Row;
-            var body = Assert.Single(row.GetVisualDescendants().OfType<MessageBodyPanel>());
-            var translationRegion = Assert.Single(row.GetVisualDescendants().OfType<Grid>(), control => control.Classes.Contains("translationLine"));
-            var placeholder = Assert.Single(row.GetVisualDescendants().OfType<ShimmerTextBlock>());
+            var body = Assert.Single(row.GetVisualDescendants().OfType<MessageBodyPanel>(), value => value.IsEffectivelyVisible);
+            var translationRegion = Assert.Single(body.GetVisualDescendants().OfType<Grid>(), control => control.Classes.Contains("translationLine"));
+            var placeholder = Assert.Single(body.GetVisualDescendants().OfType<ShimmerTextBlock>());
             Assert.True(placeholder.IsEffectivelyVisible);
             var pendingBodyHeight = body.Bounds.Height;
             var pendingTranslationHeight = translationRegion.Bounds.Height;

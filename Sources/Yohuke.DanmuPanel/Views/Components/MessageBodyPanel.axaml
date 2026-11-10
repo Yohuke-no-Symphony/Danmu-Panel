@@ -15,10 +15,12 @@
         <Grid>
             <components:EmoticonTextBlock x:Name="OriginalText" Classes="danmuFeedContent regularFeedContent originalText"
                 TextWrapping="Wrap" ContentText="{Binding Detail}" Emoticons="{Binding Emoticons}"
+                Reply="{Binding Reply}" ShowReplyAvatar="{Binding ShowUserAvatars}"
                 Annotations="{Binding ContentPinyin}" PinyinLayout="{Binding PinyinLayout}"
                 PinyinForeground="{DynamicResource MessagePinyinBrush}" PinyinFontSize="{DynamicResource MessageFontSizePinyin}" />
             <components:HoverMarqueeTextBlock x:Name="OriginalMarquee" Classes="compactFeedContent originalText"
                 Text="{Binding Detail}" AutoScroll="{Binding AutoScrollLongMessages}" Emoticons="{Binding Emoticons}"
+                Reply="{Binding Reply}" ShowReplyAvatar="{Binding ShowUserAvatars}"
                 Annotations="{Binding ContentPinyin}" PinyinLayout="{Binding PinyinLayout}"
                 PinyinForeground="{DynamicResource MessagePinyinBrush}" PinyinFontSize="{DynamicResource MessageFontSizePinyin}" />
         </Grid>
@@ -26,10 +28,12 @@
     <Grid x:Name="TranslationRegion" Classes="translationLine" IsVisible="{Binding ShowTranslation}">
         <Grid IsVisible="{Binding HasTranslation}">
             <components:MessageTranslationTextBlock x:Name="TranslatedText"
-                Classes="danmuFeedContent regularFeedContent translatedText" Text="{Binding Translation}"
+                Classes="danmuFeedContent regularFeedContent translatedText" ContentText="{Binding Translation}"
+                Reply="{Binding TranslationReply}" ShowReplyAvatar="{Binding ShowUserAvatars}"
                 TextTrimming="CharacterEllipsis" TextWrapping="Wrap" />
             <components:HoverMarqueeTextBlock x:Name="TranslationMarquee" Classes="compactFeedContent translatedText"
                 Text="{Binding Translation}" AutoScroll="{Binding AutoScrollLongMessages}"
+                Reply="{Binding TranslationReply}" ShowReplyAvatar="{Binding ShowUserAvatars}"
                 TextBlock.LineHeight="{Binding #TranslatedText.LineHeight}" />
         </Grid>
         <components:ShimmerTextBlock x:Name="PendingTranslation" Classes="translationPending"

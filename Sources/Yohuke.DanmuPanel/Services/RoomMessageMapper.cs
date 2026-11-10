@@ -15,6 +15,8 @@ public static class RoomMessageMapper
             Kind = MessageKind.Danmu, MessageId = value.MessageId, Time = Time(value.Timestamp),
             HasSourceTimestamp = value.Timestamp > 0,
             UserUid = value.Uid, UserName = value.UserName, Content = value.Content,
+            ReplyUid = value.ReplyUid, ReplyUserName = value.ReplyUserName,
+            ReplyUserNameColor = value.ReplyUserNameColor, ReplyIsMystery = value.ReplyIsMystery,
             RoomGuardLevel = value.RoomGuardLevel, IsRoomAdmin = value.IsRoomAdmin,
             IsHistory = history, MedalName = value.MedalName, MedalLevel = value.MedalLevel,
             MedalGuardLevel = value.MedalGuardLevel,

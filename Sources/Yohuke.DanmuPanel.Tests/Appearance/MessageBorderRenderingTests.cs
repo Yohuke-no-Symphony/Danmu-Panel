@@ -125,7 +125,8 @@ public sealed class MessageBorderRenderingTests
 
     private static Border FindFrame(Control row)
     {
-        return row.GetVisualDescendants().OfType<Border>().Single(border => border.Child is Grid grid &&
+        return row.GetVisualDescendants().OfType<Border>().Single(border => border is not MessageEventSummarySurface &&
+            border.Child is Grid grid &&
             (grid.Classes.Contains("scFeedLayout") || grid.Classes.Contains("danmuFeedLayout")));
     }
 

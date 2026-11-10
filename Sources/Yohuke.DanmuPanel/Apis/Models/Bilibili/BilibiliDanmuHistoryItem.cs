@@ -45,4 +45,8 @@ public class BilibiliDanmuHistoryItem
     /// <summary>整条表情信息。</summary>
     [JsonProperty("emoticon")]
     public JObject? Emoticon { get; set; }
+
+    /// <summary>可选的回复对象信息。</summary>
+    [JsonProperty("reply")]
+    public JToken? Reply { get; set; }
 }

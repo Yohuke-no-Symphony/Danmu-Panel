@@ -278,9 +278,9 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
                 var isEventSummary = kind == MessageKind.Danmu && record.Kind != MessageKind.Danmu;
                 var changed = true;
                 var translationBlocked = displaySettings.IsTranslationBlocked(record);
-                var translationPending = !isEventSummary && !translationBlocked && record.TranslationFingerprint == displaySettings.TranslationFingerprint &&
+                var translationPending = !translationBlocked && record.TranslationFingerprint == displaySettings.TranslationFingerprint &&
                     snapshot.PendingTranslationIds.Contains(record.Id);
-                if (!isEventSummary && !translationBlocked && displaySettings.TranslationEnabled && record.Kind is MessageKind.Danmu or MessageKind.SuperChat)
+                if (!translationBlocked && displaySettings.TranslationEnabled && record.Kind is MessageKind.Danmu or MessageKind.SuperChat)
                 {
                     var fingerprint = displaySettings.TranslationFingerprint;
                     if (record.TranslationFingerprint != fingerprint && translationRequested.Add(record.Id + fingerprint))
@@ -294,10 +294,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
                         isEventSummary);
                     expectedItems[index] = item;
                     Items.Insert(index, item);
-                    if (!isEventSummary)
-                    {
-                        _ = LoadEmoticonsAsync(item, cancellationToken);
-                    }
+                    _ = LoadEmoticonsAsync(item, cancellationToken);
                 }
                 else
                 {

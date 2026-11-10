@@ -266,9 +266,11 @@ public sealed class EmoticonTextVisibilityTests
             window.Show();
             await EmoticonImageTestHelper.LoadAsync(window);
             var regular = Assert.Single(row.GetVisualDescendants().OfType<EmoticonTextBlock>(),
-                block => block.Classes.Contains("regularFeedContent"));
+                block => block.Classes.Contains("regularFeedContent") && block.Classes.Contains("originalText") &&
+                    !block.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any());
             var marquee = Assert.Single(row.GetVisualDescendants().OfType<HoverMarqueeTextBlock>(),
-                block => block.Classes.Contains("originalText"));
+                block => block.Classes.Contains("originalText") &&
+                    !block.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any());
             var marqueeText = Assert.IsType<EmoticonTextBlock>(Assert.IsType<ScrollViewer>(marquee.Content).Content);
             Assert.Equal(!compact, regular.HasAnnotations);
             Assert.Equal(compact, marqueeText.HasAnnotations);

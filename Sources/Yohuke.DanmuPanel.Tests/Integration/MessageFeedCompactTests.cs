@@ -342,7 +342,8 @@ public sealed class MessageFeedCompactTests
 
     private static TextBlock FindTime(Button row)
     {
-        return row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("danmuFeedMeta"));
+        return row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("danmuFeedMeta") &&
+            !text.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any());
     }
 
     private static Control[] VisibleBodyContents(Button row)
@@ -365,7 +366,7 @@ public sealed class MessageFeedCompactTests
 
     private static void AssertBodyAlignment(Button row)
     {
-        var body = row.GetVisualDescendants().OfType<Panel>().Single(panel => panel.Classes.Contains("messageBody"));
+        var body = row.GetVisualDescendants().OfType<Panel>().Single(panel => panel.Classes.Contains("messageBody") && panel.IsEffectivelyVisible);
         Assert.Equal(VerticalAlignment.Center, body.VerticalAlignment);
         foreach (var content in VisibleBodyContents(row))
         {

@@ -54,13 +54,14 @@ public sealed class SpecialAttentionRenderingTests
             var originalWeight = original.FontWeight;
             var translatedWeight = translated.FontWeight;
             var name = Assert.Single(row.GetVisualDescendants().OfType<EmoticonTextBlock>(),
-                text => text.Classes.Contains("danmuFeedUser"));
+                text => text.Classes.Contains("danmuFeedUser") && text.IsEffectivelyVisible);
             var nameBrush = name.Foreground;
             var nameWeight = name.FontWeight;
             var namePinyinBrush = name.PinyinForeground;
             var nameAnnotations = model.NameAnnotations;
             var time = Assert.Single(row.GetVisualDescendants().OfType<TextBlock>(),
-                text => text.Classes.Contains("danmuFeedMeta"));
+                text => text.Classes.Contains("danmuFeedMeta") &&
+                    !text.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any());
             var timeBrush = time.Foreground;
             var medal = row.GetVisualDescendants().OfType<TextBlock>()
                 .First(text => text.Classes.Contains("danmuMedalText"));
@@ -164,7 +165,7 @@ public sealed class SpecialAttentionRenderingTests
             var normalBrush = body.Foreground;
             var normalWeight = body.FontWeight;
             var name = Assert.Single(row.GetVisualDescendants().OfType<EmoticonTextBlock>(),
-                text => text.Classes.Contains("danmuFeedUser"));
+                text => text.Classes.Contains("danmuFeedUser") && text.IsEffectivelyVisible);
             var nameBrush = name.Foreground;
             var nameWeight = name.FontWeight;
 
@@ -333,11 +334,11 @@ public sealed class SpecialAttentionRenderingTests
         if (compact && !wrap)
         {
             var marquee = Assert.Single(row.GetVisualDescendants().OfType<HoverMarqueeTextBlock>(),
-                control => control.Classes.Contains("originalText"));
+                control => control.Classes.Contains("originalText") && control.IsEffectivelyVisible);
             return Assert.Single(marquee.GetVisualDescendants().OfType<EmoticonTextBlock>());
         }
         return Assert.Single(row.GetVisualDescendants().OfType<EmoticonTextBlock>(),
-            control => control.Classes.Contains("originalText"));
+            control => control.Classes.Contains("originalText") && control.IsEffectivelyVisible);
     }
 
     private static TextBlock FindTranslated(MessageFeedRow row, bool compact, bool wrap)
@@ -345,10 +346,10 @@ public sealed class SpecialAttentionRenderingTests
         if (compact && !wrap)
         {
             var marquee = Assert.Single(row.GetVisualDescendants().OfType<HoverMarqueeTextBlock>(),
-                control => control.Classes.Contains("translatedText"));
+                control => control.Classes.Contains("translatedText") && control.IsEffectivelyVisible);
             return Assert.Single(marquee.GetVisualDescendants().OfType<EmoticonTextBlock>());
         }
         return Assert.Single(row.GetVisualDescendants().OfType<TextBlock>(),
-            control => control.Classes.Contains("translatedText"));
+            control => control.Classes.Contains("translatedText") && control.IsEffectivelyVisible);
     }
 }

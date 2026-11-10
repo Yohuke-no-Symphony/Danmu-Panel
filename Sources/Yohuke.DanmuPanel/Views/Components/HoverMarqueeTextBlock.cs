@@ -10,6 +10,8 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Models.Workspace;
+using Yohuke.DanmuPanel.Models.Messages;
+using Yohuke.DanmuPanel.Services;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
@@ -39,6 +41,11 @@ public sealed class HoverMarqueeTextBlock : UserControl
     internal bool IsSingleTextLine => textBlock.IsSingleTextLine;
     internal double InlineTextWidth => textBlock.InlineTextWidth;
     internal event Action<Control>? TextMetricsChanged;
+    internal IUserAvatarService? AvatarService
+    {
+        get => textBlock.AvatarService;
+        set => textBlock.AvatarService = value;
+    }
     internal EmoticonBitmapCache? BitmapCache
     {
         get => textBlock.BitmapCache;
@@ -56,6 +63,14 @@ public sealed class HoverMarqueeTextBlock : UserControl
     /// </summary>
     public static readonly StyledProperty<IReadOnlyList<DanmuEmoticon>?> EmoticonsProperty =
         AvaloniaProperty.Register<HoverMarqueeTextBlock, IReadOnlyList<DanmuEmoticon>?>(nameof(Emoticons));
+
+    /// <summary>在正文前显示的回复对象。</summary>
+    public static readonly StyledProperty<MessageReply?> ReplyProperty =
+        EmoticonTextBlock.ReplyProperty.AddOwner<HoverMarqueeTextBlock>();
+
+    /// <summary>是否显示回复徽章中的头像。</summary>
+    public static readonly StyledProperty<bool> ShowReplyAvatarProperty =
+        EmoticonTextBlock.ShowReplyAvatarProperty.AddOwner<HoverMarqueeTextBlock>();
 
     /// <summary>是否在可见且内容超宽时自动循环滚动。</summary>
     public static readonly StyledProperty<bool> AutoScrollProperty =
@@ -119,6 +134,8 @@ public sealed class HoverMarqueeTextBlock : UserControl
             Source = this
         });
         textBlock.Bind(EmoticonTextBlock.AnnotationsProperty, new Binding(nameof(Annotations)) { Source = this });
+        textBlock.Bind(EmoticonTextBlock.ReplyProperty, new Binding(nameof(Reply)) { Source = this });
+        textBlock.Bind(EmoticonTextBlock.ShowReplyAvatarProperty, new Binding(nameof(ShowReplyAvatar)) { Source = this });
         textBlock.Bind(EmoticonTextBlock.PinyinLayoutProperty, new Binding(nameof(PinyinLayout)) { Source = this });
         textBlock.Bind(EmoticonTextBlock.PinyinFontSizeProperty, new Binding(nameof(PinyinFontSize)) { Source = this });
         textBlock.Bind(EmoticonTextBlock.PinyinForegroundProperty, new Binding(nameof(PinyinForeground)) { Source = this });
@@ -216,6 +233,20 @@ public sealed class HoverMarqueeTextBlock : UserControl
         set => SetValue(EmoticonsProperty, value);
     }
 
+    /// <summary>在正文前显示的回复对象。</summary>
+    public MessageReply? Reply
+    {
+        get => GetValue(ReplyProperty);
+        set => SetValue(ReplyProperty, value);
+    }
+
+    /// <summary>是否显示回复徽章中的头像。</summary>
+    public bool ShowReplyAvatar
+    {
+        get => GetValue(ShowReplyAvatarProperty);
+        set => SetValue(ShowReplyAvatarProperty, value);
+    }
+
     /// <summary>自动滚动可见的超长内容；关闭时仍支持悬停滚动。</summary>
     public bool AutoScroll
     {
@@ -279,6 +310,7 @@ public sealed class HoverMarqueeTextBlock : UserControl
         }
 
         if (change.Property == TextProperty || change.Property == EmoticonsProperty ||
+            change.Property == ReplyProperty || change.Property == ShowReplyAvatarProperty ||
             change.Property == AutoScrollProperty || change.Property == DataContextProperty ||
             change.Property == AnnotationsProperty || change.Property == PinyinLayoutProperty)
         {

@@ -35,6 +35,9 @@ public sealed class BilibiliDanmuHistoryService(HttpClient? httpClient = null) :
     internal static BilibiliDanmuMessage ParseItem(string roomId, BilibiliDanmuHistoryItem item)
     {
         var medal = item.User?["medal"] as JObject;
+        var reply = item.Reply as JObject;
+        long.TryParse((reply?["reply_mid"] as JValue)?.ToString(CultureInfo.InvariantCulture),
+            NumberStyles.Integer, CultureInfo.InvariantCulture, out var replyUid);
         var timestamp = item.Timestamp;
         if (timestamp > 253402300799)
         {
@@ -56,6 +59,10 @@ public sealed class BilibiliDanmuHistoryService(HttpClient? httpClient = null) :
             Uid = item.Uid,
             UserName = item.Nickname ?? "",
             Content = item.Text ?? "",
+            ReplyUid = Math.Max(0, replyUid),
+            ReplyUserName = (reply?["reply_uname"] as JValue)?.Value<string>() ?? "",
+            ReplyUserNameColor = (reply?["reply_uname_color"] as JValue)?.Value<string>() ?? "",
+            ReplyIsMystery = (reply?["reply_is_mystery"] as JValue)?.ToString() is "1" or "True" or "true",
             IsRoomAdmin = item.IsAdmin?.ToString() is "1" or "True" or "true",
             MedalName = medal?["name"]?.Value<string>() ?? "",
             MedalLevel = medal?["level"]?.Value<int>() ?? 0,

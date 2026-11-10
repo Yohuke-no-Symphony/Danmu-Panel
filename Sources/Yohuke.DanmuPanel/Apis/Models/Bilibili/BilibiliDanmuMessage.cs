@@ -31,6 +31,18 @@ public class BilibiliDanmuMessage
     /// </summary>
     public string Content { get; set; } = "";
 
+    /// <summary>被回复用户的 UID，协议缺失时为 0。</summary>
+    public long ReplyUid { get; set; }
+
+    /// <summary>被回复用户的显示名称。</summary>
+    public string ReplyUserName { get; set; } = "";
+
+    /// <summary>协议提供的被回复用户名颜色。</summary>
+    public string ReplyUserNameColor { get; set; } = "";
+
+    /// <summary>被回复用户是否为神秘人。</summary>
+    public bool ReplyIsMystery { get; set; }
+
     /// <summary>
     /// 弹幕正文中的表情图片映射。
     /// </summary>

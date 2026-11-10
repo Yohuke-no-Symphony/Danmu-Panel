@@ -48,7 +48,7 @@ public sealed class MessageFeedAvatarTests
             var row = Assert.Single(view.GetVisualDescendants().OfType<MessageFeedRow>());
             var avatar = Assert.Single(row.GetVisualDescendants().OfType<UserAvatarView>(), value => value.IsEffectivelyVisible);
             var name = Assert.Single(row.GetVisualDescendants().OfType<EmoticonTextBlock>(),
-                text => text.Classes.Contains("danmuFeedUser"));
+                text => text.Classes.Contains("danmuFeedUser") && text.IsEffectivelyVisible);
             Assert.True(avatar.IsEffectivelyVisible);
             Assert.Equal(TextAlignment.Left, name.TextAlignment);
             Assert.Equal(20, avatar.Bounds.Width);

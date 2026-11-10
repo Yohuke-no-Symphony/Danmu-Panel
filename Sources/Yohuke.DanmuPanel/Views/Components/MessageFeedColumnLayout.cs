@@ -3,6 +3,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Yohuke.DanmuPanel.Models.Messages;
 
 namespace Yohuke.DanmuPanel.Views.Components;
@@ -75,16 +76,66 @@ internal sealed partial class MessageFeedColumnLayout : Grid
         }
     }
 
-    private double GetRatio()
+    /// <summary>按共享比例确定正文与身份列的像素宽度，避免内容测量取整改变分栏位置。</summary>
+    /// <remarks>身份列保留 Star，使跨粉丝牌与身份列的摘要内容接受有限宽度测量。</remarks>
+    protected override Size MeasureOverride(Size availableSize)
     {
-        return GetValue(IdentityRatioProperty) ?? (Kind == MessageKind.Guard ? 0.6 : 0.4);
+        if (double.IsPositiveInfinity(availableSize.Width))
+        {
+            UpdateColumnWidths();
+            return base.MeasureOverride(availableSize);
+        }
+
+        var medalWidth = 0d;
+        var splitterWidth = 0d;
+        foreach (var child in Children)
+        {
+            var column = GetColumn(child);
+            if (GetColumnSpan(child) != 1 || column is not (0 or 2))
+            {
+                continue;
+            }
+            child.Measure(new(double.PositiveInfinity, availableSize.Height));
+            if (column == 0)
+            {
+                medalWidth = Math.Max(medalWidth, child.DesiredSize.Width);
+            }
+            else
+            {
+                splitterWidth = Math.Max(splitterWidth, child.DesiredSize.Width);
+            }
+        }
+
+        var scale = LayoutHelper.GetLayoutScale(this);
+        var availableWidth = UseLayoutRounding
+            ? LayoutHelper.RoundLayoutValueUp(availableSize.Width, scale) : availableSize.Width;
+        var remainingWidth = Math.Max(0,
+            availableWidth - medalWidth - splitterWidth - ColumnSpacing * (ColumnDefinitions.Count - 1));
+        var identityWidth = remainingWidth * GetRatio(this, Kind);
+        if (UseLayoutRounding)
+        {
+            identityWidth = LayoutHelper.RoundLayoutValue(identityWidth, scale);
+        }
+        identityWidth = Math.Clamp(identityWidth, 0, remainingWidth);
+        ColumnDefinitions[1].Width = new(1, GridUnitType.Star);
+        ColumnDefinitions[3].Width = new(Math.Max(0, remainingWidth - identityWidth), GridUnitType.Pixel);
+        return base.MeasureOverride(availableSize);
+    }
+
+    internal static double GetRatio(Control control, MessageKind kind)
+    {
+        return control.GetValue(IdentityRatioProperty) ?? (kind == MessageKind.Guard ? 0.6 : 0.4);
     }
 
     private void UpdateColumnWidths()
     {
-        var ratio = GetRatio();
-        ColumnDefinitions[1].Width = new(ratio, GridUnitType.Star);
-        ColumnDefinitions[3].Width = new(1 - ratio, GridUnitType.Star);
+        ApplyColumnWidths(this, GetRatio(this, Kind));
+    }
+
+    internal static void ApplyColumnWidths(Grid layout, double ratio)
+    {
+        layout.ColumnDefinitions[1].Width = new(ratio, GridUnitType.Star);
+        layout.ColumnDefinitions[3].Width = new(1 - ratio, GridUnitType.Star);
     }
 
     private void OnResizePressed(object? sender, PointerPressedEventArgs args)
@@ -92,7 +143,7 @@ internal sealed partial class MessageFeedColumnLayout : Grid
         args.Handled = true;
         var width = ColumnDefinitions[1].ActualWidth + ColumnDefinitions[3].ActualWidth;
         RaiseEvent(new MessageColumnResizeStartedEventArgs(args.Pointer,
-            args.GetPosition(TopLevel.GetTopLevel(this)), width, GetRatio()));
+            args.GetPosition(TopLevel.GetTopLevel(this)), width, GetRatio(this, Kind)));
     }
 
     private void OnSplitterKeyDown(object? sender, KeyEventArgs args)
@@ -108,7 +159,7 @@ internal sealed partial class MessageFeedColumnLayout : Grid
             return;
         }
         var delta = args.Key == Key.Right ? KEYBOARD_RATIO_STEP : -KEYBOARD_RATIO_STEP;
-        RaiseEvent(new MessageColumnResizeEventArgs(ClampRatio(GetRatio() + delta, width), false));
-        RaiseEvent(new MessageColumnResizeEventArgs(GetRatio(), true));
+        RaiseEvent(new MessageColumnResizeEventArgs(ClampRatio(GetRatio(this, Kind) + delta, width), false));
+        RaiseEvent(new MessageColumnResizeEventArgs(GetRatio(this, Kind), true));
     }
 }

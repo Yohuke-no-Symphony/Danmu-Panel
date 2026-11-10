@@ -3,7 +3,7 @@ using Avalonia.Controls;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
-internal sealed class MessageTranslationTextBlock : TextBlock
+internal sealed class MessageTranslationTextBlock : EmoticonTextBlock
 {
     private readonly TextBlock textMetrics = new() { Text = "\u200B" };
 
@@ -21,7 +21,7 @@ internal sealed class MessageTranslationTextBlock : TextBlock
         base.OnPropertyChanged(change);
         if (change.Property == FontFamilyProperty || change.Property == FontSizeProperty ||
             change.Property == FontStyleProperty || change.Property == FontWeightProperty ||
-            change.Property == FontStretchProperty)
+            change.Property == FontStretchProperty || change.Property == ReplyProperty)
         {
             UpdateLineHeight();
         }
@@ -35,6 +35,6 @@ internal sealed class MessageTranslationTextBlock : TextBlock
         textMetrics.FontWeight = FontWeight;
         textMetrics.FontStretch = FontStretch;
         textMetrics.Measure(Size.Infinity);
-        SetCurrentValue(LineHeightProperty, textMetrics.TextLayout.Height);
+        SetCurrentValue(LineHeightProperty, Reply is null ? textMetrics.TextLayout.Height : double.NaN);
     }
 }

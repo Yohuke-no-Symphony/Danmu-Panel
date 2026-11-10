@@ -3,6 +3,7 @@ using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.Messages;
+using Yohuke.DanmuPanel.Models.Appearance;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Services.Messages;
@@ -15,6 +16,7 @@ internal sealed class MessageDisplaySettings
     private readonly Dictionary<string, string> colors;
     private readonly Dictionary<string, IBrush> brushes = new(StringComparer.Ordinal);
     private readonly HashSet<long> specialAttentionUids;
+    private readonly MessageBorderSettings messageBorders;
 
     internal string TranslationFingerprint { get; }
     internal bool TranslationEnabled { get; }
@@ -51,6 +53,12 @@ internal sealed class MessageDisplaySettings
         PresentationOptions = new(ShowUserPinyin, ShowGiftPinyin, ShowDanmuPinyin, ShowSuperChatPinyin, CultureName);
         colors = new(settings.ColorScheme.Overrides, StringComparer.Ordinal);
         specialAttentionUids = settings.SpecialAttention.Users.Select(user => user.UserUid).ToHashSet();
+        messageBorders = new()
+        {
+            SuperChat = settings.MessageBorders.SuperChat,
+            Gift = settings.MessageBorders.Gift,
+            Guard = settings.MessageBorders.Guard
+        };
     }
 
     internal static MessageDisplaySettings Capture(PanelSettings settings, MessageDisplaySettings? previous = null,
@@ -67,6 +75,9 @@ internal sealed class MessageDisplaySettings
             previous.ShowUserPinyin == settings.ShowUserPinyin && previous.ShowGiftPinyin == settings.ShowGiftPinyin &&
             previous.ShowUserAvatars == settings.ShowUserAvatars &&
             previous.ShowFanMedals == settings.ShowFanMedals &&
+            previous.messageBorders.SuperChat == settings.MessageBorders.SuperChat &&
+            previous.messageBorders.Gift == settings.MessageBorders.Gift &&
+            previous.messageBorders.Guard == settings.MessageBorders.Guard &&
             previous.ShowDanmuPinyin == settings.ShowDanmuPinyin &&
             previous.ShowSuperChatPinyin == settings.ShowSuperChatPinyin &&
             previous.PinyinLayout == settings.PinyinLayout &&
@@ -82,6 +93,11 @@ internal sealed class MessageDisplaySettings
     internal bool IsTranslationBlocked(MessageRecord record)
     {
         return record.Kind == MessageKind.Danmu && DanmuFilter.IsTranslationBlocked(record.Content);
+    }
+
+    internal double GetBorderThickness(MessageKind kind)
+    {
+        return messageBorders.GetThickness(kind);
     }
 
     internal bool IsSpecialAttention(long userUid)

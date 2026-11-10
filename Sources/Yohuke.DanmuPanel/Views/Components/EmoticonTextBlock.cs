@@ -12,13 +12,15 @@ using Avalonia.Media.TextFormatting;
 using Avalonia.VisualTree;
 using Yohuke.DanmuPanel.Models.Workspace;
 using Yohuke.DanmuPanel.Models.Translation;
+using Yohuke.DanmuPanel.Models.Messages;
+using Yohuke.DanmuPanel.Services;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
 /// <summary>
-/// 在弹幕原文中内联显示本地缓存的表情图片。
+/// 在消息正文中内联显示回复徽章、表情图片和拼音注音。
 /// </summary>
-public sealed class EmoticonTextBlock : TextBlock
+public class EmoticonTextBlock : TextBlock
 {
     internal const double DEFAULT_EMOTICON_HEIGHT = 28;
     private const int MAX_CACHED_RUBY_INLINES = 64;
@@ -34,6 +36,7 @@ public sealed class EmoticonTextBlock : TextBlock
     private readonly Dictionary<int, Run> pronunciationRuns = [];
     private List<Visual>? visibilityAncestors;
     private PinyinSeparateLinePresenter? separateLine;
+    private MessageReplyBadge? replyBadge;
     private bool isAttached;
     private bool isContentDeferred;
     private bool isVisibilityTracking;
@@ -43,6 +46,7 @@ public sealed class EmoticonTextBlock : TextBlock
     private int contentRevision;
 
     internal Task PendingImageLoad { get; private set; } = Task.CompletedTask;
+    internal IUserAvatarService? AvatarService { get; set; }
     internal Task PendingPreviewLoad => imagePreview?.PendingLoad ?? Task.CompletedTask;
     internal static readonly RoutedEvent<RoutedEventArgs> AsyncContentUpdatingEvent =
         RoutedEvent.Register<EmoticonTextBlock, RoutedEventArgs>("AsyncContentUpdating", RoutingStrategies.Bubble);
@@ -100,6 +104,14 @@ public sealed class EmoticonTextBlock : TextBlock
     public static readonly StyledProperty<string?> ContentTextProperty =
         AvaloniaProperty.Register<EmoticonTextBlock, string?>(nameof(ContentText));
 
+    /// <summary>在正文前显示的回复对象。</summary>
+    public static readonly StyledProperty<MessageReply?> ReplyProperty =
+        AvaloniaProperty.Register<EmoticonTextBlock, MessageReply?>(nameof(Reply));
+
+    /// <summary>是否显示回复徽章中的头像。</summary>
+    public static readonly StyledProperty<bool> ShowReplyAvatarProperty =
+        AvaloniaProperty.Register<EmoticonTextBlock, bool>(nameof(ShowReplyAvatar), true);
+
     /// <summary>
     /// 正文中的表情图片映射。
     /// </summary>
@@ -138,6 +150,22 @@ public sealed class EmoticonTextBlock : TextBlock
         get => GetValue(ContentTextProperty);
         set => SetValue(ContentTextProperty, value);
     }
+
+    /// <summary>在正文前显示的回复对象。</summary>
+    public MessageReply? Reply
+    {
+        get => GetValue(ReplyProperty);
+        set => SetValue(ReplyProperty, value);
+    }
+
+    /// <summary>是否显示回复徽章中的头像。</summary>
+    public bool ShowReplyAvatar
+    {
+        get => GetValue(ShowReplyAvatarProperty);
+        set => SetValue(ShowReplyAvatarProperty, value);
+    }
+
+    private bool HasReply => Reply is { } reply && !string.IsNullOrWhiteSpace(reply.UserName);
 
     /// <summary>
     /// 正文中的表情图片映射。
@@ -199,11 +227,21 @@ public sealed class EmoticonTextBlock : TextBlock
         return lines.Count <= 1 && (lines.Count == 0 || !lines[0].HasCollapsed);
     }
 
+    /// <inheritdoc />
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        if (replyBadge is not null)
+        {
+            replyBadge.MaxWidth = Math.Max(0, availableSize.Width - Padding.Left - Padding.Right);
+        }
+        return base.MeasureOverride(availableSize);
+    }
+
     /// <summary>修正 Avalonia 11.3.12 对 EmbeddedControlRun 使用严格大于等于比较而误判等宽溢出的边界。</summary>
     /// <remarks>只将原生排版约束增加一个浮点表示值，使恰好等宽的内联对象可放入该行，保留控件真实尺寸及单次测量。</remarks>
     protected override TextLayout CreateTextLayout(string? text)
     {
-        if (!HasAnnotations || TextWrapping != TextWrapping.Wrap ||
+        if ((!HasAnnotations && replyBadge is null) || TextWrapping != TextWrapping.Wrap ||
             !double.IsFinite(_constraint.Width) || _constraint.Width <= 0)
         {
             return base.CreateTextLayout(text);
@@ -226,6 +264,7 @@ public sealed class EmoticonTextBlock : TextBlock
         base.OnPropertyChanged(change);
 
         if (change.Property == ContentTextProperty || change.Property == EmoticonsProperty ||
+            change.Property == ReplyProperty || change.Property == ShowReplyAvatarProperty ||
             change.Property == AnnotationsProperty || change.Property == PinyinLayoutProperty ||
             change.Property == EmoticonHeightProperty)
         {
@@ -459,7 +498,7 @@ public sealed class EmoticonTextBlock : TextBlock
         isContentUpdatePending = false;
         ReleaseContent();
         var content = ContentText ?? "";
-        var hasRichContent = Annotations?.Any(annotation => annotation.HasPinyin) == true ||
+        var hasRichContent = HasReply || Annotations?.Any(annotation => annotation.HasPinyin) == true ||
                              Emoticons?.Any(emoticon => !string.IsNullOrEmpty(emoticon.Text) &&
                                  !string.IsNullOrWhiteSpace(emoticon.ImagePath)) == true;
         UpdateVisibilityTracking(isAttached && hasRichContent);
@@ -507,7 +546,7 @@ public sealed class EmoticonTextBlock : TextBlock
         var hasAnnotations = Annotations is { Count: > 0 } &&
                              Annotations.Any(annotation => annotation.HasPinyin) &&
                              string.Concat(Annotations.Select(annotation => annotation.Text)) == content;
-        if (candidates.Count == 0 && !hasAnnotations)
+        if (candidates.Count == 0 && !hasAnnotations && !HasReply)
         {
             Inlines = null;
             Text = content;
@@ -527,6 +566,7 @@ public sealed class EmoticonTextBlock : TextBlock
         }
         else if (hasAnnotations)
         {
+            AddReplyInline(Inlines);
             foreach (var segment in segments)
             {
                 if (segment.Emoticon is not null)
@@ -678,7 +718,7 @@ public sealed class EmoticonTextBlock : TextBlock
     private InlineCollection CreateOriginalInlines(IReadOnlyList<EmoticonTextSegment> segments)
     {
         var result = new InlineCollection();
-        var textIndex = 0;
+        var textIndex = AddReplyInline(result);
         foreach (var segment in segments)
         {
             var inline = segment.Emoticon is null ? new Run(segment.Text) : CreateEmoticonInline(segment);
@@ -688,6 +728,18 @@ public sealed class EmoticonTextBlock : TextBlock
             textIndex += textLength;
         }
         return result;
+    }
+
+    private int AddReplyInline(InlineCollection inlines)
+    {
+        if (!HasReply)
+        {
+            return 0;
+        }
+        replyBadge = new(Reply!, AvatarService, ShowReplyAvatar);
+        inlines.Add(new InlineUIContainer(replyBadge) { BaselineAlignment = BaselineAlignment.Baseline });
+        inlines.Add(new Run(" "));
+        return 2;
     }
 
     private Inline CreateEmoticonInline(EmoticonTextSegment segment, bool alignToTextBaseline = false)
@@ -779,6 +831,7 @@ public sealed class EmoticonTextBlock : TextBlock
             element.Foreground = Foreground;
         }
         separateLine?.UpdateTypography(this, foreground);
+        replyBadge?.UpdateTypography(this);
         UpdateHighlightAppearance();
     }
 
@@ -852,6 +905,7 @@ public sealed class EmoticonTextBlock : TextBlock
         renderedSpans.Clear();
         pronunciationRuns.Clear();
         separateLine = null;
+        replyBadge = null;
         if (Inlines is not null)
         {
             foreach (var inline in Inlines)

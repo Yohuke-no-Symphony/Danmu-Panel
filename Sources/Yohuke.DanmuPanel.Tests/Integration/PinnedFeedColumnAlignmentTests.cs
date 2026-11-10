@@ -233,13 +233,15 @@ public sealed class PinnedFeedColumnAlignmentTests
     {
         var pinnedRow = FindVisibleRow(pinned);
         var scrollingRow = FindVisibleRow(scrolling);
-        var pinnedSplitter = Assert.Single(pinnedRow.GetVisualDescendants().OfType<MessageColumnSplitter>());
-        var scrollingSplitter = Assert.Single(scrollingRow.GetVisualDescendants().OfType<MessageColumnSplitter>());
+        var pinnedSplitter = Assert.Single(pinnedRow.GetVisualDescendants().OfType<MessageColumnSplitter>(),
+            value => value.IsEffectivelyVisible);
+        var scrollingSplitter = Assert.Single(scrollingRow.GetVisualDescendants().OfType<MessageColumnSplitter>(),
+            value => value.IsEffectivelyVisible);
         var pinnedX = pinnedSplitter.TranslatePoint(new(pinnedSplitter.Bounds.Width / 2, 0), relativeTo)!.Value.X;
         var scrollingX = scrollingSplitter.TranslatePoint(new(scrollingSplitter.Bounds.Width / 2, 0), relativeTo)!.Value.X;
         Assert.InRange(Math.Abs(pinnedX - scrollingX), 0, 0.5);
-        var pinnedBody = Assert.Single(pinnedRow.GetVisualDescendants().OfType<Panel>(), panel => panel.Classes.Contains("messageBody"));
-        var scrollingBody = Assert.Single(scrollingRow.GetVisualDescendants().OfType<Panel>(), panel => panel.Classes.Contains("messageBody"));
+        var pinnedBody = Assert.Single(pinnedRow.GetVisualDescendants().OfType<Panel>(), panel => panel.Classes.Contains("messageBody") && panel.IsEffectivelyVisible);
+        var scrollingBody = Assert.Single(scrollingRow.GetVisualDescendants().OfType<Panel>(), panel => panel.Classes.Contains("messageBody") && panel.IsEffectivelyVisible);
         Assert.InRange(Math.Abs(pinnedBody.TranslatePoint(default, relativeTo)!.Value.X -
             scrollingBody.TranslatePoint(default, relativeTo)!.Value.X), 0, 0.5);
         Assert.InRange(Math.Abs(pinnedRow.Bounds.Width - scrollingRow.Bounds.Width), 0, 0.5);
