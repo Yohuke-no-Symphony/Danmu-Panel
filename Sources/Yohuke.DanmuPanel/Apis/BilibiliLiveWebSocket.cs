@@ -626,6 +626,7 @@ public class BilibiliLiveWebSocket : BaseApi, ILiveDanmuSocket
                 json["ts"],
                 json["send_time"]),
             Quantity = ReadNonNegativeInt(isModern ? ReadObjectProperty(pay, "num") : data["num"]),
+            TotalPrice = ReadGuardTotalPrice(isModern ? ReadObjectProperty(pay, "price") : data["price"]),
             IsGroup = ReadBoolean(ReadObjectProperty(option, "is_group")),
             ReceiverUid = ReadInteger(ReadObjectProperty(data["receiver_uinfo"], "uid"))
         };
@@ -672,6 +673,17 @@ public class BilibiliLiveWebSocket : BaseApi, ILiveDanmuSocket
         return decimal.TryParse(ReadScalarText(token), NumberStyles.Number, CultureInfo.InvariantCulture, out var value)
             ? Math.Max(0, value)
             : 0;
+    }
+
+    private static decimal? ReadGuardTotalPrice(JToken? token)
+    {
+        if (token?.Type is not (JTokenType.Integer or JTokenType.String) ||
+            !decimal.TryParse(ReadScalarText(token), NumberStyles.None, CultureInfo.InvariantCulture, out var price))
+        {
+            return null;
+        }
+
+        return price / 1000m;
     }
 
     private static bool ReadBoolean(JToken? token)

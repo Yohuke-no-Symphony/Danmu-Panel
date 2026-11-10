@@ -309,7 +309,7 @@ public sealed class UserAvatarPreviewTests
         {
             window.Show();
             Pump(window);
-            var avatar = Assert.Single(row.GetVisualDescendants().OfType<UserAvatarView>());
+            var avatar = Assert.Single(row.GetVisualDescendants().OfType<UserAvatarView>(), value => value.IsEffectivelyVisible);
             await WaitUntilAsync(() => avatar.AvatarImage is not null, window);
             var preview = await OpenPreviewAsync(avatar, window);
             var bitmap = Assert.IsType<Bitmap>(preview.Source);

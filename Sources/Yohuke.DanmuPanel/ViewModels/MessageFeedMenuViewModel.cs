@@ -41,8 +41,9 @@ public sealed class MessageFeedMenuViewModel : ObservableObject
     public IAsyncRelayCommand CopyCommand { get; }
     public IAsyncRelayCommand RetryCommand { get; }
     public IAsyncRelayCommand ToggleAttentionCommand { get; }
-    public bool CanActivate => getItem() is { } item && (kind == MessageKind.Danmu || !item.Record.IsRead);
-    public bool CanRetryTranslation => getItem() is { } item && canRetry(item);
+    public bool ShowMessageActions => getItem() is { IsEventSummary: false };
+    public bool CanActivate => getItem() is { IsEventSummary: false } item && (kind == MessageKind.Danmu || !item.Record.IsRead);
+    public bool CanRetryTranslation => getItem() is { IsEventSummary: false } item && canRetry(item);
     public bool CanToggleAttention => getItem() is { UserUid: > 0 };
 
     /// <summary>连接当前行解析器与宿主操作，不保存回收前的消息实例。</summary>
@@ -58,9 +59,9 @@ public sealed class MessageFeedMenuViewModel : ObservableObject
         this.canRetry = canRetry;
         this.isFollowed = isFollowed;
         this.reportError = reportError;
-        ActivateCommand = CreateCommand(activate, item => kind == MessageKind.Danmu || !item.Record.IsRead);
-        CopyCommand = CreateCommand(copy, _ => true);
-        RetryCommand = CreateCommand(retry, canRetry);
+        ActivateCommand = CreateCommand(activate, item => !item.IsEventSummary && (kind == MessageKind.Danmu || !item.Record.IsRead));
+        CopyCommand = CreateCommand(copy, item => !item.IsEventSummary);
+        RetryCommand = CreateCommand(retry, item => !item.IsEventSummary && canRetry(item));
         ToggleAttentionCommand = CreateCommand(toggleAttention, item => item.UserUid > 0);
         Refresh();
     }
@@ -79,6 +80,7 @@ public sealed class MessageFeedMenuViewModel : ObservableObject
         AttentionHeader = Localization.Get(item is not null && isFollowed(item)
             ? "SpecialAttention.Remove" : "SpecialAttention.Add");
         OnPropertyChanged(nameof(CanActivate));
+        OnPropertyChanged(nameof(ShowMessageActions));
         OnPropertyChanged(nameof(CanRetryTranslation));
         OnPropertyChanged(nameof(CanToggleAttention));
         ActivateCommand.NotifyCanExecuteChanged();

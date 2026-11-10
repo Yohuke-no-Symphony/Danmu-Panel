@@ -57,13 +57,18 @@ public static class RoomMessageMapper
     /// <summary>转换独立的上舰事件。</summary>
     public static MessageRecord Map(BilibiliGuardPurchaseMessage value, string tabId, long generation)
     {
+        var quantity = Math.Max(1, value.Quantity);
+        var totalPrice = value.TotalPrice is >= 0 ? value.TotalPrice : null;
         return new()
         {
             RoomTabId = tabId, Generation = generation, RoomId = value.RoomId,
             Kind = MessageKind.Guard, MessageId = value.Identity, Time = Time(value.Timestamp),
             HasSourceTimestamp = value.Timestamp > 0,
             UserUid = value.Uid, UserName = value.UserName, GuardLevel = value.GuardLevel,
-            Quantity = Math.Max(1, value.Quantity)
+            Quantity = quantity,
+            UnitPrice = totalPrice.GetValueOrDefault() / quantity,
+            TotalPrice = totalPrice.GetValueOrDefault(),
+            HasKnownPrice = totalPrice.HasValue
         };
     }
 

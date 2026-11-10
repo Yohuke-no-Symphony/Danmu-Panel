@@ -391,7 +391,7 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
 
     internal void ShowCopyPopup(MessageFeedRow row)
     {
-        if (row.DataContext is not MessageItemViewModel item)
+        if (row.DataContext is not MessageItemViewModel { IsEventSummary: false } item)
         {
             return;
         }
@@ -450,6 +450,10 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
 
     private async Task RetryTranslationAsync(MessageItemViewModel item)
     {
+        if (item.IsEventSummary)
+        {
+            return;
+        }
         await runtime.Messages.RetryTranslationJobAsync(item.Record.Id, item.Record.Generation,
             TranslationRequestFactory.GetConfigurationFingerprint(runtime.Configuration.Settings.Translation));
         runtime.NotifyTranslation(retryAuthentication: true);
@@ -458,6 +462,10 @@ public sealed class MessageFeedView : UserControl, IWorkbenchHeaderActions, IWor
 
     private async Task ActivateMessageAsync(MessageItemViewModel item)
     {
+        if (item.IsEventSummary)
+        {
+            return;
+        }
         var record = item.Record;
         if (record.Kind != MessageKind.Danmu && record.IsRead)
         {

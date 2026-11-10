@@ -28,6 +28,8 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     private string time = "";
     private string? detail;
     private string price = "";
+    private string summaryLabel = "";
+    private string summaryValue = "";
     private string translation = "";
     private bool translationPending;
     private bool translationBlocked;
@@ -37,6 +39,12 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     private IBrush medalBackgroundBrush = Brushes.Transparent;
     private IReadOnlyList<DanmuEmoticon> emoticons = [];
     public MessageRecord Record { get; private set; }
+    /// <summary>是否仅在普通弹幕时间线中提示付费事件，不提供阅读确认。</summary>
+    public bool IsEventSummary { get; }
+    /// <summary>付费事件的类型、礼物名称或大航海档位。</summary>
+    public string SummaryLabel => summaryLabel;
+    /// <summary>事件的人民币价值；缺少大航海价格时明确显示未知。</summary>
+    public string SummaryValue => summaryValue;
     internal bool IsPresentationPending => isPresentationPending;
     internal MessageDisplaySettings PresentationSettings => settings;
     internal bool TranslationPending => translationPending;
@@ -90,8 +98,8 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     public IBrush MedalBackgroundBrush => medalBackgroundBrush;
     public string Time => time;
     public bool ShowPinBadge => Record.Kind == MessageKind.Danmu && Record.IsPinned;
-    public bool ShowUnreadDot => Record.Kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard && !Record.IsRead;
-    public string Detail => detail ??= FormatDetail();
+    public bool ShowUnreadDot => !IsEventSummary && Record.Kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard && !Record.IsRead;
+    public string Detail => IsEventSummary ? "" : detail ??= FormatDetail();
     public string DetailPinyin => detailPinyin;
     public bool HasDetailPinyin => DetailPinyin.Length > 0;
     public IReadOnlyList<PinyinAnnotation> ContentPinyin => contentPinyin;
@@ -116,18 +124,20 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     }
 
     /// <summary>创建单行显示投影。</summary>
-    public MessageItemViewModel(MessageRecord record, PanelSettings settings, IPinyinService pinyin)
-        : this(record, MessageDisplaySettings.Capture(settings), pinyin)
+    public MessageItemViewModel(MessageRecord record, PanelSettings settings, IPinyinService pinyin,
+        bool isEventSummary = false)
+        : this(record, MessageDisplaySettings.Capture(settings), pinyin, isEventSummary: isEventSummary)
     {
     }
 
     private MessageItemViewModel(MessageRecord record, MessageDisplaySettings settings, IPinyinService pinyin,
-        bool isTranslationPending = false, bool deferPresentation = false)
+        bool isTranslationPending = false, bool deferPresentation = false, bool isEventSummary = false)
     {
         Record = record;
         this.settings = settings;
         this.pinyin = pinyin;
-        this.deferPresentation = deferPresentation;
+        IsEventSummary = isEventSummary && record.Kind != MessageKind.Danmu;
+        this.deferPresentation = deferPresentation || IsEventSummary;
         Update(record, settings, true, isTranslationPending);
     }
 
@@ -144,9 +154,9 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     }
 
     internal static MessageItemViewModel CreateDeferred(MessageRecord record, MessageDisplaySettings settings, IPinyinService pinyin,
-        bool isTranslationPending)
+        bool isTranslationPending, bool isEventSummary = false)
     {
-        return new(record, settings, pinyin, isTranslationPending, deferPresentation: true);
+        return new(record, settings, pinyin, isTranslationPending, deferPresentation: true, isEventSummary: isEventSummary);
     }
 
     internal bool ApplyPresentation(MessagePresentationSnapshot value)
@@ -273,7 +283,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
             SetProperty(ref contentPinyin, IsContentPinyinEnabled(record.Kind, settings)
                 ? GetContentAnnotations(record) : [], nameof(ContentPinyin));
         }
-        if (deferPresentation && presentation?.Matches(record, settings.PresentationOptions) != true)
+        if (!IsEventSummary && deferPresentation && presentation?.Matches(record, settings.PresentationOptions) != true)
         {
             SetProperty(ref namePinyin, "", nameof(NamePinyin));
             SetProperty(ref nameAnnotations, Array.Empty<PinyinAnnotation>(), nameof(NameAnnotations));
@@ -294,10 +304,10 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         {
             SetProperty(ref time, record.Time.ToLocalTime().ToString("HH:mm:ss"), nameof(Time));
         }
-        if (initialize || previous.Kind != record.Kind || previous.Content != record.Content ||
+        if (!IsEventSummary && (initialize || previous.Kind != record.Kind || previous.Content != record.Content ||
             previous.GiftName != record.GiftName || previous.Quantity != record.Quantity ||
             previous.TotalPrice != record.TotalPrice || previous.GuardLevel != record.GuardLevel ||
-            previousSettings.LanguageId != settings.LanguageId || cultureChanged)
+            previousSettings.LanguageId != settings.LanguageId || cultureChanged))
         {
             SetProperty(ref detail, record.Kind != MessageKind.Guard || Localization.IsInitialized
                 ? FormatDetail() : null, nameof(Detail));
@@ -306,7 +316,16 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         {
             SetProperty(ref price, record.Kind == MessageKind.SuperChat ? $"￥{record.TotalPrice:0.##}" : "", nameof(Price));
         }
-        SetProperty(ref translation, !translationBlocked && record.TranslationFingerprint == settings.TranslationFingerprint
+        if (IsEventSummary && Localization.IsInitialized &&
+            (initialize || previous.UserName != record.UserName || previous.Kind != record.Kind ||
+                previous.GiftName != record.GiftName ||
+                previous.Quantity != record.Quantity || previous.TotalPrice != record.TotalPrice ||
+                previous.HasKnownPrice != record.HasKnownPrice ||
+                previous.GuardLevel != record.GuardLevel || previousSettings.LanguageId != settings.LanguageId || cultureChanged))
+        {
+            UpdateEventSummary();
+        }
+        SetProperty(ref translation, !IsEventSummary && !translationBlocked && record.TranslationFingerprint == settings.TranslationFingerprint
             ? record.Translation ?? "" : "", nameof(Translation));
         SetProperty(ref borderBrush, GetBorderBrush(), nameof(BorderBrush));
         SetProperty(ref medalBackgroundBrush, record.MedalGuardLevel switch
@@ -369,6 +388,21 @@ public sealed class MessageItemViewModel : FeedRowViewModel
             MessageKind.Guard => Localization.Get($"Panel.Guard.{Record.GuardLevel}") + $" ×{Record.Quantity}",
             _ => Record.Content
         };
+    }
+
+    private void UpdateEventSummary()
+    {
+        SetProperty(ref summaryLabel, Record.Kind switch
+        {
+            MessageKind.SuperChat => Localization.Get("Workbench.Panel.SuperChat"),
+            MessageKind.Gift => Localization.Format("Panel.EventSummary.Gift", Record.GiftName, Record.Quantity),
+            MessageKind.Guard => Localization.Format("Panel.EventSummary.Guard",
+                Localization.Get($"Panel.Guard.{Record.GuardLevel}"), Record.Quantity),
+            _ => ""
+        }, nameof(SummaryLabel));
+        SetProperty(ref summaryValue, Record.Kind == MessageKind.Guard && !Record.HasKnownPrice && Record.TotalPrice == 0
+            ? Localization.Get("Panel.EventSummary.UnknownValue")
+            : Localization.Format("Panel.EventSummary.Value", Record.TotalPrice), nameof(SummaryValue));
     }
 
     private IBrush GetBorderBrush()

@@ -5,7 +5,7 @@
                     x:Class="Yohuke.DanmuPanel.Views.Components.MessageFeedRowTemplates">
     <DataTemplate x:Key="Danmu" x:DataType="vm:MessageItemViewModel">
         <Grid>
-            <Border BorderBrush="{Binding BorderBrush}">
+            <Border BorderBrush="{Binding BorderBrush}" IsVisible="{Binding !IsEventSummary}">
                 <components:MessageFeedColumnLayout Kind="Danmu">
                     <components:MessageMedalSurface />
                     <components:MessageIdentitySurface Grid.Column="1" />
@@ -22,6 +22,7 @@
             <Canvas HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False">
                 <TextBlock Text="📌" Classes="messagePinBadge" IsHitTestVisible="False" IsVisible="{Binding ShowPinBadge}" />
             </Canvas>
+            <components:MessageEventSummarySurface IsVisible="{Binding IsEventSummary}" />
         </Grid>
     </DataTemplate>
     <DataTemplate x:Key="SuperChat" x:DataType="vm:MessageItemViewModel">

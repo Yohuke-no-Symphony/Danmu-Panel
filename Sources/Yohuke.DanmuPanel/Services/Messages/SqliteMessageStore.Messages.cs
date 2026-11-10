@@ -218,6 +218,14 @@ public sealed partial class SqliteMessageStore
                 INSERT INTO message_feed_clears(room_tab_id,kind,cleared_before) VALUES($room,$kind,$cutoff)
                 ON CONFLICT(room_tab_id,kind) DO UPDATE SET cleared_before=excluded.cleared_before;
                 """, ("$room", roomTabId), ("$kind", (int)kind), ("$cutoff", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
+            if (kind == MessageKind.Danmu)
+            {
+                Execute(connection, transaction, """
+                    INSERT INTO message_timeline_clears(room_tab_id,cleared_sequence)
+                    VALUES($room,(SELECT COALESCE(MAX(sequence),0) FROM message_records WHERE room_tab_id=$room))
+                    ON CONFLICT(room_tab_id) DO UPDATE SET cleared_sequence=excluded.cleared_sequence;
+                    """, ("$room", roomTabId));
+            }
             if (kind == MessageKind.Gift)
             {
                 Execute(connection, transaction, """

@@ -44,6 +44,8 @@ public sealed record MessageRecord
     public int BatchComboCount { get; init; }
     public decimal UnitPrice { get; init; }
     public decimal TotalPrice { get; init; }
+    /// <summary>标识协议或测试输入明确提供了事件金额，区分零金额与旧记录或缺失金额。</summary>
+    public bool HasKnownPrice { get; init; }
     public string ComboId { get; init; } = "";
     public int GuardLevel { get; init; }
     public string BorderColor { get; init; } = "";

@@ -1,0 +1,22 @@
+<Border xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Yohuke.DanmuPanel.ViewModels"
+        xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
+        x:Class="Yohuke.DanmuPanel.Views.Components.MessageEventSummarySurface"
+        x:DataType="vm:MessageItemViewModel" Classes="messageEventSummary"
+        BorderBrush="{Binding BorderBrush}" BorderThickness="3,0,0,0"
+        CornerRadius="3" Padding="8,3">
+    <Grid ColumnDefinitions="Auto,2*,3*,Auto,Auto" ColumnSpacing="8" ClipToBounds="True">
+        <components:UserAvatarView UserUid="{Binding UserUid}" ShowAvatar="{Binding ShowUserAvatars}" Margin="0" />
+        <TextBlock Grid.Column="1" Classes="danmuFeedUser eventSummaryUser" Text="{Binding Name}"
+                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                   ToolTip.Tip="{Binding Name}" />
+        <TextBlock Grid.Column="2" Classes="eventSummaryLabel" Text="{Binding SummaryLabel}"
+                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                   ToolTip.Tip="{Binding SummaryLabel}" />
+        <TextBlock Grid.Column="3" Classes="eventSummaryValue" Text="{Binding SummaryValue}" FontWeight="SemiBold"
+                   TextWrapping="NoWrap" VerticalAlignment="Center" ToolTip.Tip="{Binding SummaryValue}" />
+        <TextBlock Grid.Column="4" Classes="eventSummaryTime" Text="{Binding Time}"
+                   VerticalAlignment="Center" />
+    </Grid>
+</Border>

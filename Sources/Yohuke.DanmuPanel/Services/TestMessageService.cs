@@ -84,6 +84,7 @@ public sealed class TestMessageService
             Quantity = quantity,
             UnitPrice = request.Kind == MessageKind.Danmu ? 0 : request.UnitPrice,
             TotalPrice = request.Kind == MessageKind.Danmu ? 0 : request.UnitPrice * quantity,
+            HasKnownPrice = request.Kind != MessageKind.Danmu,
             GuardLevel = request.Kind == MessageKind.Guard ? request.GuardLevel : 0,
             BorderColor = request.Kind == MessageKind.SuperChat
                 ? ColorSettingCatalog.GetSuperChatBorder(request.UnitPrice).DefaultColor!

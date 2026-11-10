@@ -54,6 +54,11 @@ public class BilibiliGuardPurchaseMessage
     public int Quantity { get; set; }
 
     /// <summary>
+    /// 本次事件的协议金额，单位为人民币元；GUARD_BUY 提供报价，庆祝消息提供支付总额，缺失或非法时为空。
+    /// </summary>
+    public decimal? TotalPrice { get; set; }
+
+    /// <summary>
     /// 是否为团体大航海记录。
     /// </summary>
     public bool IsGroup { get; set; }

@@ -46,7 +46,7 @@ public sealed class MessageFeedAvatarTests
             Pump(window);
             var item = Assert.Single(view.Model.Items);
             var row = Assert.Single(view.GetVisualDescendants().OfType<MessageFeedRow>());
-            var avatar = Assert.Single(row.GetVisualDescendants().OfType<UserAvatarView>());
+            var avatar = Assert.Single(row.GetVisualDescendants().OfType<UserAvatarView>(), value => value.IsEffectivelyVisible);
             var name = Assert.Single(row.GetVisualDescendants().OfType<EmoticonTextBlock>(),
                 text => text.Classes.Contains("danmuFeedUser"));
             Assert.True(avatar.IsEffectivelyVisible);
@@ -138,7 +138,8 @@ public sealed class MessageFeedAvatarTests
         {
             window.Show();
             Pump(window);
-            var avatars = rows.Select(row => Assert.Single(row.GetVisualDescendants().OfType<UserAvatarView>())).ToArray();
+            var avatars = rows.Select(row => Assert.Single(row.GetVisualDescendants().OfType<UserAvatarView>(),
+                value => value.IsEffectivelyVisible)).ToArray();
             for (var attempt = 0; attempt < 100 && avatars.Any(avatar => avatar.AvatarImage is null); attempt++)
             {
                 await Task.Delay(10);

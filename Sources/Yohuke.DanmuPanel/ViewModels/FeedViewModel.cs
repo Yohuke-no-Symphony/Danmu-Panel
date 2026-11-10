@@ -239,12 +239,17 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
                 limit = retentionCount;
             }
             var requestedLimit = loadMore
-                ? Math.Max(limit, ScrollingItems.Count(item => !item.Record.IsPriority)) + HISTORY_PAGE_SIZE
+                ? Math.Max(limit, kind == MessageKind.Danmu ? ScrollingItems.Count :
+                    ScrollingItems.Count(item => !item.Record.IsPriority)) + HISTORY_PAGE_SIZE
                 : limit;
-            var snapshot = await runtime.Messages.LoadFeedAsync(current.Id, kind, requestedLimit,
-                IsReadingHistory ? oldestHistoryId : null,
-                cancellationToken, hideEmoticonDanmu: runtime.Configuration.Settings.HideEmoticonDanmu,
-                danmuRegexFilter: runtime.DanmuFilter, readFilter: ReadFilter, sortOrder: SortOrder);
+            var snapshot = kind == MessageKind.Danmu
+                ? await runtime.Messages.LoadDanmuTimelineAsync(current.Id, requestedLimit,
+                    IsReadingHistory ? oldestHistoryId : null,
+                    hideEmoticonDanmu: runtime.Configuration.Settings.HideEmoticonDanmu,
+                    danmuRegexFilter: runtime.DanmuFilter, cancellationToken: cancellationToken)
+                : await runtime.Messages.LoadFeedAsync(current.Id, kind, requestedLimit,
+                    IsReadingHistory ? oldestHistoryId : null, cancellationToken,
+                    readFilter: ReadFilter, sortOrder: SortOrder);
             loadingHint?.Dispose();
             loadingHint = null;
             if (disposed || version != revision || cancellationToken.IsCancellationRequested)
@@ -270,11 +275,12 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
             for (var index = 0; index < records.Count; index++)
             {
                 var record = records[index];
+                var isEventSummary = kind == MessageKind.Danmu && record.Kind != MessageKind.Danmu;
                 var changed = true;
                 var translationBlocked = displaySettings.IsTranslationBlocked(record);
-                var translationPending = !translationBlocked && record.TranslationFingerprint == displaySettings.TranslationFingerprint &&
+                var translationPending = !isEventSummary && !translationBlocked && record.TranslationFingerprint == displaySettings.TranslationFingerprint &&
                     snapshot.PendingTranslationIds.Contains(record.Id);
-                if (!translationBlocked && displaySettings.TranslationEnabled && record.Kind is MessageKind.Danmu or MessageKind.SuperChat)
+                if (!isEventSummary && !translationBlocked && displaySettings.TranslationEnabled && record.Kind is MessageKind.Danmu or MessageKind.SuperChat)
                 {
                     var fingerprint = displaySettings.TranslationFingerprint;
                     if (record.TranslationFingerprint != fingerprint && translationRequested.Add(record.Id + fingerprint))
@@ -284,10 +290,14 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
                 }
                 if (!existingItems.TryGetValue(record.Id, out var existing))
                 {
-                    var item = MessageItemViewModel.CreateDeferred(record, displaySettings, runtime.Pinyin, translationPending);
+                    var item = MessageItemViewModel.CreateDeferred(record, displaySettings, runtime.Pinyin, translationPending,
+                        isEventSummary);
                     expectedItems[index] = item;
                     Items.Insert(index, item);
-                    _ = LoadEmoticonsAsync(item, cancellationToken);
+                    if (!isEventSummary)
+                    {
+                        _ = LoadEmoticonsAsync(item, cancellationToken);
+                    }
                 }
                 else
                 {
@@ -307,9 +317,11 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
             }
             await FeedCollectionSynchronizer.SynchronizeAsync(Items, expectedItems, cancellationToken);
             await FeedCollectionSynchronizer.SynchronizeAsync(PinnedItems,
-                expectedItems.Where(item => kind == MessageKind.Danmu && item.Record.IsPinned).ToArray(), cancellationToken);
+                expectedItems.Where(item => kind == MessageKind.Danmu && item.Record.Kind == MessageKind.Danmu &&
+                    item.Record.IsPinned).ToArray(), cancellationToken);
             await FeedCollectionSynchronizer.SynchronizeAsync(ScrollingItems,
-                expectedItems.Where(item => kind != MessageKind.Danmu || !item.Record.IsPinned).ToArray(), cancellationToken);
+                expectedItems.Where(item => kind != MessageKind.Danmu || item.Record.Kind != MessageKind.Danmu ||
+                    !item.Record.IsPinned).ToArray(), cancellationToken);
             await SynchronizeScrollingRowsAsync(cancellationToken);
             if (loadMore)
             {
@@ -424,7 +436,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
 
     private void OnMessagesChanged(string roomId, MessageKind? changedKind)
     {
-        if (changedKind is null || changedKind == kind)
+        if (kind == MessageKind.Danmu || changedKind is null || changedKind == kind)
         {
             OnChanged(roomId);
         }

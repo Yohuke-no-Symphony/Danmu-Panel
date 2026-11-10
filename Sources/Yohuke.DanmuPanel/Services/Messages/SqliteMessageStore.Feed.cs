@@ -45,7 +45,8 @@ public sealed partial class SqliteMessageStore
 
     private MessageFeedSnapshot ReadFeed(SqliteConnection connection, string roomTabId, MessageKind kind,
         int historyLimit, string? oldestHistoryId, bool hideEmoticons, DanmuRegexFilter? filter,
-        MessageReadFilter readFilter, MessageSortOrder sortOrder, CancellationToken cancellationToken)
+        MessageReadFilter readFilter, MessageSortOrder sortOrder, CancellationToken cancellationToken,
+        bool includeEventSummaries = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var transaction = connection.BeginTransaction(deferred: true);
@@ -57,7 +58,8 @@ public sealed partial class SqliteMessageStore
             {
                 readCache.BeginSnapshot(Convert.ToInt64(version.ExecuteScalar(), CultureInfo.InvariantCulture));
             }
-            var giftMinimum = kind == MessageKind.Gift ? ReadOptions(connection, transaction).GiftAutoPinMinimum : 0;
+            var giftMinimum = kind == MessageKind.Gift || includeEventSummaries
+                ? ReadOptions(connection, transaction).GiftAutoPinMinimum : 0;
             filtered = giftMinimum > 0 || hideEmoticons || filter is { Enabled: true };
             var predicate = filtered ? VISIBILITY_PREDICATE : "";
             if (filtered)
@@ -73,7 +75,8 @@ public sealed partial class SqliteMessageStore
                 _ => ""
             };
             var history = ReadHistorySequences(connection, transaction, roomTabId, kind, historyLimit,
-                oldestHistoryId, predicate + readPredicate, cancellationToken);
+                oldestHistoryId, predicate + readPredicate, includeEventSummaries
+                    ? DanmuTimelineHistoryPredicate : "kind=$kind AND priority=0", cancellationToken);
             sequences.AddRange(history);
             var records = LoadFeedRecords(connection, transaction, sequences, cancellationToken);
             if (kind != MessageKind.Danmu && readFilter != MessageReadFilter.All)
@@ -162,11 +165,11 @@ public sealed partial class SqliteMessageStore
 
     private static List<long> ReadHistorySequences(SqliteConnection connection, SqliteTransaction transaction,
         string roomTabId, MessageKind kind, int historyLimit, string? oldestHistoryId, string predicate,
-        CancellationToken cancellationToken)
+        string selectionPredicate, CancellationToken cancellationToken)
     {
         using var command = Command(connection, transaction, $"""
             SELECT sequence,occurred_ms FROM message_records
-            WHERE room_tab_id=$room AND kind=$kind AND priority=0 {predicate}
+            WHERE room_tab_id=$room AND {selectionPredicate} {predicate}
             ORDER BY occurred_ms DESC,sequence DESC LIMIT $limit;
             """, ("$room", roomTabId), ("$kind", (int)kind), ("$limit", historyLimit));
         var sequences = new List<long>();
@@ -186,7 +189,7 @@ public sealed partial class SqliteMessageStore
         {
             using var retained = Command(connection, transaction, $"""
                 SELECT sequence FROM message_records
-                WHERE room_tab_id=$room AND kind=$kind AND priority=0
+                WHERE room_tab_id=$room AND {selectionPredicate}
                     AND (occurred_ms,sequence)<($lastTime,$lastSequence)
                     AND (occurred_ms,sequence)>=(
                         SELECT occurred_ms,sequence FROM message_records WHERE id=$oldest)
@@ -220,6 +223,10 @@ public sealed partial class SqliteMessageStore
             if (record.Kind == MessageKind.Gift && record.TotalPrice < giftMinimum)
             {
                 return false;
+            }
+            if (record.Kind != MessageKind.Danmu)
+            {
+                return true;
             }
             if (hideEmoticons && TranslationTextExtractor.IsEmoticonOnly(record.Content,
                     record.Emoticons.Select(emoticon => emoticon.Text)))

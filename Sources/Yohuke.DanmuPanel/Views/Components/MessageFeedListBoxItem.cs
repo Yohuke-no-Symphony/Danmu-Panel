@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Yohuke.DanmuPanel.ViewModels;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
@@ -13,6 +14,23 @@ internal sealed class MessageFeedListBoxItem : ListBoxItem
         Row = row;
         Host = new(row);
         Content = Host;
+    }
+
+    internal void ConnectRowDataContext()
+    {
+        DataContextChanged += OnContainerDataContextChanged;
+        Row.DataContext = DataContext as MessageItemViewModel;
+    }
+
+    internal void DisconnectRowDataContext()
+    {
+        DataContextChanged -= OnContainerDataContextChanged;
+        Row.DataContext = null;
+    }
+
+    private void OnContainerDataContextChanged(object? sender, EventArgs args)
+    {
+        Row.DataContext = DataContext as MessageItemViewModel;
     }
 
     /// <inheritdoc/>

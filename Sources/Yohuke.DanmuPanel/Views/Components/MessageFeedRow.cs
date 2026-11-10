@@ -50,7 +50,10 @@ internal sealed class MessageFeedRow : Button
         Gestures.SetIsHoldWithMouseEnabled(this, canCopy);
         Holding += OnHolding;
         var content = Templates.Build(kind);
-        content.GetVisualDescendants().OfType<UserAvatarView>().Single().AvatarService = avatars;
+        foreach (var avatar in content.GetVisualDescendants().OfType<UserAvatarView>())
+        {
+            avatar.AvatarService = avatars;
+        }
         content.GetVisualDescendants().OfType<MessageBodyPanel>().Single().SetBitmapCache(bitmapCache);
         Content = content;
         HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -67,7 +70,7 @@ internal sealed class MessageFeedRow : Button
     {
         suppressClick = false;
         copyPressPosition = e.GetPosition(this);
-        isCopyHoldEligible = canCopy &&
+        isCopyHoldEligible = canCopy && DataContext is not MessageItemViewModel { IsEventSummary: true } &&
             e.GetCurrentPoint(this).Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonPressed;
         copyPointer = isCopyHoldEligible ? e.Pointer : null;
         base.OnPointerPressed(e);
@@ -165,7 +168,8 @@ internal sealed class MessageFeedRow : Button
 
     private void OnHolding(object? sender, HoldingRoutedEventArgs e)
     {
-        if (e.HoldingState == HoldingState.Started && isCopyHoldEligible)
+        if (e.HoldingState == HoldingState.Started && isCopyHoldEligible &&
+            DataContext is not MessageItemViewModel { IsEventSummary: true })
         {
             suppressClick = true;
             e.Handled = true;

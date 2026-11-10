@@ -3,7 +3,6 @@ using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Data;
 using Yohuke.DanmuPanel.ViewModels;
 using Yohuke.DanmuPanel.Models.Messages;
 
@@ -35,7 +34,7 @@ internal sealed class MessageFeedListBox(Func<MessageFeedRow> createRow, Message
             return new MessageLoadingListBoxItem(kind);
         }
         var row = createRow();
-        LogicalChildren.Add(row);
+        row.DataContext = null;
         var container = new MessageFeedListBoxItem(row);
         RegisterSlot(container);
         return container;
@@ -129,11 +128,11 @@ internal sealed class MessageFeedListBox(Func<MessageFeedRow> createRow, Message
         {
             return;
         }
+        container.ConnectRowDataContext();
         if (!LogicalChildren.Contains(container.Row))
         {
             LogicalChildren.Add(container.Row);
         }
-        container.Row.Bind(DataContextProperty, new Binding(nameof(DataContext)) { Source = container });
     }
 
     private void ClearSlots()
@@ -143,7 +142,7 @@ internal sealed class MessageFeedListBox(Func<MessageFeedRow> createRow, Message
         foreach (var container in released)
         {
             container.Row.ContextMenu?.Close();
-            container.Row.ClearValue(DataContextProperty);
+            container.DisconnectRowDataContext();
             LogicalChildren.Remove(container.Row);
         }
     }

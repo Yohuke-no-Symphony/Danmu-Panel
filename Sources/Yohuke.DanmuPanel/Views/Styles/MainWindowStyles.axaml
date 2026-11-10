@@ -912,6 +912,14 @@
         <Setter Property="FontWeight" Value="Bold" />
     </Style>
 
+    <Style Selector="TextBlock.eventSummaryLabel">
+        <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeBody}" />
+    </Style>
+
+    <Style Selector="TextBlock.eventSummaryValue">
+        <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeBody}" />
+    </Style>
+
     <Style Selector="Button.feedUserNameButton">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
@@ -943,7 +951,7 @@
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
-    <Style Selector="TextBlock.danmuFeedMeta">
+    <Style Selector="TextBlock.danmuFeedMeta, TextBlock.eventSummaryTime">
         <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeMetadata}" />
         <Setter Property="Foreground" Value="{DynamicResource MessageTimeBrush}" />
     </Style>
@@ -1122,7 +1130,7 @@
         <Setter Property="RowSpacing" Value="0" />
     </Style>
 
-    <Style Selector="Grid.compactDanmu TextBlock.danmuFeedMeta">
+    <Style Selector="Grid.compactDanmu TextBlock.danmuFeedMeta, Grid.compactDanmu TextBlock.eventSummaryTime">
         <Setter Property="IsVisible" Value="False" />
     </Style>
 
@@ -1133,6 +1141,10 @@
     </Style>
 
     <Style Selector="Grid.compactDanmu TextBlock.scFeedPrice">
+        <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeCompact}" />
+    </Style>
+
+    <Style Selector="Grid.compactDanmu TextBlock.eventSummaryLabel, Grid.compactDanmu TextBlock.eventSummaryValue">
         <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeCompact}" />
     </Style>
 

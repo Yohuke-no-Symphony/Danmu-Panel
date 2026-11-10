@@ -79,13 +79,15 @@
         </DataTemplate>
         <DataTemplate x:Key="DanmuRowMenu" x:DataType="vm:MessageFeedMenuViewModel">
             <views:LocalizedContextMenu>
-                <MenuItem Header="{Binding ActivationHeader}" Command="{Binding ActivateCommand}" IsEnabled="{Binding CanActivate}">
+                <MenuItem Header="{Binding ActivationHeader}" Command="{Binding ActivateCommand}"
+                          IsEnabled="{Binding CanActivate}" IsVisible="{Binding ShowMessageActions}">
                     <MenuItem.Icon><LucideIcon Kind="{Binding ActivationIcon}" Size="16" /></MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="{Loc Key=Panel.CopyText}" Command="{Binding CopyCommand}">
+                <MenuItem Header="{Loc Key=Panel.CopyText}" Command="{Binding CopyCommand}" IsVisible="{Binding ShowMessageActions}">
                     <MenuItem.Icon><LucideIcon Kind="Copy" Size="16" /></MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Name="RetryTranslationMenuItem" Header="{Loc Key=Panel.RetryTranslation}" Command="{Binding RetryCommand}" IsEnabled="{Binding CanRetryTranslation}">
+                <MenuItem Name="RetryTranslationMenuItem" Header="{Loc Key=Panel.RetryTranslation}" Command="{Binding RetryCommand}"
+                          IsEnabled="{Binding CanRetryTranslation}" IsVisible="{Binding ShowMessageActions}">
                     <MenuItem.Icon><LucideIcon Kind="Languages" Size="16" /></MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Name="ToggleSpecialAttentionMenuItem" Header="{Binding AttentionHeader}" Command="{Binding ToggleAttentionCommand}" IsEnabled="{Binding CanToggleAttention}">
