@@ -68,6 +68,11 @@ public class BilibiliLiveWebSocket : BaseApi, ILiveDanmuSocket
     public event EventHandler<BilibiliGuardPurchaseMessage>? GuardPurchaseReceived;
 
     /// <summary>
+    /// 接收到红包内容或开奖更新时触发。
+    /// </summary>
+    public event EventHandler<BilibiliRedPocketMessage>? RedPocketReceived;
+
+    /// <summary>
     /// 监听发生错误时触发。
     /// </summary>
     public event EventHandler<Exception>? ErrorReceived;
@@ -372,6 +377,17 @@ public class BilibiliLiveWebSocket : BaseApi, ILiveDanmuSocket
 
             DanmuReceived?.Invoke(this, danmu);
             PublishTranslatedDanmu(danmu.Content);
+            return;
+        }
+
+        if (BilibiliRedPocketMessageParser.SupportsCommand(command))
+        {
+            var redPocket = BilibiliRedPocketMessageParser.Parse(roomId, json);
+            if (redPocket is not null)
+            {
+                RedPocketReceived?.Invoke(this, redPocket);
+            }
+
             return;
         }
 

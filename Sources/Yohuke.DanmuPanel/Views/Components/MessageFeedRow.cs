@@ -54,6 +54,10 @@ internal sealed class MessageFeedRow : Button
         Gestures.SetIsHoldWithMouseEnabled(this, canCopy);
         Holding += OnHolding;
         var content = Templates.Build(kind);
+        foreach (var redPocket in content.GetVisualDescendants().OfType<RedPocketContentSurface>())
+        {
+            redPocket.AvatarService = avatars;
+        }
         foreach (var avatar in content.GetVisualDescendants().OfType<UserAvatarView>())
         {
             avatar.AvatarService = avatars;
@@ -66,7 +70,7 @@ internal sealed class MessageFeedRow : Button
         HorizontalAlignment = HorizontalAlignment.Stretch;
         HorizontalContentAlignment = HorizontalAlignment.Stretch;
         Classes.Add(kind == MessageKind.SuperChat ? "scFeedButton" : "danmuFeedButton");
-        if (kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard)
+        if (kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard or MessageKind.RedPocket)
         {
             RenderTransform = new TranslateTransform();
             Classes.Add("messageCardButton");

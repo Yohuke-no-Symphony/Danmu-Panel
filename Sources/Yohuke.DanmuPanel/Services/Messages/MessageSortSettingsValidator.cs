@@ -13,6 +13,7 @@ internal static class MessageSortSettingsValidator
         ValidatePanel(settings.SuperChat);
         ValidatePanel(settings.Gift);
         ValidatePanel(settings.Guard);
+        ValidatePanel(settings.RedPocket);
     }
 
     private static void ValidatePanel(MessageReadSortSettings? panel)

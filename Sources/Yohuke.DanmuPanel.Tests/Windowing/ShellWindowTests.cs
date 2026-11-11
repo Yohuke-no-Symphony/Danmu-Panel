@@ -26,7 +26,7 @@ public sealed class ShellWindowTests
             await shell.InitializeLayoutAsync();
             shell.Show();
             Pump(shell);
-            Assert.Equal(7, shell.Layouts.PanelAdapters.Count);
+            Assert.Equal(8, shell.Layouts.PanelAdapters.Count);
             Assert.False(shell.Layouts.IsVisible(WorkbenchPanelIds.TEST_MESSAGES));
             Assert.True(WorkspaceLayoutValidator.TryValidate(shell.Layouts.CaptureFile(), out _));
             shell.FloatPanel(WorkbenchPanelIds.GIFT);

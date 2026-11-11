@@ -50,7 +50,7 @@
                     <ComboBox ItemTemplate="{StaticResource ChoiceTemplate}" x:Name="TestRoomGuardLevel" ItemsSource="{Binding MedalGuardChoices}" SelectedIndex="{Binding RoomGuardIndex, Mode=TwoWay}" HorizontalAlignment="Stretch" />
                     <CheckBox x:Name="TestIsRoomAdmin" Content="{Loc Key=TestMessages.IsRoomAdmin}" IsChecked="{Binding IsRoomAdmin, Mode=TwoWay}" />
                 </StackPanel>
-                <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding ShowsText}">
+                <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding ShowsContent}">
                     <TextBlock Text="{Loc Key=TestMessages.Content}" />
                     <TextBox x:Name="TestMessageContent" Text="{Binding MessageContent, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="74" MaxHeight="160" />
                 </StackPanel>
@@ -74,6 +74,10 @@
                     <TextBlock Text="{Loc Key=TestMessages.GuardLevel}" />
                     <ComboBox ItemTemplate="{StaticResource ChoiceTemplate}" x:Name="TestGuardLevel" ItemsSource="{Binding GuardChoices}" SelectedIndex="{Binding GuardIndex, Mode=TwoWay}" HorizontalAlignment="Stretch" />
                 </StackPanel>
+                <CheckBox x:Name="TestRedPocketHasResult"
+                          Content="{Loc Key=TestMessages.RedPocketHasResult}"
+                          IsChecked="{Binding RedPocketHasResult, Mode=TwoWay}"
+                          IsVisible="{Binding ShowsRedPocket}" />
                 <StackPanel Spacing="5" Margin="0,0,0,10">
                     <TextBlock Text="{Loc Key=TestMessages.BatchCount}" />
                     <NumericUpDown x:Name="TestBatchCount" Value="{Binding BatchCount, Mode=TwoWay}" Minimum="1" Maximum="{Binding MaximumBatchCount}" FormatString="0" />

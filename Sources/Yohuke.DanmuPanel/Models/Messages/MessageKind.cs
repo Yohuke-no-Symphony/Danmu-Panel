@@ -6,5 +6,6 @@ public enum MessageKind
     Danmu,
     SuperChat,
     Gift,
-    Guard
+    Guard,
+    RedPocket = 4
 }

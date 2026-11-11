@@ -20,7 +20,7 @@ namespace Yohuke.DanmuPanel.Tests.Windowing;
 /// <summary>从真实停靠面板驱动本地测试消息生成和清理。</summary>
 public sealed class TestMessagesViewTests
 {
-    /// <summary>未选择房间时禁用操作，四类型输入通过标题图标或同一右键命令写入并能定向清理。</summary>
+    /// <summary>未选择房间时禁用操作，各类型输入通过标题图标或同一右键命令写入并能定向清理。</summary>
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]
@@ -106,6 +106,22 @@ public sealed class TestMessagesViewTests
             }
             await view.AddSingleCommand.ExecuteAsync(null);
             Assert.Equal(1, Assert.Single(await runtime.Messages.LoadPageAsync(room.Id, MessageKind.Guard, 0, 10)).GuardLevel);
+            kind.SelectedIndex = (int)MessageKind.RedPocket;
+            Pump(shell);
+            Assert.True(Find<TextBox>(view, "TestGiftName").IsEffectivelyVisible);
+            Assert.True(Find<TextBox>(view, "TestMessageContent").IsEffectivelyVisible);
+            Assert.False(Find<TextBox>(view, "TestTranslation").IsEffectivelyVisible);
+            var includeResult = Find<CheckBox>(view, "TestRedPocketHasResult");
+            Assert.True(includeResult.IsChecked);
+            includeResult.IsChecked = false;
+            await view.AddSingleCommand.ExecuteAsync(null);
+            includeResult.IsChecked = true;
+            await view.AddSingleCommand.ExecuteAsync(null);
+            var redPockets = await runtime.Messages.LoadPageAsync(room.Id, MessageKind.RedPocket, 0, 10);
+            Assert.Equal(2, redPockets.Count);
+            Assert.Single(redPockets, record => record.RedPocket!.HasResult);
+            Assert.Single(redPockets, record => !record.RedPocket!.HasResult);
+            Assert.Single(redPockets.Single(record => record.RedPocket!.HasResult).RedPocket!.Winners);
             foreach (var messageKind in Enum.GetValues<MessageKind>())
             {
                 var records = (await runtime.Messages.LoadPageAsync(room.Id, messageKind, 0, 10))
@@ -127,7 +143,7 @@ public sealed class TestMessagesViewTests
 
             await view.ClearCommand.ExecuteAsync(null);
             Assert.Equal("live", Assert.Single(await runtime.Messages.LoadPageAsync(room.Id, MessageKind.Danmu, 0, 10)).Id);
-            foreach (var messageKind in new[] { MessageKind.SuperChat, MessageKind.Gift, MessageKind.Guard })
+            foreach (var messageKind in new[] { MessageKind.SuperChat, MessageKind.Gift, MessageKind.Guard, MessageKind.RedPocket })
             {
                 Assert.Empty(await runtime.Messages.LoadPageAsync(room.Id, messageKind, 0, 10));
             }

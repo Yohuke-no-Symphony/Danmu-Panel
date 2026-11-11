@@ -18,6 +18,9 @@ public sealed record MessageRecord
 
     public string Content { get; init; } = "";
 
+    /// <summary>红包专用内容，旧记录及其他消息类型为空。</summary>
+    public RedPocketData? RedPocket { get; init; }
+
     /// <summary>被回复用户的 UID，旧记录或协议缺失时为 0。</summary>
     public long ReplyUid { get; init; }
 

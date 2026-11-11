@@ -71,4 +71,18 @@
             </Canvas>
         </Grid>
     </DataTemplate>
+    <DataTemplate x:Key="RedPocket" x:DataType="vm:MessageItemViewModel">
+        <Grid>
+            <Border Classes="messageCard" BorderBrush="{Binding BorderBrush}"
+                    BorderThickness="{DynamicResource MessageCardBorderThickness}">
+                <StackPanel Spacing="8">
+                    <components:MessageIdentitySurface />
+                    <components:RedPocketContentSurface DataContext="{Binding RedPocket}" />
+                </StackPanel>
+            </Border>
+            <Canvas HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False">
+                <Border Classes="messageUnreadDot" IsHitTestVisible="False" IsVisible="{Binding ShowUnreadDot}" Canvas.Right="0" />
+            </Canvas>
+        </Grid>
+    </DataTemplate>
 </ResourceDictionary>

@@ -74,6 +74,27 @@ public static class RoomMessageMapper
         };
     }
 
+    /// <summary>将红包的多个协议阶段映射到同一条持久化记录。</summary>
+    public static MessageRecord Map(BilibiliRedPocketMessage value, string tabId, long generation, bool history = false)
+    {
+        var redPocket = value.RedPocket;
+        return new()
+        {
+            Id = redPocket.GetRecordId(tabId, value.RoomId),
+            RoomTabId = tabId,
+            Generation = generation,
+            RoomId = value.RoomId,
+            Kind = MessageKind.RedPocket,
+            Time = Time(value.Timestamp),
+            HasSourceTimestamp = value.Timestamp > 0,
+            IsHistory = history,
+            UserUid = redPocket.SenderUid,
+            UserName = redPocket.SenderName,
+            Content = redPocket.Danmu,
+            RedPocket = redPocket
+        };
+    }
+
     private static DateTimeOffset Time(long timestamp)
     {
         return timestamp > 0 ? DateTimeOffset.FromUnixTimeSeconds(timestamp) : DateTimeOffset.UtcNow;

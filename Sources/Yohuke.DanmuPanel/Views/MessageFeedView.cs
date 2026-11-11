@@ -87,7 +87,7 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
             scroll = null;
         };
         HeaderActionsTemplate = GetTemplate(kind == MessageKind.Danmu ? "DanmuHeaderActions" : "CardHeaderActions");
-        if (kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard)
+        if (kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard or MessageKind.RedPocket)
         {
             HeaderBadgeTemplate = GetTemplate("UnreadBadge");
             HeaderTabsTemplate = GetTemplate("ReadTabs");
@@ -209,7 +209,7 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
 
     private void UpdateColumnRatio()
     {
-        if (messageKind == MessageKind.SuperChat)
+        if (messageKind is MessageKind.SuperChat or MessageKind.RedPocket)
         {
             return;
         }
@@ -394,6 +394,10 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
         var row = new MessageFeedRow(kind, runtime.UserAvatars, EmoticonBitmaps);
         row.Click += async (_, args) =>
         {
+            if (!ReferenceEquals(args.Source, row))
+            {
+                return;
+            }
             args.Handled = true;
             if (row.DataContext is MessageItemViewModel item)
             {
@@ -509,7 +513,8 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
             }
             else
             {
-                await runtime.Messages.MarkReadAsync(record.Id, record.Quantity, record.TotalPrice);
+                await runtime.Messages.MarkReadAsync(record.Id, record.Quantity, record.TotalPrice,
+                    observedRedPocketResult: record.RedPocket?.HasResult);
             }
             runtime.NotifyTranslation();
             await Model.RefreshAsync();

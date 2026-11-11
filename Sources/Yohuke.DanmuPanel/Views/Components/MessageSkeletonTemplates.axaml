@@ -51,4 +51,13 @@
             </components:MessageFeedColumnLayout>
         </Border>
     </DataTemplate>
+    <DataTemplate x:Key="RedPocket">
+        <Border Classes="messageCard" BorderBrush="Transparent" Background="Transparent"
+                BorderThickness="{DynamicResource MessageCardBorderThickness}">
+            <StackPanel Spacing="8">
+                <components:SkeletonIdentitySurface />
+                <components:SkeletonBodySurface />
+            </StackPanel>
+        </Border>
+    </DataTemplate>
 </ResourceDictionary>

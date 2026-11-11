@@ -41,7 +41,9 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     private IReadOnlyList<DanmuEmoticon> emoticons = [];
     private MessageReply? reply;
     private bool isPinged;
+    private RedPocketViewModel? redPocket;
     public MessageRecord Record { get; private set; }
+    public RedPocketViewModel? RedPocket => redPocket;
     /// <summary>当前导航定位的动态提示状态，只在界面内保留。</summary>
     public bool IsPinged
     {
@@ -61,7 +63,9 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     internal bool IsPresentationPending => isPresentationPending;
     internal MessageDisplaySettings PresentationSettings => settings;
     internal bool TranslationPending => translationPending;
-    public string Name => Record.UserName;
+    public string Name => Record.Kind == MessageKind.RedPocket && string.IsNullOrWhiteSpace(Record.UserName) && Localization.IsInitialized
+        ? Localization.Get("RedPocket.UnknownSender")
+        : Record.UserName;
     /// <summary>当前消息用户的稳定身份，用于独立于消息行缓存头像。</summary>
     public long UserUid => Record.UserUid;
     /// <summary>正文前内联显示的回复对象，神秘人只显示匿名头像。</summary>
@@ -115,7 +119,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     public IBrush MedalBackgroundBrush => medalBackgroundBrush;
     public string Time => time;
     public bool ShowPinBadge => Record.Kind == MessageKind.Danmu && Record.IsPinned;
-    public bool ShowUnreadDot => !IsEventSummary && Record.Kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard && !Record.IsRead;
+    public bool ShowUnreadDot => !IsEventSummary && Record.Kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard or MessageKind.RedPocket && !Record.IsRead;
     public string Detail => detail ??= FormatDetail();
     public string DetailPinyin => detailPinyin;
     public bool HasDetailPinyin => DetailPinyin.Length > 0;
@@ -335,6 +339,17 @@ public sealed class MessageItemViewModel : FeedRowViewModel
                 ? record.MedalName : name.SubstringByTextElements(0, MAX_MEDAL_NAME_TEXT_ELEMENTS), nameof(MedalName));
         }
         var cultureChanged = previousSettings.CultureName != settings.CultureName;
+        if (record.Kind == MessageKind.RedPocket && !IsEventSummary)
+        {
+            redPocket ??= new();
+            redPocket.ShowUserAvatars = settings.ShowUserAvatars;
+            if (initialize || previous.RedPocket != record.RedPocket || previousSettings.LanguageId != settings.LanguageId || cultureChanged)
+            {
+                redPocket.Update(record.RedPocket);
+                OnPropertyChanged(nameof(RedPocket));
+                OnPropertyChanged(nameof(Name));
+            }
+        }
         if (initialize || previous.Time != record.Time || cultureChanged)
         {
             SetProperty(ref time, record.Time.ToLocalTime().ToString("HH:mm:ss"), nameof(Time));
@@ -356,9 +371,14 @@ public sealed class MessageItemViewModel : FeedRowViewModel
                 previous.GiftName != record.GiftName ||
                 previous.Quantity != record.Quantity || previous.TotalPrice != record.TotalPrice ||
                 previous.HasKnownPrice != record.HasKnownPrice ||
+                previous.RedPocket != record.RedPocket ||
                 previous.GuardLevel != record.GuardLevel || previousSettings.LanguageId != settings.LanguageId || cultureChanged))
         {
             UpdateEventSummary();
+            if (record.Kind == MessageKind.RedPocket && string.IsNullOrWhiteSpace(record.UserName))
+            {
+                OnPropertyChanged(nameof(Name));
+            }
         }
         SetProperty(ref translation, !translationBlocked && record.TranslationFingerprint == settings.TranslationFingerprint
             ? record.Translation ?? "" : "", nameof(Translation));
@@ -429,17 +449,23 @@ public sealed class MessageItemViewModel : FeedRowViewModel
 
     private void UpdateEventSummary()
     {
+        var redPocketData = Record.RedPocket;
         SetProperty(ref summaryLabel, Record.Kind switch
         {
             MessageKind.SuperChat => Localization.Get("Workbench.Panel.SuperChat"),
             MessageKind.Gift => Localization.Format("Panel.EventSummary.Gift", Record.GiftName, Record.Quantity),
             MessageKind.Guard => Localization.Format("Panel.EventSummary.Guard",
                 Localization.Get($"Panel.Guard.{Record.GuardLevel}"), Record.Quantity),
+            MessageKind.RedPocket => Localization.Format("Panel.EventSummary.RedPocket",
+                Localization.Get(redPocketData?.HasResult == true ? "RedPocket.Drawn" : "RedPocket.Waiting")),
             _ => ""
         }, nameof(SummaryLabel));
-        SetProperty(ref summaryValue, Record.Kind == MessageKind.Guard && !Record.HasKnownPrice && Record.TotalPrice == 0
-            ? Localization.Get("Panel.EventSummary.UnknownValue")
-            : Localization.Format("Panel.EventSummary.Value", Record.TotalPrice), nameof(SummaryValue));
+        SetProperty(ref summaryValue, Record.Kind switch
+        {
+            MessageKind.RedPocket => redPocketData is null ? "" : RedPocketViewModel.FormatValue(redPocketData, includeGiftLabel: false),
+            MessageKind.Guard when !Record.HasKnownPrice && Record.TotalPrice == 0 => Localization.Get("Panel.EventSummary.UnknownValue"),
+            _ => Localization.Format("Panel.EventSummary.Value", Record.TotalPrice)
+        }, nameof(SummaryValue));
     }
 
     private IBrush GetBorderBrush()

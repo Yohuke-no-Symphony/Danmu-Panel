@@ -22,7 +22,7 @@ public sealed partial class TestMessagesViewModel : ObservableObject, IDisposabl
     private string statusRoom = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsMedal), nameof(ShowsRoomIdentity), nameof(ShowsText), nameof(ShowsGift), nameof(ShowsPrice), nameof(ShowsQuantity), nameof(ShowsGuard))]
+    [NotifyPropertyChangedFor(nameof(ShowsMedal), nameof(ShowsRoomIdentity), nameof(ShowsText), nameof(ShowsContent), nameof(ShowsGift), nameof(ShowsPrice), nameof(ShowsQuantity), nameof(ShowsGuard), nameof(ShowsRedPocket))]
     private int kindIndex;
     [ObservableProperty] private string userName = Localization.Get("TestMessages.SampleUser");
     [ObservableProperty] private string medalName = "";
@@ -37,9 +37,10 @@ public sealed partial class TestMessagesViewModel : ObservableObject, IDisposabl
     [ObservableProperty] private decimal? quantity = 1;
     [ObservableProperty] private decimal? batchCount = 100;
     [ObservableProperty] private int guardIndex = 2;
+    [ObservableProperty] private bool redPocketHasResult = true;
 
     public IReadOnlyList<TestMessageChoice> KindChoices { get; } =
-        [new("Workbench.Panel.Danmu"), new("Workbench.Panel.SuperChat"), new("Workbench.Panel.Gift"), new("Workbench.Panel.Guard")];
+        [new("Workbench.Panel.Danmu"), new("Workbench.Panel.SuperChat"), new("Workbench.Panel.Gift"), new("Workbench.Panel.Guard"), new("Workbench.Panel.RedPocket")];
     public IReadOnlyList<TestMessageChoice> GuardChoices { get; } = [new("Panel.Guard.1"), new("Panel.Guard.2"), new("Panel.Guard.3")];
     public IReadOnlyList<TestMessageChoice> MedalGuardChoices { get; } = [new("TestMessages.NoGuard"), new("Panel.Guard.3"), new("Panel.Guard.2"), new("Panel.Guard.1")];
     public decimal MaximumBatchCount => TestMessageRequest.MAX_BATCH_COUNT;
@@ -47,10 +48,12 @@ public sealed partial class TestMessagesViewModel : ObservableObject, IDisposabl
     /// <summary>仅普通弹幕允许设置本直播间的舰队身份和房管标记。</summary>
     public bool ShowsRoomIdentity => KindIndex == (int)MessageKind.Danmu;
     public bool ShowsText => KindIndex is (int)MessageKind.Danmu or (int)MessageKind.SuperChat;
-    public bool ShowsGift => KindIndex == (int)MessageKind.Gift;
+    public bool ShowsContent => ShowsText || ShowsRedPocket;
+    public bool ShowsGift => KindIndex is (int)MessageKind.Gift or (int)MessageKind.RedPocket;
     public bool ShowsPrice => KindIndex != (int)MessageKind.Danmu;
-    public bool ShowsQuantity => KindIndex is (int)MessageKind.Gift or (int)MessageKind.Guard;
+    public bool ShowsQuantity => KindIndex is (int)MessageKind.Gift or (int)MessageKind.Guard or (int)MessageKind.RedPocket;
     public bool ShowsGuard => KindIndex == (int)MessageKind.Guard;
+    public bool ShowsRedPocket => KindIndex == (int)MessageKind.RedPocket;
     public string TargetText => room is null ? Localization.Get("TestMessages.NoRoom") : Localization.Format("TestMessages.Target", room.Name, room.RoomId);
     public bool HasStatus => statusKey is not null;
     public string StatusText => statusKey is null ? "" : Localization.Format(statusKey, statusCount, statusRoom);
@@ -114,7 +117,7 @@ public sealed partial class TestMessagesViewModel : ObservableObject, IDisposabl
         var selectedKind = (MessageKind)KindIndex;
         if (string.IsNullOrWhiteSpace(UserName) ||
             selectedKind is MessageKind.Danmu or MessageKind.SuperChat && string.IsNullOrWhiteSpace(MessageContent) ||
-            selectedKind == MessageKind.Gift && string.IsNullOrWhiteSpace(GiftName))
+            selectedKind is MessageKind.Gift or MessageKind.RedPocket && string.IsNullOrWhiteSpace(GiftName))
         {
             SetStatus("TestMessages.Required", 0, "");
             return;
@@ -127,7 +130,7 @@ public sealed partial class TestMessagesViewModel : ObservableObject, IDisposabl
             RoomGuardLevel = GuardLevelFromIndex(RoomGuardIndex), IsRoomAdmin = IsRoomAdmin,
             GiftName = GiftName ?? "", UnitPrice = Price ?? 0,
             Quantity = decimal.ToInt32(Quantity ?? 1), GuardLevel = GuardIndex + 1,
-            Translation = Translation ?? "", Count = count
+            Translation = Translation ?? "", RedPocketHasResult = RedPocketHasResult, Count = count
         };
         await RunAsync(async () =>
         {

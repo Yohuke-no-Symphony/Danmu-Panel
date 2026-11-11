@@ -47,7 +47,17 @@ internal static class WorkspaceLayoutPresets
                         Children =
                         [
                             Tabs(0.4, WorkbenchPanelIds.SUPER_CHAT),
-                            Tabs(0.35, WorkbenchPanelIds.GIFT),
+                            new()
+                            {
+                                Kind = WorkspaceLayoutNodeKind.Split,
+                                Orientation = WorkspaceLayoutOrientation.Horizontal,
+                                Proportion = 0.35,
+                                Children =
+                                [
+                                    Tabs(0.5, WorkbenchPanelIds.GIFT),
+                                    Tabs(0.5, WorkbenchPanelIds.RED_POCKET)
+                                ]
+                            },
                             Tabs(0.25, WorkbenchPanelIds.GUARD)
                         ]
                     }

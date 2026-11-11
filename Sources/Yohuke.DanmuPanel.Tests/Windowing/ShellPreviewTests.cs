@@ -16,7 +16,7 @@ using Xunit;
 
 namespace Yohuke.DanmuPanel.Tests.Windowing;
 
-/// <summary>使用隔离数据库与真实五面板组件验证工作台，并可输出无网络视觉样例。</summary>
+/// <summary>使用隔离数据库与真实消息面板组件验证工作台，并可输出无网络视觉样例。</summary>
 public sealed class ShellPreviewTests
 {
     /// <summary>真实消息恢复到各自面板，渲染中英日内容、已读与置顶状态。</summary>
@@ -45,12 +45,13 @@ public sealed class ShellPreviewTests
         using var logView = new LogPanelView(log);
         using var testView = new TestMessagesView(runtime, errors.Add);
         testView.SelectRoom(room);
-        var kinds = new[] { MessageKind.Danmu, MessageKind.SuperChat, MessageKind.Gift, MessageKind.Guard };
+        var kinds = new[] { MessageKind.Danmu, MessageKind.SuperChat, MessageKind.Gift, MessageKind.Guard, MessageKind.RedPocket };
         var feeds = kinds.Select(kind => new MessageFeedView(runtime, kind, errors.Add)).ToArray();
         var panels = new Dictionary<string, Control>
         {
             ["workspace"] = workspaceView, ["danmu"] = feeds[0], ["superChat"] = feeds[1],
-            ["gift"] = feeds[2], ["guard"] = feeds[3], ["testMessages"] = testView, ["log"] = logView
+            ["gift"] = feeds[2], ["guard"] = feeds[3], ["redPocket"] = feeds[4],
+            ["testMessages"] = testView, ["log"] = logView
         };
         var shell = new ShellWindow(panels, workspaceView.Toolbar, directory);
         workspaceView.HostWindow = shell;
@@ -83,6 +84,30 @@ public sealed class ShellPreviewTests
             await AddAsync(runtime, room, generation, MessageKind.Guard, "春山", "", time.AddSeconds(45), guardLevel: 3, color: "#2A60B2");
             var guard = await AddAsync(runtime, room, generation, MessageKind.Guard, "南星", "", time.AddSeconds(42), guardLevel: 2, color: "#9554B2");
             await runtime.Messages.MarkReadAsync(guard.Id, guard.Quantity, guard.TotalPrice);
+            await runtime.Messages.AppendAsync(new()
+            {
+                RoomTabId = room.Id,
+                RoomId = room.RoomId,
+                Generation = generation,
+                Kind = MessageKind.RedPocket,
+                UserName = "星海",
+                UserUid = 10001,
+                Time = time.AddSeconds(50),
+                RedPocket = new()
+                {
+                    LotId = 123,
+                    SenderUid = 10001,
+                    SenderName = "星海",
+                    StartTime = time.ToUnixTimeSeconds(),
+                    EndTime = time.AddMinutes(3).ToUnixTimeSeconds(),
+                    HasDetails = true,
+                    HasResult = true,
+                    TotalPrice = 1600,
+                    TotalAwardCount = 8,
+                    Awards = [new() { GiftId = "1", Name = "小花花", Quantity = 8 }],
+                    Winners = [new() { Uid = 10002, UserName = "月光旅人", GiftId = "1", GiftName = "小花花" }]
+                }
+            }, runtime.Configuration.Settings.Reading);
             foreach (var feed in feeds)
             {
                 await feed.Model.SelectRoomAsync(room);
@@ -96,7 +121,10 @@ public sealed class ShellPreviewTests
             Assert.Empty(errors);
             Assert.False(Assert.Single(shell.GetVisualDescendants().OfType<WindowTitleBar>()).FindControl<TextBlock>("TitleText")!.IsVisible);
             Assert.True(feeds[0].Model.Items[0].HasTranslation);
-            Assert.Equal(6, feeds[0].Model.Items.Count);
+            Assert.Equal(6, feeds[0].Model.Items.Count(item => item.Record.Kind == MessageKind.Danmu));
+            var redPocketSummary = Assert.Single(feeds[0].Model.Items, item => item.Record.Kind == MessageKind.RedPocket);
+            Assert.True(redPocketSummary.IsEventSummary);
+            Assert.Contains(Localization.Get("RedPocket.Drawn"), redPocketSummary.SummaryLabel);
             Assert.True(feeds[0].Model.Items[0].Record.IsPinned);
             Assert.All(feeds, feed => Assert.NotEmpty(feed.Model.Items));
             Assert.All(feeds.Skip(1), feed => Assert.All(feed.Model.Items, item => Assert.False(item.Record.IsRead)));

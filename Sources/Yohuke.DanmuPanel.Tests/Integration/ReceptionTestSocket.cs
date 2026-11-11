@@ -12,6 +12,7 @@ internal sealed class ReceptionTestSocket : ILiveDanmuSocket
     public event EventHandler<BilibiliGiftMessage>? GiftReceived;
     public event EventHandler<BilibiliSuperChatMessage>? SuperChatReceived;
     public event EventHandler<BilibiliGuardPurchaseMessage>? GuardPurchaseReceived;
+    public event EventHandler<BilibiliRedPocketMessage>? RedPocketReceived;
     public event EventHandler<Exception>? ErrorReceived;
     public event EventHandler? Disconnected;
     public event EventHandler? Recovered;
@@ -25,6 +26,7 @@ internal sealed class ReceptionTestSocket : ILiveDanmuSocket
     internal void Emit(BilibiliGiftMessage message) => GiftReceived?.Invoke(this, message);
     internal void Emit(BilibiliSuperChatMessage message) => SuperChatReceived?.Invoke(this, message);
     internal void Emit(BilibiliGuardPurchaseMessage message) => GuardPurchaseReceived?.Invoke(this, message);
+    internal void Emit(BilibiliRedPocketMessage message) => RedPocketReceived?.Invoke(this, message);
     internal void Error(Exception exception) => ErrorReceived?.Invoke(this, exception);
     internal void Disconnect() => Disconnected?.Invoke(this, EventArgs.Empty);
     internal void Recover() => Recovered?.Invoke(this, EventArgs.Empty);

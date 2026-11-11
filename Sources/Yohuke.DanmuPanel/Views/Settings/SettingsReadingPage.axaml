@@ -82,7 +82,7 @@
             <settings:SettingsCard Title="{Loc Key=Settings.MessageSorting}">
                 <StackPanel Spacing="14">
                     <Grid ColumnDefinitions="Auto,*,*"
-                          RowDefinitions="Auto,Auto,Auto,Auto"
+                          RowDefinitions="Auto,Auto,Auto,Auto,Auto"
                           ColumnSpacing="16"
                           RowSpacing="8"
                           ToolTip.Tip="{Loc Key=Settings.MessageSortingHelp}">
@@ -125,6 +125,19 @@
                                   Grid.Column="2"
                                   x:Name="GuardReadSortOrderComboBox"
                                   SelectedIndex="{Binding GuardReadSort, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding SortOrderOptions}" ItemTemplate="{StaticResource SettingsChoiceTemplate}" />
+                        <TextBlock Grid.Row="4" Text="{Loc Key=Workbench.Panel.RedPocket}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <ComboBox Grid.Row="4"
+                                  Grid.Column="1"
+                                  x:Name="RedPocketUnreadSortOrderComboBox"
+                                  SelectedIndex="{Binding RedPocketUnreadSort, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding SortOrderOptions}" ItemTemplate="{StaticResource SettingsChoiceTemplate}" />
+                        <ComboBox Grid.Row="4"
+                                  Grid.Column="2"
+                                  x:Name="RedPocketReadSortOrderComboBox"
+                                  SelectedIndex="{Binding RedPocketReadSort, Mode=TwoWay}"
                                   HorizontalAlignment="Stretch"
                                   ItemsSource="{Binding SortOrderOptions}" ItemTemplate="{StaticResource SettingsChoiceTemplate}" />
                     </Grid>

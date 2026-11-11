@@ -4,7 +4,7 @@ using Yohuke.DanmuPanel.Models.State;
 
 namespace Yohuke.DanmuPanel.ViewModels.Settings;
 
-/// <summary>保存阅读页的独立输入及三类消息的排序草稿。</summary>
+/// <summary>保存阅读页的独立输入及各事件消息的排序草稿。</summary>
 public sealed partial class SettingsReadingViewModel : ObservableObject
 {
     [ObservableProperty] private decimal? messageRetentionCount;
@@ -29,6 +29,8 @@ public sealed partial class SettingsReadingViewModel : ObservableObject
     [ObservableProperty] private int giftReadSort;
     [ObservableProperty] private int guardUnreadSort;
     [ObservableProperty] private int guardReadSort;
+    [ObservableProperty] private int redPocketUnreadSort;
+    [ObservableProperty] private int redPocketReadSort;
 
     public int MaximumMessageRetentionCount => PanelSettings.MAX_MESSAGE_RETENTION_COUNT;
     public IReadOnlyList<SettingsChoiceOption> GiftResetPolicyOptions { get; } = SettingsChoiceOption.Create(
@@ -38,7 +40,11 @@ public sealed partial class SettingsReadingViewModel : ObservableObject
     public IReadOnlyList<SettingsChoiceOption> PinyinLayoutOptions { get; } = SettingsChoiceOption.Create(
         "Settings.PinyinRuby", "Settings.PinyinSeparateLine");
 
-    public bool HasValidSorting => new[] { SuperChatUnreadSort, SuperChatReadSort, GiftUnreadSort, GiftReadSort, GuardUnreadSort, GuardReadSort }
+    public bool HasValidSorting => new[]
+        {
+            SuperChatUnreadSort, SuperChatReadSort, GiftUnreadSort, GiftReadSort,
+            GuardUnreadSort, GuardReadSort, RedPocketUnreadSort, RedPocketReadSort
+        }
         .All(value => Enum.IsDefined((MessageSortOrder)value));
 
     /// <summary>复制阅读设置，所有编辑只影响当前窗口的草稿。</summary>
@@ -66,6 +72,8 @@ public sealed partial class SettingsReadingViewModel : ObservableObject
         giftReadSort = (int)settings.MessageSorting.Gift.Read;
         guardUnreadSort = (int)settings.MessageSorting.Guard.Unread;
         guardReadSort = (int)settings.MessageSorting.Guard.Read;
+        redPocketUnreadSort = (int)settings.MessageSorting.RedPocket.Unread;
+        redPocketReadSort = (int)settings.MessageSorting.RedPocket.Read;
     }
 
     /// <summary>刷新显示文字，保留各消息的排序与阅读草稿。</summary>
@@ -84,7 +92,8 @@ public sealed partial class SettingsReadingViewModel : ObservableObject
         {
             SuperChat = new() { Unread = (MessageSortOrder)SuperChatUnreadSort, Read = (MessageSortOrder)SuperChatReadSort },
             Gift = new() { Unread = (MessageSortOrder)GiftUnreadSort, Read = (MessageSortOrder)GiftReadSort },
-            Guard = new() { Unread = (MessageSortOrder)GuardUnreadSort, Read = (MessageSortOrder)GuardReadSort }
+            Guard = new() { Unread = (MessageSortOrder)GuardUnreadSort, Read = (MessageSortOrder)GuardReadSort },
+            RedPocket = new() { Unread = (MessageSortOrder)RedPocketUnreadSort, Read = (MessageSortOrder)RedPocketReadSort }
         };
     }
 }

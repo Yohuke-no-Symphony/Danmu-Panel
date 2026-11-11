@@ -38,7 +38,7 @@ public sealed partial class SqliteMessageStore
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(messages.Count, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(messages.Count, IMessageStore.MAX_BATCH_COUNT);
-        var snapshot = messages.ToArray();
+        var snapshot = messages.Select(SnapshotRedPocketMessage).ToArray();
         foreach (var message in snapshot)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(message.RoomTabId);
@@ -148,7 +148,7 @@ public sealed partial class SqliteMessageStore
 
     /// <inheritdoc />
     public Task<MessageRecord?> MarkReadAsync(string id, int observedQuantity, decimal observedTotalPrice,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, bool? observedRedPocketResult = null)
     {
         return EnqueueAsync(connection =>
         {
@@ -159,13 +159,18 @@ public sealed partial class SqliteMessageStore
                 return null;
             }
             var options = ReadOptions(connection, transaction);
+            var hasUnobservedResult = record.Kind == MessageKind.RedPocket &&
+                record.RedPocket?.HasResult == true && observedRedPocketResult == false;
             record = record with
             {
                 HasBeenRead = true,
                 ReadQuantity = Math.Max(record.ReadQuantity, Math.Min(record.Quantity, observedQuantity)),
                 ReadTotalPrice = Math.Max(record.ReadTotalPrice, Math.Min(record.TotalPrice, observedTotalPrice))
             };
-            record = record with { IsRead = record.Kind != MessageKind.Gift || IsGiftRead(record, options) };
+            record = record with
+            {
+                IsRead = !hasUnobservedResult && (record.Kind != MessageKind.Gift || IsGiftRead(record, options))
+            };
             record = record with { IsPriority = IsPriority(record, options) };
             WriteMessage(connection, transaction, record);
             UpdateJobPriority(connection, transaction, record);
@@ -177,7 +182,7 @@ public sealed partial class SqliteMessageStore
     /// <inheritdoc />
     public Task<int> MarkAllReadAsync(string roomTabId, MessageKind kind, CancellationToken cancellationToken = default)
     {
-        if (kind is not (MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard))
+        if (kind is not (MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard or MessageKind.RedPocket))
         {
             throw new ArgumentOutOfRangeException(nameof(kind));
         }
@@ -340,6 +345,10 @@ public sealed partial class SqliteMessageStore
             {
                 return new(MessageAppendDisposition.ClearedHistory);
             }
+        }
+        if (message.Kind == MessageKind.RedPocket && message.RedPocket is not null)
+        {
+            return AppendRedPocket(connection, transaction, message, options, out keepChanges);
         }
         if (!string.IsNullOrWhiteSpace(message.MessageId))
         {

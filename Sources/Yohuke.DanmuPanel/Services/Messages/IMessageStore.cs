@@ -27,9 +27,9 @@ public interface IMessageStore : IAsyncDisposable
     Task<MessageRecord?> GetByIdAsync(string id, CancellationToken cancellationToken = default);
     /// <summary>提交普通弹幕置顶状态的切换。</summary>
     Task<MessageRecord?> TogglePinAsync(string id, CancellationToken cancellationToken = default);
-    /// <summary>仅确认用户操作时实际看到的数量和价值。</summary>
+    /// <summary>仅确认用户操作时实际看到的数量、价值和红包开奖阶段。</summary>
     Task<MessageRecord?> MarkReadAsync(string id, int observedQuantity, decimal observedTotalPrice,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default, bool? observedRedPocketResult = null);
     /// <summary>在同一事务中确认指定房间与消息类型的全部未读记录，返回确认条数。</summary>
     Task<int> MarkAllReadAsync(string roomTabId, MessageKind kind, CancellationToken cancellationToken = default);
     /// <summary>清空指定房间和类型的全部记录及翻译任务，保留其他类型和礼物连击增量基线。</summary>

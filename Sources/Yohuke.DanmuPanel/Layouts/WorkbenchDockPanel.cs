@@ -29,6 +29,7 @@ internal sealed class WorkbenchDockPanel : Tool, IDeferredContentPresentation
             WorkbenchPanelIds.SUPER_CHAT => "Workbench.Panel.SuperChat",
             WorkbenchPanelIds.DANMU => "Workbench.Panel.Danmu",
             WorkbenchPanelIds.GIFT => "Workbench.Panel.Gift",
+            WorkbenchPanelIds.RED_POCKET => "Workbench.Panel.RedPocket",
             WorkbenchPanelIds.GUARD => "Workbench.Panel.Guard",
             WorkbenchPanelIds.TEST_MESSAGES => "Workbench.Panel.TestMessages",
             WorkbenchPanelIds.LOG => "Workbench.Panel.Log",

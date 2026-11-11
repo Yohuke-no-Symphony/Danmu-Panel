@@ -12,7 +12,7 @@ namespace Yohuke.DanmuPanel.Tests.Messages;
 /// <summary>验证测试消息的持久化、自动翻译入队和定向删除。</summary>
 public sealed class TestMessageServiceTests
 {
-    /// <summary>四类消息使用真实存储与阅读规则，弹幕和 SC 仅在自动翻译开启时入队并通知调度器。</summary>
+    /// <summary>各类消息使用真实存储与阅读规则，弹幕和 SC 仅在自动翻译开启时入队并通知调度器。</summary>
     [Theory]
     [InlineData(MessageKind.Danmu, false)]
     [InlineData(MessageKind.Danmu, true)]
@@ -22,6 +22,8 @@ public sealed class TestMessageServiceTests
     [InlineData(MessageKind.Gift, true)]
     [InlineData(MessageKind.Guard, false)]
     [InlineData(MessageKind.Guard, true)]
+    [InlineData(MessageKind.RedPocket, false)]
+    [InlineData(MessageKind.RedPocket, true)]
     public async Task EveryMessageKindUsesTheGlobalAutomaticTranslationSetting(MessageKind kind, bool enabled)
     {
         using var directory = new MessageStoreTestDirectory();
@@ -63,6 +65,15 @@ public sealed class TestMessageServiceTests
                 Assert.Equal(kind is MessageKind.Gift or MessageKind.Guard ? 5 : 1, row.Quantity);
                 Assert.Equal(kind is MessageKind.Gift or MessageKind.Guard ? 10 : kind == MessageKind.SuperChat ? 2 : 0, row.TotalPrice);
                 Assert.Null(row.Translation);
+                if (kind == MessageKind.RedPocket)
+                {
+                    var redPocket = Assert.IsType<RedPocketData>(row.RedPocket);
+                    Assert.True(redPocket.HasDetails);
+                    Assert.True(redPocket.HasResult);
+                    Assert.Equal(10000, redPocket.TotalPrice);
+                    Assert.Equal(5, Assert.Single(redPocket.Awards).Quantity);
+                    Assert.Equal("gift", Assert.Single(redPocket.Winners).GiftName);
+                }
                 if (shouldTranslate)
                 {
                     Assert.Equal(TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation), row.TranslationFingerprint);

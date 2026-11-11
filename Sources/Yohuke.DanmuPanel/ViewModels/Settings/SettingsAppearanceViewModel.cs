@@ -16,6 +16,7 @@ public sealed partial class SettingsAppearanceViewModel : ObservableObject
     [ObservableProperty] private decimal? superChatBorderThickness;
     [ObservableProperty] private decimal? giftBorderThickness;
     [ObservableProperty] private decimal? guardBorderThickness;
+    [ObservableProperty] private decimal? redPocketBorderThickness;
 
     public bool SupportsNativeMenus { get; }
     public IReadOnlyList<SettingsChoiceOption> LanguageOptions { get; } = SettingsChoiceOption.Create(
@@ -34,6 +35,7 @@ public sealed partial class SettingsAppearanceViewModel : ObservableObject
         superChatBorderThickness = (decimal)settings.MessageBorders.SuperChat;
         giftBorderThickness = (decimal)settings.MessageBorders.Gift;
         guardBorderThickness = (decimal)settings.MessageBorders.Guard;
+        redPocketBorderThickness = (decimal)settings.MessageBorders.RedPocket;
         SupportsNativeMenus = supportsNativeMenus;
     }
 
@@ -51,12 +53,21 @@ public sealed partial class SettingsAppearanceViewModel : ObservableObject
     {
         borders = null!;
         if (SuperChatBorderThickness is not { } superChat || GiftBorderThickness is not { } gift ||
-            GuardBorderThickness is not { } guard || superChat < MinimumBorderThickness || superChat > MaximumBorderThickness ||
-            gift < MinimumBorderThickness || gift > MaximumBorderThickness || guard < MinimumBorderThickness || guard > MaximumBorderThickness)
+            GuardBorderThickness is not { } guard || RedPocketBorderThickness is not { } redPocket ||
+            superChat < MinimumBorderThickness || superChat > MaximumBorderThickness ||
+            gift < MinimumBorderThickness || gift > MaximumBorderThickness ||
+            guard < MinimumBorderThickness || guard > MaximumBorderThickness ||
+            redPocket < MinimumBorderThickness || redPocket > MaximumBorderThickness)
         {
             return false;
         }
-        borders = new() { SuperChat = (double)superChat, Gift = (double)gift, Guard = (double)guard };
+        borders = new()
+        {
+            SuperChat = (double)superChat,
+            Gift = (double)gift,
+            Guard = (double)guard,
+            RedPocket = (double)redPocket
+        };
         return true;
     }
 }

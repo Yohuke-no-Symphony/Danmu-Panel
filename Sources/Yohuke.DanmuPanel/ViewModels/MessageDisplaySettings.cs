@@ -57,7 +57,8 @@ internal sealed class MessageDisplaySettings
         {
             SuperChat = settings.MessageBorders.SuperChat,
             Gift = settings.MessageBorders.Gift,
-            Guard = settings.MessageBorders.Guard
+            Guard = settings.MessageBorders.Guard,
+            RedPocket = settings.MessageBorders.RedPocket
         };
     }
 
@@ -78,6 +79,7 @@ internal sealed class MessageDisplaySettings
             previous.messageBorders.SuperChat == settings.MessageBorders.SuperChat &&
             previous.messageBorders.Gift == settings.MessageBorders.Gift &&
             previous.messageBorders.Guard == settings.MessageBorders.Guard &&
+            previous.messageBorders.RedPocket == settings.MessageBorders.RedPocket &&
             previous.ShowDanmuPinyin == settings.ShowDanmuPinyin &&
             previous.ShowSuperChatPinyin == settings.ShowSuperChatPinyin &&
             previous.PinyinLayout == settings.PinyinLayout &&

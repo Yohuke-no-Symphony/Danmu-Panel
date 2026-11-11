@@ -1,11 +1,12 @@
 namespace Yohuke.DanmuPanel.Models.Messages;
 
-/// <summary>分别保存 SC、礼物和大航海面板的阅读排序。</summary>
+/// <summary>分别保存各事件面板的阅读排序。</summary>
 public sealed record MessageSortSettings
 {
     public MessageReadSortSettings SuperChat { get; init; } = new();
     public MessageReadSortSettings Gift { get; init; } = new();
     public MessageReadSortSettings Guard { get; init; } = new();
+    public MessageReadSortSettings RedPocket { get; init; } = new();
 
     /// <summary>取得指定付费消息面板的独立排序偏好。</summary>
     public MessageReadSortSettings GetPanel(MessageKind kind)
@@ -15,6 +16,7 @@ public sealed record MessageSortSettings
             MessageKind.SuperChat => SuperChat,
             MessageKind.Gift => Gift,
             MessageKind.Guard => Guard,
+            MessageKind.RedPocket => RedPocket,
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
     }

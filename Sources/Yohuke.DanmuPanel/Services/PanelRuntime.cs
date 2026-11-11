@@ -261,7 +261,7 @@ public sealed partial class PanelRuntime : IAsyncDisposable
         Volatile.Write(ref receptionSettings, CaptureReceptionSettings());
         var account = PanelAccountSelector.Resolve(Configuration, workspace, room);
         var session = new RoomReceptionSession(room, account?.Cookie ?? "", Messages, () => Volatile.Read(ref receptionSettings),
-            new BilibiliLiveDanmuSocketFactory(), new BilibiliDanmuHistoryService());
+            new BilibiliLiveDanmuSocketFactory(), new BilibiliDanmuHistoryService(), redPockets: new BilibiliRedPocketService());
         session.Committed += message =>
         {
             scheduler.NotifyWorkAvailable();
@@ -308,6 +308,7 @@ public sealed partial class PanelRuntime : IAsyncDisposable
         return new()
         {
             Reading = Configuration.Settings.Reading,
+            MessageRetentionCount = Configuration.Settings.MessageRetentionCount,
             Translation = TranslationRequestFactory.Snapshot(Configuration.Settings.Translation)
         };
     }

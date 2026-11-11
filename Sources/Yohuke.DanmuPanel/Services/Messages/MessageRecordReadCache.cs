@@ -42,7 +42,8 @@ internal sealed class MessageRecordReadCache
         var record = JsonSerializer.Deserialize<MessageRecord>(payload) ?? throw new JsonException("A message payload cannot be null.");
         record = record with
         {
-            Emoticons = record.Emoticons.Count == 0 ? Array.Empty<MessageEmoticon>() : Array.AsReadOnly(record.Emoticons.ToArray())
+            Emoticons = record.Emoticons.Count == 0 ? Array.Empty<MessageEmoticon>() : Array.AsReadOnly(record.Emoticons.ToArray()),
+            RedPocket = record.RedPocket?.CreateSnapshot()
         };
         var textBytes = ((long)id.Length + payload.Length) * sizeof(char);
         if (textBytes > textByteCapacity)

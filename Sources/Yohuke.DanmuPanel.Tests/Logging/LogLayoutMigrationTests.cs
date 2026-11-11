@@ -17,10 +17,7 @@ public sealed class LogLayoutMigrationTests
     {
         using var directory = new MessageStoreTestDirectory();
         Directory.CreateDirectory(directory.Path);
-        var snapshot = WorkspaceLayoutPresets.Create(WorkspaceLayoutPresets.DEFAULT) with
-        {
-            HiddenPanelIds = version == 1 ? [] : [WorkbenchPanelIds.TEST_MESSAGES]
-        };
+        var snapshot = CreateLegacySnapshot(version);
         var legacy = new WorkspaceLayoutFile
         {
             Version = version,
@@ -33,11 +30,11 @@ public sealed class LogLayoutMigrationTests
 
         var migrated = await store.LoadAsync();
 
-        Assert.Equal(3, migrated.Version);
+        Assert.Equal(WorkspaceLayoutFile.CURRENT_VERSION, migrated.Version);
         Assert.Equal("custom", migrated.CurrentPresetId);
         Assert.Equal(JsonSerializer.Serialize(snapshot.Main), JsonSerializer.Serialize(migrated.CurrentLayout.Main));
         Assert.Equal(snapshot.FocusedPanelId, migrated.CurrentLayout.FocusedPanelId);
-        Assert.Equal(new[] { WorkbenchPanelIds.TEST_MESSAGES, "log" }, migrated.CurrentLayout.HiddenPanelIds);
+        Assert.Equal(new[] { WorkbenchPanelIds.TEST_MESSAGES, WorkbenchPanelIds.LOG, WorkbenchPanelIds.RED_POCKET }, migrated.CurrentLayout.HiddenPanelIds);
         var preset = Assert.Single(migrated.UserPresets);
         Assert.Equal("Existing layout", preset.Name);
         Assert.Equal(migrated.CurrentLayout.HiddenPanelIds, preset.Layout.HiddenPanelIds);
@@ -54,9 +51,38 @@ public sealed class LogLayoutMigrationTests
         var malformed = WorkspaceLayoutPresets.CreateDefaultFile() with
         {
             Version = 2,
-            CurrentLayout = WorkspaceLayoutPresets.Create(WorkspaceLayoutPresets.DEFAULT) with { HiddenPanelIds = [] }
+            CurrentLayout = CreateLegacySnapshot(2) with { HiddenPanelIds = [] }
         };
 
         Assert.Throws<InvalidDataException>(() => WorkspaceLayoutSerializer.Deserialize(JsonSerializer.Serialize(malformed)));
+    }
+
+    private static WorkspaceLayoutSnapshot CreateLegacySnapshot(int version)
+    {
+        var snapshot = WorkspaceLayoutPresets.Create(WorkspaceLayoutPresets.DEFAULT);
+        var main = snapshot.Main!;
+        var events = main.Children[2];
+        var gift = events.Children[1];
+        return snapshot with
+        {
+            Main = main with
+            {
+                Children =
+                [
+                    main.Children[0],
+                    main.Children[1],
+                    events with
+                    {
+                        Children =
+                        [
+                            events.Children[0],
+                            gift.Children[0] with { Proportion = gift.Proportion },
+                            events.Children[2]
+                        ]
+                    }
+                ]
+            },
+            HiddenPanelIds = version == 1 ? [] : [WorkbenchPanelIds.TEST_MESSAGES]
+        };
     }
 }

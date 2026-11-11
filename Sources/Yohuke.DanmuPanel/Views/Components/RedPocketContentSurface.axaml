@@ -1,0 +1,113 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Yohuke.DanmuPanel.ViewModels"
+             xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
+             xmlns:i18n="using:Yohuke.DanmuPanel.I18n"
+             x:Class="Yohuke.DanmuPanel.Views.Components.RedPocketContentSurface"
+             x:DataType="vm:RedPocketViewModel"
+             FontSize="{DynamicResource MessageFontSizeBody}">
+    <UserControl.Resources>
+        <ControlTheme x:Key="WinnerHeaderTheme" TargetType="ToggleButton">
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="HeaderBorder" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalContentAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ Border#HeaderBorder">
+                <Setter Property="Background" Value="{DynamicResource AppSidebarHoverBrush}" />
+            </Style>
+            <Style Selector="^:pressed /template/ Border#HeaderBorder">
+                <Setter Property="Background" Value="{DynamicResource AppSidebarSelectedBrush}" />
+            </Style>
+            <Style Selector="^:focus-visible /template/ Border#HeaderBorder">
+                <Setter Property="BorderBrush" Value="{DynamicResource AppPrimaryBrush}" />
+            </Style>
+        </ControlTheme>
+    </UserControl.Resources>
+    <UserControl.Styles>
+        <Style Selector="LucideIcon.winnerChevron">
+            <Setter Property="Kind" Value="ChevronRight" />
+        </Style>
+        <Style Selector="ToggleButton#WinnerHeader:checked LucideIcon">
+            <Setter Property="Kind" Value="ChevronDown" />
+        </Style>
+        <Style Selector="ListBox.redPocketWinners">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="ListBox.redPocketWinners ListBoxItem">
+            <Setter Property="Padding" Value="2,4" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+    </UserControl.Styles>
+    <StackPanel Spacing="6">
+        <TextBlock Text="{Binding Status}" FontWeight="SemiBold" />
+        <TextBlock Text="{Binding DrawTime}" IsVisible="{Binding HasDrawTime}"
+                   Classes="danmuFeedMeta" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Value}" IsVisible="{Binding HasValue}" TextWrapping="Wrap" />
+        <ItemsControl ItemsSource="{Binding Awards}" IsVisible="{Binding HasAwards}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:RedPocketAwardViewModel">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,2">
+                        <TextBlock Text="{Binding Name}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Column="1" Text="{Binding Quantity}" IsVisible="{Binding HasQuantity}" />
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Text="{i18n:Loc Key=RedPocket.ContentPending}" IsVisible="{Binding IsContentPending}"
+                   Classes="danmuFeedMeta" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Data.Danmu}" IsVisible="{Binding HasDanmu}" TextWrapping="Wrap" />
+        <Border IsVisible="{Binding HasWinners}" CornerRadius="6" ClipToBounds="True"
+                BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
+            <Grid RowDefinitions="Auto,Auto">
+                <ToggleButton Name="WinnerHeader" Theme="{StaticResource WinnerHeaderTheme}"
+                              IsChecked="{Binding IsExpanded, Mode=TwoWay}"
+                              AutomationProperties.Name="{Binding ResultsTitle}">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <TextBlock Text="{Binding ResultsTitle}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <LucideIcon Name="WinnerChevron" Grid.Column="1" Classes="winnerChevron" Size="14" VerticalAlignment="Center"
+                                    Foreground="{DynamicResource AppMutedTextBrush}" />
+                    </Grid>
+                </ToggleButton>
+                <Border Grid.Row="1" IsVisible="{Binding IsExpanded}" Padding="8,4"
+                        BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0,1,0,0">
+                    <ListBox ItemsSource="{Binding Winners}" Classes="redPocketWinners" MaxHeight="240"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:RedPocketWinnerViewModel">
+                                <Grid ColumnDefinitions="Auto,*,*" ColumnSpacing="6">
+                                    <components:UserAvatarView UserUid="{Binding UserUid}" Margin="0"
+                                        AvatarService="{Binding $parent[components:RedPocketContentSurface].AvatarService}"
+                                        ShowAvatar="{Binding $parent[components:RedPocketContentSurface].((vm:RedPocketViewModel)DataContext).ShowUserAvatars}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Name}" ToolTip.Tip="{Binding Name}"
+                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Award}" TextWrapping="Wrap"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </Grid>
+        </Border>
+    </StackPanel>
+</UserControl>

@@ -28,6 +28,11 @@ public interface ILiveDanmuSocket
     event EventHandler<BilibiliGuardPurchaseMessage>? GuardPurchaseReceived;
 
     /// <summary>
+    /// 接收到红包内容或开奖结果时触发。
+    /// </summary>
+    event EventHandler<BilibiliRedPocketMessage>? RedPocketReceived;
+
+    /// <summary>
     /// 监听发生错误时触发。
     /// </summary>
     event EventHandler<Exception>? ErrorReceived;

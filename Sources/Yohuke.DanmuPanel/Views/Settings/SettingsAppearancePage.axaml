@@ -55,6 +55,14 @@
                                        Increment="0.5"
                                        FormatString="0.##" />
                     </settings:SettingsRow>
+                    <settings:SettingsRow Label="{Loc Key=Settings.RedPocketBorderThickness}">
+                        <NumericUpDown x:Name="RedPocketBorderThicknessInput"
+                                       Value="{Binding RedPocketBorderThickness, Mode=TwoWay}"
+                                       Minimum="{Binding MinimumBorderThickness}"
+                                       Maximum="{Binding MaximumBorderThickness}"
+                                       Increment="0.5"
+                                       FormatString="0.##" />
+                    </settings:SettingsRow>
                 </StackPanel>
             </settings:SettingsCard>
             <ContentPresenter Content="{Binding ColorEditor, ElementName=Root}" HorizontalContentAlignment="Stretch"/>

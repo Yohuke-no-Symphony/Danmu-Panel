@@ -10,7 +10,8 @@ internal static class MessageBorderSettingsValidator
         {
             throw new InvalidDataException("The message border settings are missing.");
         }
-        if (!IsValidThickness(settings.SuperChat) || !IsValidThickness(settings.Gift) || !IsValidThickness(settings.Guard))
+        if (!IsValidThickness(settings.SuperChat) || !IsValidThickness(settings.Gift) ||
+            !IsValidThickness(settings.Guard) || !IsValidThickness(settings.RedPocket))
         {
             throw new InvalidDataException("Message border thickness must be finite and between 0.5 and 10.");
         }

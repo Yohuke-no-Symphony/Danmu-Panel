@@ -47,7 +47,7 @@ public sealed class TestMessageService
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(request.Content);
         }
-        if (request.Kind == MessageKind.Gift)
+        if (request.Kind is MessageKind.Gift or MessageKind.RedPocket)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(request.GiftName);
         }
@@ -78,20 +78,24 @@ public sealed class TestMessageService
             MedalGuardLevel = request.Kind == MessageKind.Danmu ? request.MedalGuardLevel : 0,
             RoomGuardLevel = request.Kind == MessageKind.Danmu ? request.RoomGuardLevel : 0,
             IsRoomAdmin = request.Kind == MessageKind.Danmu && request.IsRoomAdmin,
-            Content = hasText ? request.Content : "",
+            Content = hasText || request.Kind == MessageKind.RedPocket ? request.Content : "",
             Time = now.AddMilliseconds(index - request.Count + 1),
             GiftName = request.Kind == MessageKind.Gift ? request.GiftName.Trim() : "",
             Quantity = quantity,
-            UnitPrice = request.Kind == MessageKind.Danmu ? 0 : request.UnitPrice,
-            TotalPrice = request.Kind == MessageKind.Danmu ? 0 : request.UnitPrice * quantity,
-            HasKnownPrice = request.Kind != MessageKind.Danmu,
+            UnitPrice = request.Kind is MessageKind.Danmu or MessageKind.RedPocket ? 0 : request.UnitPrice,
+            TotalPrice = request.Kind is MessageKind.Danmu or MessageKind.RedPocket ? 0 : request.UnitPrice * quantity,
+            HasKnownPrice = request.Kind is not (MessageKind.Danmu or MessageKind.RedPocket),
             GuardLevel = request.Kind == MessageKind.Guard ? request.GuardLevel : 0,
             BorderColor = request.Kind == MessageKind.SuperChat
                 ? ColorSettingCatalog.GetSuperChatBorder(request.UnitPrice).DefaultColor!
                 : request.Kind == MessageKind.Guard
                     ? request.GuardLevel switch { 1 => "#D99D36", 2 => "#9554B2", _ => "#2A60B2" } : "",
             Translation = translation,
-            TranslationFingerprint = fingerprint
+            TranslationFingerprint = fingerprint,
+            RedPocket = request.Kind == MessageKind.RedPocket
+                ? CreateRedPocket(request, now, request.Count > 1
+                    ? $"{request.UserName.Trim()} · {index + 1}" : request.UserName.Trim())
+                : null
         }).ToArray();
         var added = await store.AppendTestMessagesAsync(messages, settings.Reading, requestFingerprint, cancellationToken);
         if (requestFingerprint is not null && translation is null)
@@ -100,6 +104,48 @@ public sealed class TestMessageService
         }
         notifyChanged(room.Id);
         return added;
+    }
+
+    private static RedPocketData CreateRedPocket(TestMessageRequest request, DateTimeOffset now, string senderName)
+    {
+        var award = new RedPocketAward
+        {
+            GiftId = "test-gift",
+            Name = request.GiftName.Trim(),
+            Quantity = request.Quantity,
+            Type = 1,
+            Price = request.UnitPrice * 1000m
+        };
+        return new()
+        {
+            LotId = Random.Shared.NextInt64(1, long.MaxValue),
+            Type = 0,
+            SenderName = senderName,
+            StartTime = now.AddMinutes(request.RedPocketHasResult ? -3 : 0).ToUnixTimeSeconds(),
+            EndTime = now.AddMinutes(request.RedPocketHasResult ? 0 : 3).ToUnixTimeSeconds(),
+            CurrentTime = now.ToUnixTimeSeconds(),
+            Duration = 180,
+            Danmu = request.Content,
+            TotalPrice = request.UnitPrice * request.Quantity * 1000m,
+            TotalAwardCount = request.RedPocketHasResult ? request.Quantity : null,
+            HasDetails = true,
+            HasResult = request.RedPocketHasResult,
+            Awards = Array.AsReadOnly(new[] { award }),
+            Winners = request.RedPocketHasResult
+                ? Array.AsReadOnly(new[]
+                {
+                    new RedPocketWinner
+                    {
+                        UserName = senderName,
+                        GiftId = award.GiftId,
+                        GiftName = award.Name,
+                        Quantity = request.Quantity,
+                        AwardType = award.Type,
+                        AwardPrice = award.Price
+                    }
+                })
+                : []
+        };
     }
 
     /// <summary>清除当前房间的测试消息并刷新阅读列表，保留真实消息和其他房间。</summary>

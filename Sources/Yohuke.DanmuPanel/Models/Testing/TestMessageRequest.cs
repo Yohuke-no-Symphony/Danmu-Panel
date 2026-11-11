@@ -19,5 +19,6 @@ public sealed record TestMessageRequest
     public int Quantity { get; init; } = 1;
     public int GuardLevel { get; init; } = 3;
     public string Translation { get; init; } = "";
+    public bool RedPocketHasResult { get; init; } = true;
     public int Count { get; init; } = 1;
 }

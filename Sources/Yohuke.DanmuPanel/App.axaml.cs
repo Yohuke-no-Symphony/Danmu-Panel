@@ -67,7 +67,14 @@ public partial class App : Application
                 runtime.Colors.Apply(this, configuration.Settings.ColorScheme);
                 workspace = new(runtime, ReportFailure);
                 var panels = new Dictionary<string, Control> { ["workspace"] = workspace };
-                foreach (var (id, kind) in new[] { ("danmu", MessageKind.Danmu), ("superChat", MessageKind.SuperChat), ("gift", MessageKind.Gift), ("guard", MessageKind.Guard) })
+                foreach (var (id, kind) in new[]
+                {
+                    (WorkbenchPanelIds.DANMU, MessageKind.Danmu),
+                    (WorkbenchPanelIds.SUPER_CHAT, MessageKind.SuperChat),
+                    (WorkbenchPanelIds.GIFT, MessageKind.Gift),
+                    (WorkbenchPanelIds.GUARD, MessageKind.Guard),
+                    (WorkbenchPanelIds.RED_POCKET, MessageKind.RedPocket)
+                })
                 {
                     var view = new MessageFeedView(runtime, kind, ReportFailure, NavigateToMessageAsync);
                     feeds.Add(view);
@@ -164,6 +171,7 @@ public partial class App : Application
         {
             MessageKind.SuperChat => WorkbenchPanelIds.SUPER_CHAT,
             MessageKind.Gift => WorkbenchPanelIds.GIFT,
+            MessageKind.RedPocket => WorkbenchPanelIds.RED_POCKET,
             MessageKind.Guard => WorkbenchPanelIds.GUARD,
             _ => null
         };

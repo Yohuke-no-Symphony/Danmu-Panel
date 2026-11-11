@@ -6,7 +6,7 @@ public sealed partial class SqliteMessageStore
 {
     private static string DanmuTimelineHistoryPredicate { get; } = $"""
         (kind=$kind AND priority=0 OR
-            kind IN ({(int)MessageKind.SuperChat},{(int)MessageKind.Gift},{(int)MessageKind.Guard})
+            kind IN ({(int)MessageKind.SuperChat},{(int)MessageKind.Gift},{(int)MessageKind.Guard},{(int)MessageKind.RedPocket})
             AND sequence>COALESCE((
                 SELECT cleared_sequence FROM message_timeline_clears WHERE room_tab_id=$room),0)
             AND NOT EXISTS (

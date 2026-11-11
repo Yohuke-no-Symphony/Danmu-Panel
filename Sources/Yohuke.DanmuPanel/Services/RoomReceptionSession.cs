@@ -8,7 +8,7 @@ using Yohuke.DanmuPanel.Services.Translation;
 namespace Yohuke.DanmuPanel.Services;
 
 /// <summary>一个房间标签的监听生命周期，串行持久化接收消息。</summary>
-public sealed class RoomReceptionSession : IAsyncDisposable
+public sealed partial class RoomReceptionSession : IAsyncDisposable
 {
     private readonly RoomTabState room;
     private readonly string cookie;
@@ -35,13 +35,15 @@ public sealed class RoomReceptionSession : IAsyncDisposable
 
     /// <summary>创建可注入网络连接与历史服务的监听会话。</summary>
     public RoomReceptionSession(RoomTabState room, string cookie, IMessageStore store, Func<PanelSettings> settings,
-        ILiveDanmuSocketFactory sockets, IBilibiliDanmuHistoryService history, int receiveQueueCapacity = 4096)
+        ILiveDanmuSocketFactory sockets, IBilibiliDanmuHistoryService history, int receiveQueueCapacity = 4096,
+        IBilibiliRedPocketService? redPockets = null)
     {
         this.room = room;
         this.cookie = cookie;
         this.store = store;
         this.settings = settings;
         this.history = history;
+        this.redPockets = redPockets;
         incoming = Channel.CreateBounded<MessageRecord>(new BoundedChannelOptions(receiveQueueCapacity)
         {
             SingleReader = true, FullMode = BoundedChannelFullMode.Wait
@@ -51,6 +53,7 @@ public sealed class RoomReceptionSession : IAsyncDisposable
         socket.GiftReceived += OnGift;
         socket.SuperChatReceived += OnSuperChat;
         socket.GuardPurchaseReceived += OnGuard;
+        socket.RedPocketReceived += OnRedPocket;
         socket.ErrorReceived += OnSocketError;
         socket.Disconnected += OnDisconnected;
         socket.Recovered += OnRecovered;
@@ -75,6 +78,10 @@ public sealed class RoomReceptionSession : IAsyncDisposable
         writerTask = WriteIncomingAsync();
         socketTask = RunSocketAsync();
         historyTask = LoadHistoryAsync();
+        if (redPockets is not null)
+        {
+            redPocketTask = RecoverRedPocketsAsync(redPockets);
+        }
         if (!lifetime.IsCancellationRequested)
         {
             Notify(StatusChanged, "Panel.Listening");
@@ -93,6 +100,10 @@ public sealed class RoomReceptionSession : IAsyncDisposable
         {
             await historyTask;
         }
+        if (redPocketTask is not null)
+        {
+            await redPocketTask;
+        }
         incoming.Writer.TryComplete();
         if (writerTask is not null)
         {
@@ -102,6 +113,7 @@ public sealed class RoomReceptionSession : IAsyncDisposable
         socket.GiftReceived -= OnGift;
         socket.SuperChatReceived -= OnSuperChat;
         socket.GuardPurchaseReceived -= OnGuard;
+        socket.RedPocketReceived -= OnRedPocket;
         socket.ErrorReceived -= OnSocketError;
         socket.Disconnected -= OnDisconnected;
         socket.Recovered -= OnRecovered;
@@ -159,6 +171,10 @@ public sealed class RoomReceptionSession : IAsyncDisposable
                     if (result.Record is { } committed)
                     {
                         Notify(Committed, committed);
+                        if (committed.Kind == MessageKind.RedPocket)
+                        {
+                            redPocketRefresh.Writer.TryWrite(0);
+                        }
                     }
                 }
             }
@@ -212,6 +228,11 @@ public sealed class RoomReceptionSession : IAsyncDisposable
         Enqueue(RoomMessageMapper.Map(value, room.Id, generation));
     }
 
+    private void OnRedPocket(object? sender, BilibiliRedPocketMessage value)
+    {
+        Enqueue(RoomMessageMapper.Map(value, room.Id, generation));
+    }
+
     private void OnSocketError(object? sender, Exception exception)
     {
         NotifyFailure(exception);
@@ -232,6 +253,8 @@ public sealed class RoomReceptionSession : IAsyncDisposable
             return;
         }
         Notify(StatusChanged, "Panel.Listening");
+        Interlocked.Exchange(ref refreshRedPocketList, 1);
+        redPocketRefresh.Writer.TryWrite(0);
         if (historyTask?.IsCompleted != false)
         {
             historyTask = LoadHistoryAsync();
