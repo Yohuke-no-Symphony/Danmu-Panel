@@ -116,7 +116,12 @@ internal sealed partial class UserAvatarView : UserControl
             IsVisible = ShowAvatar;
             UpdateActivity();
         }
-        else if (change.Property == UserUidProperty || change.Property == IsVisibleProperty)
+        else if (change.Property == UserUidProperty)
+        {
+            ClearImage();
+            UpdateActivity();
+        }
+        else if (change.Property == IsVisibleProperty)
         {
             UpdateActivity();
         }
@@ -218,18 +223,25 @@ internal sealed partial class UserAvatarView : UserControl
 
     private void UpdateActivity()
     {
-        var nextUserUid = isAttached && isInViewport && IsEffectivelyVisible && ShowAvatar ? UserUid : 0;
-        if (nextUserUid <= 0 || avatars is null)
+        var canDisplayAvatar = isAttached && IsEffectivelyVisible && ShowAvatar && UserUid > 0 && avatars is not null;
+        var nextUserUid = canDisplayAvatar && isInViewport ? UserUid : 0;
+        if (nextUserUid <= 0)
         {
             activeUserUid = 0;
             refreshTimer.Stop();
             CancelRequest();
-            ClearImage();
+            if (canDisplayAvatar)
+            {
+                ClearPreview();
+            }
+            else
+            {
+                ClearImage();
+            }
         }
         else if (activeUserUid != nextUserUid)
         {
             activeUserUid = nextUserUid;
-            ClearImage();
             refreshTimer.Start();
             RefreshAvatar();
         }
