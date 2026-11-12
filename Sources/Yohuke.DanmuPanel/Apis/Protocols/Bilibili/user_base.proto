@@ -1,7 +1,0 @@
-syntax = "proto3";
-
-option csharp_namespace = "Yohuke.DanmuPanel.Apis.Protocols.Bilibili";
-
-message UserBase {
-  string name = 1;
-}

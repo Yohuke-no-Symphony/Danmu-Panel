@@ -3,7 +3,7 @@ using Yohuke.DanmuPanel.ViewModels.Settings;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
-using Yohuke.DanmuPanel.Apis;
+using Yohuke.DanmuCore.Apis;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.BrowserLogin;
 using Yohuke.DanmuPanel.Models.State;
@@ -22,6 +22,7 @@ public sealed class AccountSettingsView : UserControl
     private readonly CancellationTokenSource lifetime = new();
     private bool initialized;
     private bool closed;
+    private Exception? statusError;
 
     internal Task Initialization { get; private set; } = Task.CompletedTask;
 
@@ -123,6 +124,10 @@ public sealed class AccountSettingsView : UserControl
     private void OnLanguageChanged(object? sender, EventArgs args)
     {
         RefreshStates();
+        if (statusError is { } error)
+        {
+            Model.Status = DiagnosticSanitizer.Sanitize(LocalizedExceptionText.Get(error));
+        }
     }
 
     private void RefreshRows()
@@ -253,7 +258,7 @@ public sealed class AccountSettingsView : UserControl
             return;
         }
         var credential = account.Cookie;
-        var result = await accountSessions.ValidateAsync(account, cancellationToken: lifetime.Token);
+        var result = await accountSessions.ValidateAsync(account.Id, cancellationToken: lifetime.Token);
         if (closed || account.Cookie != credential || !runtime.Configuration.Accounts.Contains(account))
         {
             return;
@@ -302,6 +307,7 @@ public sealed class AccountSettingsView : UserControl
         {
             return;
         }
-        Model.Status = AppLogSanitizer.Sanitize(exception.Message);
+        statusError = exception;
+        Model.Status = DiagnosticSanitizer.Sanitize(LocalizedExceptionText.Get(exception));
     }
 }

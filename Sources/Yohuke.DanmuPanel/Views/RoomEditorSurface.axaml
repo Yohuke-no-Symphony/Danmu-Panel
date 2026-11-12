@@ -34,7 +34,7 @@
                     <StackPanel Spacing="8">
                         <ItemsControl x:Name="LiveRoomSearchResultsControl" ItemsSource="{Binding LiveRoomSearchResults}">
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="workspace:LiveRoomSearchResult">
+                                <DataTemplate DataType="vm:LiveRoomSearchResultViewModel">
                                     <Border Margin="0,0,0,8" Padding="10" BorderThickness="1"
                                             BorderBrush="{DynamicResource AppBorderBrush}" CornerRadius="8">
                                         <Grid ColumnDefinitions="*,*,2*,Auto,Auto" ColumnSpacing="10">

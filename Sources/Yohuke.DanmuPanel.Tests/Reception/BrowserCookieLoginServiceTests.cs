@@ -86,7 +86,7 @@ public class BrowserCookieLoginServiceTests
             new("SESSDATA", "other-session", "/", ".example.com"),
             new("bili_jct", "other-csrf", "/", ".example.com")
         ]));
-        Assert.Equal(Localization.Get("Services.BrowserLogin.BilibiliCookiesMissing"), error.Message);
+        Assert.Equal(Localization.Get("Services.BrowserLogin.BilibiliCookiesMissing"), LocalizedExceptionText.Get(error));
     }
 
     [AvaloniaFact]
@@ -95,7 +95,7 @@ public class BrowserCookieLoginServiceTests
         var service = new BrowserCookieLoginService();
 
         var error = Assert.Throws<InvalidOperationException>(() => service.CreateResult(BrowserLoginPlatform.Bilibili, []));
-        Assert.Equal(Localization.Get("Services.BrowserLogin.BilibiliCookiesMissing"), error.Message);
+        Assert.Equal(Localization.Get("Services.BrowserLogin.BilibiliCookiesMissing"), LocalizedExceptionText.Get(error));
     }
 
 }

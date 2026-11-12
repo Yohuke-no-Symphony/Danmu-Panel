@@ -2,8 +2,8 @@ using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
-using Yohuke.DanmuPanel.Apis;
-using Yohuke.DanmuPanel.Apis.Models.Common;
+using Yohuke.DanmuCore.Apis;
+using Yohuke.DanmuCore.Apis.Models.Common;
 using Yohuke.DanmuPanel.Models.Messages;
 
 namespace Yohuke.DanmuPanel.Services;

@@ -48,3 +48,11 @@ The character in the icon was illustrated by @hshjbbnd. The character is [椎名
 ## License
 
 Based on Danmu Neo and licensed under [GPL-3.0](LICENSE). Third-party components retain their respective licenses.
+
+## Building from source
+
+Initialize the shared Bilibili core before opening `Sources/Yohuke.DanmuPanel.sln` or running `release.ps1`.
+
+```sh
+git submodule update --init --recursive
+```

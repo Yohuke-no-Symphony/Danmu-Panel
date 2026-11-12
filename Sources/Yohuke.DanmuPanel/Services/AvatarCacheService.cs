@@ -2,7 +2,7 @@ using Yohuke.DanmuPanel.I18n;
 using System.Net.Http;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
-using Yohuke.DanmuPanel.Apis;
+using Yohuke.DanmuCore.Apis;
 using Yohuke.DanmuPanel.Models.Workspace;
 using Yohuke.DanmuPanel.Models.Logging;
 

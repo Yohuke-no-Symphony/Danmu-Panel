@@ -1,5 +1,5 @@
 using System.Threading.Channels;
-using Yohuke.DanmuPanel.Apis.Models.Bilibili;
+using Yohuke.DanmuCore.Apis.Models.Bilibili;
 using Yohuke.DanmuPanel.Models.Messages;
 
 namespace Yohuke.DanmuPanel.Services;

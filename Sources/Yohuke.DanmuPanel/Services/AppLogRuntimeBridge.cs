@@ -41,9 +41,9 @@ internal sealed class AppLogRuntimeBridge : IDisposable
             }
 
             var sensitiveValues = getSensitiveValues().ToArray();
-            var safeSource = AppLogSanitizer.Sanitize(source, sensitiveValues);
-            var safeMessage = AppLogSanitizer.Sanitize(PanelErrorText.Render(message), sensitiveValues);
-            var details = error is null ? null : AppLogSanitizer.Sanitize(error.ToString(), sensitiveValues);
+            var safeSource = DiagnosticSanitizer.Sanitize(source, sensitiveValues);
+            var safeMessage = DiagnosticSanitizer.Sanitize(PanelErrorText.Render(message), sensitiveValues);
+            var details = error is null ? null : DiagnosticSanitizer.Sanitize(error.ToString(), sensitiveValues);
             switch (level)
             {
                 case AppLogLevel.ERROR:

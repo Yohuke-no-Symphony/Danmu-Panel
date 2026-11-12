@@ -18,6 +18,7 @@ public sealed partial class PanelRuntime : IAsyncDisposable
     private readonly SqliteTranslationCache translationCache;
     private readonly Dictionary<string, string> translationCacheFingerprints;
     private readonly SemaphoreSlim lifecycle = new(1, 1);
+    private readonly BilibiliAccountSessionBinding accountBinding;
     private PanelSettings receptionSettings;
     public ConfigurationService ConfigurationStore { get; }
     public PanelConfiguration Configuration { get; }
@@ -53,10 +54,8 @@ public sealed partial class PanelRuntime : IAsyncDisposable
         translationCacheFingerprints = configuration.Settings.Translation.CacheFingerprints;
         receptionSettings = CaptureReceptionSettings();
         DanmuFilter = CreateDanmuFilter();
-        foreach (var account in configuration.Accounts)
-        {
-            AccountSessions.Register(account);
-        }
+        accountBinding = new(AccountSessions);
+        accountBinding.Synchronize(configuration.Accounts);
         configuration.Accounts.CollectionChanged += OnAccountsChanged;
         var database = Path.Combine(configurationStore.DirectoryPath, "messages.db");
         Messages = new(database);
@@ -79,7 +78,7 @@ public sealed partial class PanelRuntime : IAsyncDisposable
     {
         await Messages.ReevaluateReadOptionsAsync(Configuration.Settings.Reading);
         await scheduler.StartAsync(Configuration.Settings.Translation, danmuFilter: DanmuFilter);
-        await Task.WhenAll(Configuration.Accounts.Select(account => AccountSessions.ValidateAsync(account)));
+        await Task.WhenAll(Configuration.Accounts.Select(account => AccountSessions.ValidateAsync(account.Id)));
     }
 
     /// <summary>读取房间监听状态。</summary>
@@ -228,6 +227,7 @@ public sealed partial class PanelRuntime : IAsyncDisposable
             Avatars.Dispose();
             Colors.Dispose();
             Configuration.Accounts.CollectionChanged -= OnAccountsChanged;
+            accountBinding.Dispose();
             AccountSessions.Dispose();
             await Messages.DisposeAsync();
             translationHttp.Dispose();
@@ -240,20 +240,7 @@ public sealed partial class PanelRuntime : IAsyncDisposable
 
     private void OnAccountsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs args)
     {
-        if (args.OldItems is not null)
-        {
-            foreach (BilibiliAccount account in args.OldItems)
-            {
-                AccountSessions.Remove(account.Id);
-            }
-        }
-        if (args.NewItems is not null)
-        {
-            foreach (BilibiliAccount account in args.NewItems)
-            {
-                AccountSessions.Register(account);
-            }
-        }
+        accountBinding.Synchronize(Configuration.Accounts);
     }
 
     private async Task StartAsync(WorkspaceState workspace, RoomTabState room)
@@ -273,11 +260,11 @@ public sealed partial class PanelRuntime : IAsyncDisposable
             Changed?.Invoke(room.Id);
         };
         var logSource = I18n.Localization.Format("Panel.Log.Reception", room.Name, room.RoomId);
-        session.Failed += exception => ReportError(exception.Message, logSource);
+        session.Failed += exception => ReportError(exception, logSource);
         session.TerminalFailure += exception =>
         {
             statuses[room.Id] = "Panel.ListenerFailed";
-            ReportError(exception.Message, logSource);
+            ReportError(exception, logSource);
             Changed?.Invoke(room.Id);
         };
         sessions.Add(room.Id, session);
@@ -331,5 +318,12 @@ public sealed partial class PanelRuntime : IAsyncDisposable
     {
         var key = Configuration.Settings.Translation.ApiKey;
         StartupLog.Append(message, Models.Logging.AppLogLevel.ERROR, source, sensitiveValues: [key]);
+    }
+
+    private void ReportError(Exception exception, string source)
+    {
+        var key = Configuration.Settings.Translation.ApiKey;
+        StartupLog.Append(I18n.LocalizedExceptionText.Get(exception), Models.Logging.AppLogLevel.ERROR,
+            source, exception, [key]);
     }
 }

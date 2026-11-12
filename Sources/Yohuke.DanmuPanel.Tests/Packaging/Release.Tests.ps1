@@ -26,6 +26,7 @@ BeforeAll {
 Describe 'Release platform boundaries' {
     BeforeEach {
         $repoRoot = Join-Path $TestDrive "repo with spaces-$([Guid]::NewGuid().ToString('N'))"
+        $coreProjectPath = Join-Path $repoRoot 'Core/Sources/Yohuke.DanmuCore/Yohuke.DanmuCore.csproj'
         $solutionPath = Join-Path $repoRoot 'Sources/Yohuke.DanmuPanel.sln'
         $projectPath = Join-Path $repoRoot 'Sources/Yohuke.DanmuPanel/Yohuke.DanmuPanel.csproj'
         $iconPath = Join-Path $repoRoot 'Sources/Yohuke.DanmuPanel/Assets/favicon.ico'
@@ -42,7 +43,7 @@ Describe 'Release platform boundaries' {
         $SkipRestore = $false
         $Clean = $false
 
-        foreach ($path in @($solutionPath, $projectPath, $iconPath, $windowsInstallerScriptPath, $windowsInstallerTemplatePath))
+        foreach ($path in @($solutionPath, $projectPath, $coreProjectPath, $iconPath, $windowsInstallerScriptPath, $windowsInstallerTemplatePath))
         {
             New-Item -ItemType Directory -Path (Split-Path $path -Parent) -Force | Out-Null
             Set-Content -LiteralPath $path -Value ''
@@ -64,6 +65,18 @@ Describe 'Release platform boundaries' {
         Mock New-MacDmg {}
         Mock Write-Host {}
         Mock Assert-PathExists {} -ParameterFilter { $Description -eq 'Windows executable' }
+    }
+
+    It 'checks the Core submodule before cleaning or restoring' {
+        Mock Get-PublishRuntimeIdentifier { 'win-x64' }
+        $Clean = $true
+        Remove-Item -LiteralPath $coreProjectPath
+
+        { Invoke-Release } | Should -Throw '*Core submodule*'
+
+        Get-Content -LiteralPath $existingArtifact | Should -Be 'existing artifact'
+        Should -Invoke Invoke-DotNet -Times 0 -Exactly
+        Should -Invoke Publish-Runtime -Times 0 -Exactly
     }
 
     It 'publishes Windows without requiring macOS resources or tools' {

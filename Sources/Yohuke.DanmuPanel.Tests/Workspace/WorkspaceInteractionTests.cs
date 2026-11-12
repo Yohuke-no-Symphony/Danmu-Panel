@@ -183,7 +183,7 @@ public sealed class WorkspaceInteractionTests
             Assert.Equal("", draft.Name);
             Assert.Equal(2, runtime.Configuration.Workspaces.Count);
             roomEditor.Show();
-            roomEditor.Model.LiveRoomSearchResults.Add(new() { OwnerName = "夜更音乐电台", RoomId = "123456", OwnerUid = "789", Title = "今晚一起听歌", IsLive = true });
+            roomEditor.Model.LiveRoomSearchResults.Add(new(new() { OwnerName = "夜更音乐电台", RoomId = "123456", OwnerUid = "789", Title = "今晚一起听歌", IsLive = true }));
             Pump(roomEditor);
             Capture(roomEditor, "add-room");
             roomEditor.Model.NewRoomId = "invalid";

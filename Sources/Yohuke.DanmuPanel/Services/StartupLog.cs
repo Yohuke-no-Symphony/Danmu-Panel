@@ -20,7 +20,7 @@ public static class StartupLog
         string? source = null, Exception? error = null, IEnumerable<string>? sensitiveValues = null)
     {
         var secrets = sensitiveValues?.ToArray();
-        var safeMessage = AppLogSanitizer.Sanitize(message, secrets);
+        var safeMessage = DiagnosticSanitizer.Sanitize(message, secrets);
 
         try
         {
@@ -42,7 +42,7 @@ public static class StartupLog
                     isInitialized = true;
                 }
 
-                var details = error is null ? "" : Environment.NewLine + AppLogSanitizer.Sanitize(error.ToString(), secrets);
+                var details = error is null ? "" : Environment.NewLine + DiagnosticSanitizer.Sanitize(error.ToString(), secrets);
                 File.AppendAllText(path, $"{DateTimeOffset.Now:O} {level} {safeMessage}{details}{Environment.NewLine}");
             }
         }

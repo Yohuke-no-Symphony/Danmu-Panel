@@ -1,6 +1,6 @@
 using Yohuke.DanmuPanel.I18n;
 using System.Net;
-using Yohuke.DanmuPanel.Apis;
+using Yohuke.DanmuCore.Apis;
 using Yohuke.DanmuPanel.Models.BrowserLogin;
 
 namespace Yohuke.DanmuPanel.Services;
@@ -13,7 +13,7 @@ public class BrowserCookieLoginService
     /// <summary>
     /// B 站登录地址。
     /// </summary>
-    public static readonly Uri BILIBILI_LOGIN_URI = new("https://passport.bilibili.com/login");
+    public static readonly Uri BILIBILI_LOGIN_URI = BilibiliCookieLoginService.LoginUri;
 
     /// <summary>
     /// 读取平台登录起始地址。
@@ -65,15 +65,7 @@ public class BrowserCookieLoginService
 
     private static BrowserCookieLoginResult CreateBilibiliResult(IEnumerable<Cookie> cookies)
     {
-        var cookie = ApiCookieHelper.CreateBilibiliCookie(cookies);
-        var sessData = ApiCookieHelper.GetValue(cookie, "SESSDATA");
-        var biliJct = ApiCookieHelper.GetValue(cookie, "bili_jct");
-
-        if (string.IsNullOrWhiteSpace(sessData) || string.IsNullOrWhiteSpace(biliJct))
-        {
-            throw LocalizedExceptionText.Create("Services.BrowserLogin.BilibiliCookiesMissing",
-                message => new InvalidOperationException(message));
-        }
+        var cookie = new BilibiliCookieLoginService().CreateCookie(cookies).ToCookieString();
 
         return new()
         {

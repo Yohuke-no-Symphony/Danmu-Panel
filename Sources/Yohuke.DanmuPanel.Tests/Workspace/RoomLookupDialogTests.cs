@@ -184,7 +184,7 @@ public sealed class RoomLookupDialogTests
             await searching.WaitAsync(TimeSpan.FromSeconds(5));
             Pump(window);
             var add = Assert.Single(window.GetVisualDescendants().OfType<Button>(),
-                button => button.Name == "AddSearchedRoomButton" && ReferenceEquals(button.CommandParameter, target));
+                button => button.Name == "AddSearchedRoomButton" && button.CommandParameter is Yohuke.DanmuPanel.ViewModels.Workspace.LiveRoomSearchResultViewModel result && result.RoomId == target.RoomId);
 
             Assert.Same(window.Model.AddSearchedRoomCommand, add.Command);
             Assert.True(add.Command!.CanExecute(add.CommandParameter));

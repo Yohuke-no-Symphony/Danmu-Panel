@@ -18,6 +18,11 @@ internal static class LocalizedExceptionText
 
     internal static string Get(Exception error)
     {
-        return error.Data[typeof(LocalizedExceptionText)] is Func<string> provider ? provider() : error.Message;
+        if (error.Data[typeof(LocalizedExceptionText)] is Func<string> provider)
+        {
+            return provider();
+        }
+
+        return CoreExceptionInfo.TryGet(error, out var info) ? CoreErrorText.Get(info) : error.Message;
     }
 }

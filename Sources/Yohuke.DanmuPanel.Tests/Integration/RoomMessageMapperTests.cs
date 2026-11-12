@@ -1,6 +1,6 @@
 using System;
 using Xunit;
-using Yohuke.DanmuPanel.Apis.Models.Bilibili;
+using Yohuke.DanmuCore.Apis.Models.Bilibili;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Services;
 
@@ -9,6 +9,44 @@ namespace Yohuke.DanmuPanel.Tests.Integration;
 /// <summary>验证接收协议映射保留展示与去重字段。</summary>
 public sealed class RoomMessageMapperTests
 {
+    /// <summary>共享协议保留全部币种，产品只将金币计入人民币金额。</summary>
+    [Theory]
+    [InlineData("gold", "0.1")]
+    [InlineData("silver", "0")]
+    [InlineData("unknown", "0")]
+    [InlineData("", "0")]
+    public void GiftCurrencyPolicyRemainsInPanel(string coinType, string expectedPrice)
+    {
+        var record = RoomMessageMapper.Map(new BilibiliGiftMessage
+        {
+            CoinType = coinType, UnitPrice = 100, Quantity = 3
+        }, "tab", 0);
+        var expected = decimal.Parse(expectedPrice, System.Globalization.CultureInfo.InvariantCulture);
+
+        Assert.Equal(expected, record.UnitPrice);
+        Assert.Equal(expected * 3, record.TotalPrice);
+        Assert.Equal(coinType, record.GiftCoinType);
+    }
+
+    /// <summary>协议缺少有效颜色时，Panel 继续采用原金额档位配色。</summary>
+    [Theory]
+    [InlineData(2, "#8B9BA8")]
+    [InlineData(30, "#3171D2")]
+    [InlineData(50, "#427D9E")]
+    [InlineData(100, "#E2B52B")]
+    [InlineData(500, "#E09443")]
+    [InlineData(1000, "#E54D4D")]
+    [InlineData(2000, "#AB1A32")]
+    public void SuperChatWithoutProtocolColorUsesPanelPriceTier(decimal price, string expected)
+    {
+        var record = RoomMessageMapper.Map(new BilibiliSuperChatMessage
+        {
+            Price = price, BorderColor = ""
+        }, "tab", 0);
+
+        Assert.Equal(expected, record.BorderColor);
+    }
+
     /// <summary>弹幕保留房间标签、代次、表情、粉丝牌与历史来源。</summary>
     [Fact]
     public void DanmuPreservesIdentityEmoticonsAndMedal()

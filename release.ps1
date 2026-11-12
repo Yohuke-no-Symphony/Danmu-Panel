@@ -18,6 +18,7 @@ if ($PSVersionTable.PSVersion.Major -ge 7)
 $repoRoot = $PSScriptRoot
 $solutionPath = Join-Path $repoRoot "Sources/Yohuke.DanmuPanel.sln"
 $projectPath = Join-Path $repoRoot "Sources/Yohuke.DanmuPanel/Yohuke.DanmuPanel.csproj"
+$coreProjectPath = Join-Path $repoRoot "Core/Sources/Yohuke.DanmuCore/Yohuke.DanmuCore.csproj"
 $iconPath = Join-Path $repoRoot "Sources/Yohuke.DanmuPanel/Assets/favicon.ico"
 $macReadmePath = Join-Path $repoRoot "Packaging/macOS/README.txt"
 $windowsInstallerScriptPath = Join-Path $repoRoot "Packaging/Windows/Yohuke.DanmuPanel.WindowsInstaller.ps1"
@@ -424,6 +425,7 @@ function Invoke-Release
     $runtimeIdentifier = Get-PublishRuntimeIdentifier
     Assert-PathExists $solutionPath "Solution"
     Assert-PathExists $projectPath "Project"
+    Assert-PathExists $coreProjectPath "Core submodule (run git submodule update --init --recursive)"
     Assert-PathExists $iconPath "Icon"
     Assert-CommandExists "dotnet"
 

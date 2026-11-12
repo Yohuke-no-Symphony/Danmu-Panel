@@ -1,4 +1,4 @@
-using Yohuke.DanmuPanel.Apis.Models.Bilibili;
+using Yohuke.DanmuCore.Apis.Models.Bilibili;
 using Yohuke.DanmuPanel.Models.Messages;
 
 namespace Yohuke.DanmuPanel.Services;
@@ -52,7 +52,10 @@ public static class RoomMessageMapper
             Kind = MessageKind.SuperChat, MessageId = value.MessageId, Time = Time(value.Timestamp),
             HasSourceTimestamp = value.Timestamp > 0,
             UserUid = value.Uid, UserName = value.UserName, Content = value.Content,
-            TotalPrice = value.Price, BorderColor = value.BorderColor
+            TotalPrice = value.Price,
+            BorderColor = string.IsNullOrEmpty(value.BorderColor)
+                ? Appearance.ColorSettingCatalog.GetSuperChatBorder(value.Price).DefaultColor!
+                : value.BorderColor
         };
     }
 

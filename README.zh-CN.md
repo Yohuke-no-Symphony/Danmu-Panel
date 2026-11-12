@@ -48,3 +48,11 @@ dotnet test Sources/Yohuke.DanmuPanel.Tests/Yohuke.DanmuPanel.Tests.csproj --fil
 ## 许可
 
 基于 Danmu Neo，采用 [GPL-3.0](LICENSE) 许可。第三方组件保留各自许可。
+
+## 从源码构建
+
+打开 `Sources/Yohuke.DanmuPanel.sln` 或运行 `release.ps1` 前，请初始化共享的 Bilibili Core 子模块。
+
+```sh
+git submodule update --init --recursive
+```

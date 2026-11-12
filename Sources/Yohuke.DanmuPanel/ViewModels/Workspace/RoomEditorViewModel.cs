@@ -23,6 +23,9 @@ public sealed partial class RoomEditorViewModel : ObservableObject, IDisposable
     private bool disposed;
     private int page;
     private string searchQuery = "";
+    private IReadOnlyList<LiveRoomSearchIssue> searchIssues = [];
+    private Exception? searchError;
+    private string? searchStatusKey;
     [ObservableProperty] private string liveRoomSearchText = "";
     [ObservableProperty] private string liveRoomSearchStatus = "";
     [ObservableProperty] private bool hasMoreLiveRoomSearchResults;
@@ -30,7 +33,7 @@ public sealed partial class RoomEditorViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string newRoomId;
     [ObservableProperty] private string newRoomOwnerUid;
     [ObservableProperty] private AccountChoice? selectedAccount;
-    public ObservableCollection<LiveRoomSearchResult> LiveRoomSearchResults { get; } = [];
+    public ObservableCollection<LiveRoomSearchResultViewModel> LiveRoomSearchResults { get; } = [];
     public ObservableCollection<AccountChoice> AccountChoices { get; }
     public bool IsExisting { get; }
     public string AddDialogTitle => Localization.Get(IsExisting ? "Panel.EditRoom" : "Panel.AddRoom");
@@ -39,7 +42,7 @@ public sealed partial class RoomEditorViewModel : ObservableObject, IDisposable
     public string AddDialogPrimaryText => Localization.Get(IsExisting ? "Panel.Save" : "Workspace.Add");
     public IAsyncRelayCommand SearchLiveRoomsCommand { get; }
     public IAsyncRelayCommand LoadMoreLiveRoomsCommand { get; }
-    public IRelayCommand<LiveRoomSearchResult> AddSearchedRoomCommand { get; }
+    public IRelayCommand<LiveRoomSearchResultViewModel> AddSearchedRoomCommand { get; }
     public IRelayCommand ConfirmCommand { get; }
     public IRelayCommand CancelCommand { get; }
 
@@ -63,7 +66,7 @@ public sealed partial class RoomEditorViewModel : ObservableObject, IDisposable
         selectedAccount = AccountChoices.FirstOrDefault(value => value.Id == room.AccountOverrideId) ?? AccountChoices[0];
         SearchLiveRoomsCommand = new AsyncRelayCommand(() => SearchAsync(false), () => !searching && !disposed);
         LoadMoreLiveRoomsCommand = new AsyncRelayCommand(() => SearchAsync(true), () => !searching && !disposed && HasMoreLiveRoomSearchResults);
-        AddSearchedRoomCommand = new RelayCommand<LiveRoomSearchResult>(result =>
+        AddSearchedRoomCommand = new RelayCommand<LiveRoomSearchResultViewModel>(result =>
         {
             if (result is not null && !IsExisting)
             {
@@ -127,16 +130,16 @@ public sealed partial class RoomEditorViewModel : ObservableObject, IDisposable
             {
                 if (LiveRoomSearchResults.All(existing => existing.RoomId != result.RoomId))
                 {
-                    LiveRoomSearchResults.Add(result);
+                    LiveRoomSearchResults.Add(new(result));
                 }
             }
             page = requestedPage;
             HasMoreLiveRoomSearchResults = response.HasMore;
-            LiveRoomSearchStatus = string.Join(Environment.NewLine, response.Issues.Select(issue => issue.Message));
-            if (LiveRoomSearchStatus.Length == 0 && LiveRoomSearchResults.Count == 0)
-            {
-                LiveRoomSearchStatus = Localization.Get("Workspace.NoSearchResults");
-            }
+            searchIssues = response.Issues;
+            searchError = null;
+            searchStatusKey = searchIssues.Count == 0 && LiveRoomSearchResults.Count == 0
+                ? "Workspace.NoSearchResults" : null;
+            RefreshSearchStatus();
         }
         catch (OperationCanceledException) when (request.IsCancellationRequested)
         {
@@ -145,7 +148,10 @@ public sealed partial class RoomEditorViewModel : ObservableObject, IDisposable
         {
             if (version == searchVersion && !disposed)
             {
-                LiveRoomSearchStatus = exception.Message;
+                searchIssues = [];
+                searchStatusKey = null;
+                searchError = exception;
+                RefreshSearchStatus();
             }
         }
         finally
@@ -180,6 +186,15 @@ public sealed partial class RoomEditorViewModel : ObservableObject, IDisposable
         {
             result.RefreshLocalization();
         }
+        RefreshSearchStatus();
+    }
+
+    private void RefreshSearchStatus()
+    {
+        LiveRoomSearchStatus = searchStatusKey is { } key ? Localization.Get(key)
+            : searchError is { } error ? LocalizedExceptionText.Get(error)
+            : string.Join(Environment.NewLine, searchIssues.Select(issue =>
+                issue.Error is { } info ? CoreErrorText.Get(info) : issue.Message));
     }
 
     private void Confirm()
@@ -187,12 +202,14 @@ public sealed partial class RoomEditorViewModel : ObservableObject, IDisposable
         var roomId = IsExisting ? room.RoomId : NewRoomId.Trim();
         if (!WorkspaceShareService.IsPositiveId(roomId))
         {
-            LiveRoomSearchStatus = Localization.Get("Room.InvalidRoomId");
+            searchStatusKey = "Room.InvalidRoomId";
+            RefreshSearchStatus();
             return;
         }
         if (!string.IsNullOrWhiteSpace(NewRoomOwnerUid) && !WorkspaceShareService.IsPositiveId(NewRoomOwnerUid.Trim()))
         {
-            LiveRoomSearchStatus = Localization.Get("Workspace.InvalidOwnerUid");
+            searchStatusKey = "Workspace.InvalidOwnerUid";
+            RefreshSearchStatus();
             return;
         }
         room.RoomId = roomId;

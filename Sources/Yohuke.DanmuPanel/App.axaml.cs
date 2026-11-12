@@ -130,13 +130,13 @@ public partial class App : Application
             }
             catch (Exception exception)
             {
-                StartupLog.Append(exception.Message, Models.Logging.AppLogLevel.ERROR, error: exception);
+                StartupLog.Append(LocalizedExceptionText.Get(exception), Models.Logging.AppLogLevel.ERROR, error: exception);
                 DisposeLog();
                 desktop.MainWindow = new Window
                 {
                     Title = Localization.Get("Panel.StartupFailed"), Width = 650, Height = 300,
                     Content = new TextBox { IsReadOnly = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-                        Text = AppLogSanitizer.Sanitize(exception.ToString()), Margin = new Thickness(20) }
+                        Text = DiagnosticSanitizer.Sanitize(exception.ToString()), Margin = new Thickness(20) }
                 };
             }
         }
@@ -249,7 +249,7 @@ public partial class App : Application
         Dispatcher.UIThread.Post(() =>
         {
             var key = runtime?.Configuration.Settings.Translation.ApiKey;
-            StartupLog.Append(exception.Message, Models.Logging.AppLogLevel.ERROR,
+            StartupLog.Append(LocalizedExceptionText.Get(exception), Models.Logging.AppLogLevel.ERROR,
                 Localization.Get("Panel.Log.Operation"), exception, [key ?? string.Empty]);
         });
     }
@@ -335,7 +335,7 @@ public partial class App : Application
         }
         catch (Exception exception)
         {
-            StartupLog.Append(exception.Message, Models.Logging.AppLogLevel.ERROR,
+            StartupLog.Append(LocalizedExceptionText.Get(exception), Models.Logging.AppLogLevel.ERROR,
                 Localization.Get("Updates.Title"), exception);
         }
         finally

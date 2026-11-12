@@ -11,6 +11,74 @@ namespace Yohuke.DanmuPanel.Tests.Workspace;
 /// <summary>验证搜索代次、追加分页、关闭取消及本地化。</summary>
 public sealed class WorkspaceSearchTests
 {
+    /// <summary>已完成搜索的问题随语言切换重绘，不重新请求平台。</summary>
+    [AvaloniaFact]
+    public async Task StructuredSearchIssueRendersAgainAfterLanguageChange()
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var runtime = new PanelRuntime(new(directory.Path), new());
+        var service = new ControlledWorkspaceSearchService();
+        using var model = new RoomEditorViewModel(runtime, new(), new(), false, _ => { }, CancellationToken.None, service);
+        var previous = Localization.SelectedLanguageID;
+        try
+        {
+            Localization.SetLanguage("en-US");
+            var searching = model.SearchAsync(false);
+            service.Responses[0].SetResult(new()
+            {
+                Issues = [new()
+                {
+                    Source = LiveRoomSearchSource.Following, ApiCode = -101,
+                    Error = new(CoreErrorCode.RoomSearchFollowingLoginRequired)
+                }]
+            });
+            await searching;
+            Assert.Equal(Localization.Get("Services.BilibiliRoomSearch.FollowingLoginRequired"), model.LiveRoomSearchStatus);
+
+            Localization.SetLanguage("zh-CN");
+
+            Assert.Equal(Localization.Get("Services.BilibiliRoomSearch.FollowingLoginRequired"), model.LiveRoomSearchStatus);
+            Assert.Single(service.Requests);
+        }
+        finally
+        {
+            Localization.SetLanguage(previous);
+        }
+    }
+
+    /// <summary>异常保留原类型与固定诊断，界面通过描述按当前语言显示。</summary>
+    [AvaloniaFact]
+    public async Task StructuredSearchExceptionPreservesTypeAndRendersAgain()
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var runtime = new PanelRuntime(new(directory.Path), new());
+        var service = new ControlledWorkspaceSearchService();
+        using var model = new RoomEditorViewModel(runtime, new(), new(), false, _ => { }, CancellationToken.None, service);
+        var previous = Localization.SelectedLanguageID;
+        var error = CoreExceptionInfo.Create(CoreErrorCode.ApiEmptyJsonResult,
+            message => new Newtonsoft.Json.JsonSerializationException(message));
+        var diagnostic = error.Message;
+        try
+        {
+            Localization.SetLanguage("en-US");
+            var searching = model.SearchAsync(false);
+            service.Responses[0].SetException(error);
+            await searching;
+            Assert.Equal(Localization.Get("Services.Api.EmptyJsonResult"), model.LiveRoomSearchStatus);
+
+            Localization.SetLanguage("ja-JP");
+
+            Assert.Equal(Localization.Get("Services.Api.EmptyJsonResult"), model.LiveRoomSearchStatus);
+            Assert.IsType<Newtonsoft.Json.JsonSerializationException>(error);
+            Assert.Equal(diagnostic, error.Message);
+            Assert.Single(service.Requests);
+        }
+        finally
+        {
+            Localization.SetLanguage(previous);
+        }
+    }
+
     /// <summary>新查询隔离旧响应，后续分页追加并去重。</summary>
     [AvaloniaFact]
     public async Task LateResponseCannotReplaceNewQueryAndPaginationAppends()

@@ -1,14 +1,12 @@
-using System.Text;
 using Avalonia.Headless.XUnit;
 using Xunit;
-using Yohuke.DanmuPanel.Apis;
-using Yohuke.DanmuPanel.Apis.Models.Bilibili;
+using Yohuke.DanmuCore.Apis;
+using Yohuke.DanmuCore.Apis.Models.Bilibili;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Services;
 using Yohuke.DanmuPanel.Services.Messages;
 using Yohuke.DanmuPanel.Tests.Messages;
-using Yohuke.DanmuPanel.Tests.Reception;
 
 namespace Yohuke.DanmuPanel.Tests.Integration;
 
@@ -17,25 +15,31 @@ public sealed class GiftReceptionPersistenceTests
 {
     /// <summary>同事务的多种礼物均入库，整批重放不吞种类、不重复增加数量。</summary>
     [Fact]
-    public async Task V2BatchPersistsEveryGiftAndRemainsIdempotentAfterRestart()
+    public async Task ReceivedBatchPersistsEveryGiftAndRemainsIdempotentAfterRestart()
     {
         using var directory = new MessageStoreTestDirectory();
-        using var socket = new BilibiliLiveWebSocket(100, "");
+        var socket = new ReceptionTestSocket();
         var pending = new List<Task<MessageAppendResult>>();
-        var body = Encoding.UTF8.GetBytes(BilibiliGiftTestData.CreateBatch().ToString());
+        var batch = ReceivedGiftTestData.CreateBatch();
 
         await using (var store = new SqliteMessageStore(directory.DatabasePath))
         {
             socket.GiftReceived += (_, message) => pending.Add(store.AppendAsync(RoomMessageMapper.Map(message, "tab", 0), new()));
-            socket.AnalyseBusinessPackage(body);
+            foreach (var gift in batch)
+            {
+                socket.Emit(gift);
+            }
             await Task.WhenAll(pending);
         }
 
         await using var reopened = new SqliteMessageStore(directory.DatabasePath);
-        using var replaySocket = new BilibiliLiveWebSocket(100, "");
+        var replaySocket = new ReceptionTestSocket();
         pending.Clear();
         replaySocket.GiftReceived += (_, message) => pending.Add(reopened.AppendAsync(RoomMessageMapper.Map(message, "tab", 0), new()));
-        replaySocket.AnalyseBusinessPackage(body);
+        foreach (var gift in batch)
+        {
+            replaySocket.Emit(gift);
+        }
         var replayed = await Task.WhenAll(pending);
 
         Assert.Equal(3, replayed.Length);
@@ -93,15 +97,15 @@ public sealed class GiftReceptionPersistenceTests
         var receiver = new ReceptionTestSocket();
         var session = new RoomReceptionSession(new RoomTabState { Id = "tab", RoomId = "100" }, "", store,
             () => new PanelSettings(), new ReceptionTestSocketFactory(receiver), new ReceptionTestHistory());
-        using var parser = new BilibiliLiveWebSocket(100, "");
-        parser.GiftReceived += (_, message) => receiver.Emit(message);
-        parser.ErrorReceived += (_, error) => receiver.Error(error);
         var errors = 0;
         session.Failed += _ => errors++;
         await session.StartAsync();
 
-        parser.AnalyseBusinessPackage(Encoding.UTF8.GetBytes("""{"cmd":"SEND_GIFT_V2","data":{"pb":"UgU="}}"""));
-        parser.AnalyseBusinessPackage(Encoding.UTF8.GetBytes(BilibiliGiftTestData.CreateBatch().ToString()));
+        receiver.Error(new InvalidDataException("Malformed gift payload."));
+        foreach (var gift in ReceivedGiftTestData.CreateBatch())
+        {
+            receiver.Emit(gift);
+        }
         await session.DisposeAsync();
 
         Assert.Equal(1, errors);

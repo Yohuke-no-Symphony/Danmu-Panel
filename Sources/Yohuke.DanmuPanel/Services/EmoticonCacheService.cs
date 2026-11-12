@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
-using Yohuke.DanmuPanel.Apis;
+using Yohuke.DanmuCore.Apis;
 using Yohuke.DanmuPanel.Models.Logging;
 
 namespace Yohuke.DanmuPanel.Services;

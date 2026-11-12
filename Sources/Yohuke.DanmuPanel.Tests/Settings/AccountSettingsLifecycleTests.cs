@@ -5,7 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Yohuke.DanmuPanel.Views.Settings;
 using Microsoft.Data.Sqlite;
 using Xunit;
-using Yohuke.DanmuPanel.Apis;
+using Yohuke.DanmuCore.Apis;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Models.Workspace;
 using Yohuke.DanmuPanel.Services;
@@ -90,7 +90,8 @@ public sealed class AccountSettingsLifecycleTests
         var runtime = new PanelRuntime(new(directory), new() { Accounts = [account] });
         var validation = new ControlledAccountValidationService();
         using var sessions = new BilibiliAccountSessionService(validation);
-        sessions.Register(account);
+        using var binding = new BilibiliAccountSessionBinding(sessions);
+        binding.Register(account);
         var view = new AccountSettingsView(runtime, sessions);
         var window = new Window { Content = view, Width = 740, Height = 760 };
         try
@@ -129,7 +130,8 @@ public sealed class AccountSettingsLifecycleTests
         var runtime = new PanelRuntime(new(directory), new() { Accounts = [account] });
         var validation = new ControlledAccountValidationService();
         using var sessions = new BilibiliAccountSessionService(validation);
-        sessions.Register(account);
+        using var binding = new BilibiliAccountSessionBinding(sessions);
+        binding.Register(account);
         var view = new AccountSettingsView(runtime, sessions);
         var window = new Window { Content = view, Width = 740, Height = 760 };
         try
