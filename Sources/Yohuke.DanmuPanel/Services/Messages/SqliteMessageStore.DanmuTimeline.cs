@@ -25,6 +25,6 @@ public sealed partial class SqliteMessageStore
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(historyLimit);
         return EnqueueAsync(connection => ReadFeed(connection, roomTabId, MessageKind.Danmu, historyLimit,
             oldestHistoryId, hideEmoticonDanmu, danmuRegexFilter, MessageReadFilter.All,
-            MessageSortOrder.OldestFirst, cancellationToken, includeEventSummaries: true), cancellationToken);
+            MessageSortOrder.OldestFirst, cancellationToken, includeEventSummaries: true), cancellationToken, latestReads);
     }
 }

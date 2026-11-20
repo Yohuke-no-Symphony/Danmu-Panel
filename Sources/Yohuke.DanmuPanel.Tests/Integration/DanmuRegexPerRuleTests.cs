@@ -49,7 +49,8 @@ public sealed class DanmuRegexPerRuleTests
         await danmu.WaitForPresentationAsync();
         await paid.WaitForPresentationAsync();
 
-        Assert.Equal(3, danmu.Items.Count);
+        Assert.Equal(3, danmu.Items.Count(item => item.Record.Kind == MessageKind.Danmu));
+        Assert.Contains(danmu.Items, item => item.Record.Id == superChat.Id && item.IsEventSummary);
         Assert.DoesNotContain(danmu.Items, item => item.Record.Id == hidden.Id || item.Record.Id == overlap.Id);
         var lyricItem = danmu.Items.Single(item => item.Record.Id == lyrics.Id);
         Assert.Same(lyricItem, Assert.Single(danmu.PinnedItems));
@@ -67,7 +68,7 @@ public sealed class DanmuRegexPerRuleTests
 
         Assert.Same(lyricItem, danmu.Items.Single(item => item.Record.Id == lyrics.Id));
         Assert.True(lyricItem.IsTranslating);
-        Assert.Equal(3, danmu.Items.Count);
+        Assert.Equal(3, danmu.Items.Count(item => item.Record.Kind == MessageKind.Danmu));
         Assert.Equal(4, (await runtime.Messages.GetPendingAsync(10)).Count);
 
         configuration.Settings.DanmuRegexFilter.Rules[0].BlockDisplay = false;
@@ -75,7 +76,7 @@ public sealed class DanmuRegexPerRuleTests
         await danmu.RefreshAsync();
         await danmu.WaitForPresentationAsync();
 
-        Assert.Equal(5, danmu.Items.Count);
+        Assert.Equal(5, danmu.Items.Count(item => item.Record.Kind == MessageKind.Danmu));
         Assert.Equal(6, (await runtime.Messages.GetPendingAsync(10)).Count);
         Assert.True((await runtime.Messages.GetByIdAsync(lyrics.Id))!.IsPinned);
     }

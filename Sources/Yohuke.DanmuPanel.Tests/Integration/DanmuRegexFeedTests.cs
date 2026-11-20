@@ -115,8 +115,8 @@ public sealed class DanmuRegexFeedTests
         await runtime.Messages.AppendAsync(Message("【新的同传】", 233), new());
         await model.RefreshAsync();
 
-        Assert.Equal(101, model.ScrollingItems.Count);
-        Assert.Equal("文字20", model.ScrollingItems[0].Record.Content);
+        Assert.Equal(100, model.ScrollingItems.Count);
+        Assert.Equal("文字21", model.ScrollingItems[0].Record.Content);
 
         await model.LoadMoreAsync();
 

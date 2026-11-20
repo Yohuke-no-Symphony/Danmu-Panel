@@ -444,21 +444,42 @@ public sealed class SettingsView : UserControl
         }
     }
 
-    private async Task ClearCacheAsync()
+    private async Task ClearCacheAsync(SettingsCacheScope scope)
     {
+        if (!TryBeginOperation())
+        {
+            return;
+        }
+
         try
         {
-            await runtime.ClearTranslationCacheAsync();
+            (Func<Task> Clear, string SuccessKey) action = scope switch
+            {
+                SettingsCacheScope.Translation => (runtime.ClearTranslationCacheAsync, "Settings.CacheCleared"),
+                SettingsCacheScope.Images => (runtime.ClearImageCachesAsync, "Settings.ImageCachesCleared"),
+                SettingsCacheScope.All => (runtime.ClearAllCachesAsync, "Settings.AllCachesCleared"),
+                _ => throw new ArgumentOutOfRangeException(nameof(scope))
+            };
+            SetStatus("");
+            try
+            {
+                await action.Clear();
+                SetStatus(Localization.Get(action.SuccessKey), isError: false);
+            }
+            catch (Exception exception)
+            {
+                SetStatus(Localization.Get("Settings.CacheClearFailed") + " · " + exception.GetType().Name);
+            }
+
             if (Model.Data.RefreshCacheSizeCommand.ExecutionTask is { IsCompleted: false } pendingRefresh)
             {
                 await pendingRefresh;
             }
             await Model.Data.RefreshCacheSizeCommand.ExecuteAsync(null);
-            SetStatus(Localization.Get("Settings.CacheCleared"), isError: false);
         }
-        catch (Exception exception)
+        finally
         {
-            SetStatus(Localization.Get("Settings.SaveFailed") + " · " + exception.GetType().Name);
+            EndOperation();
         }
     }
 

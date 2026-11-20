@@ -80,14 +80,15 @@ public sealed class SqliteTranslationCache : ITranslationCache, IAsyncDisposable
         }, cancellationToken);
     }
 
-    /// <summary>清空可复用缓存，不删除永久消息。</summary>
+    /// <summary>清空可复用缓存并回收数据库空间。</summary>
     public Task ClearAsync(CancellationToken cancellationToken = default)
     {
         return EnqueueAsync(connection =>
         {
             using var command = connection.CreateCommand();
-            command.CommandText = "DELETE FROM translations;";
+            command.CommandText = "DELETE FROM translations; VACUUM; PRAGMA wal_checkpoint(TRUNCATE);";
             command.ExecuteNonQuery();
+            accessOrder = 0;
             return true;
         }, cancellationToken);
     }

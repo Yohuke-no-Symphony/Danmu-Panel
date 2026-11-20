@@ -27,6 +27,8 @@ public sealed class GiftPriorityMigrationTests
         {
             using var command = connection.CreateCommand();
             command.CommandText = """
+                DROP TRIGGER message_payload_revision;
+                ALTER TABLE message_records DROP COLUMN payload_revision;
                 UPDATE message_options SET payload=$options WHERE id=1;
                 PRAGMA user_version=3;
                 CREATE TRIGGER reject_read_changes BEFORE UPDATE ON message_records WHEN NEW.id='read'
@@ -60,7 +62,7 @@ public sealed class GiftPriorityMigrationTests
         {
             using var command = connection.CreateCommand();
             command.CommandText = "PRAGMA user_version;";
-            Assert.Equal(4L, command.ExecuteScalar());
+            Assert.Equal(5L, command.ExecuteScalar());
             command.CommandText = "SELECT priority FROM message_records WHERE id='unread';";
             Assert.Equal(expectedPriority ? 1L : 0L, command.ExecuteScalar());
             command.CommandText = """

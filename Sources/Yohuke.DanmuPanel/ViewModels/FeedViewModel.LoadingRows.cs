@@ -6,14 +6,13 @@ public sealed partial class FeedViewModel
 {
     private const int LOADING_HINT_ROW_COUNT = 3;
 
-    private void AddLoadingRows()
+    private void AddLoadingRows(bool newer)
     {
-        var index = kind == MessageKind.Danmu ? 0 : SortOrder == MessageSortOrder.NewestFirst ? ScrollingRows.Count :
-            ScrollingRows.TakeWhile(row => row is MessageItemViewModel item && item.Record.IsPriority).Count();
-        for (var offset = 0; offset < LOADING_HINT_ROW_COUNT; offset++)
-        {
-            ScrollingRows.Insert(index + offset, new MessageLoadingPlaceholderViewModel());
-        }
+        var prepend = SortOrder == MessageSortOrder.NewestFirst ? newer : !newer;
+        var index = prepend ? 0 : ScrollingRows.Count;
+        var placeholders = Enumerable.Range(0, LOADING_HINT_ROW_COUNT)
+            .Select(_ => (FeedRowViewModel)new MessageLoadingPlaceholderViewModel()).ToArray();
+        ((FeedCollection<FeedRowViewModel>)ScrollingRows).InsertRange(index, placeholders);
         NotifyRegions();
     }
 
@@ -21,10 +20,17 @@ public sealed partial class FeedViewModel
     {
         for (var index = ScrollingRows.Count - 1; index >= 0; index--)
         {
-            if (ScrollingRows[index] is MessageLoadingPlaceholderViewModel)
+            if (ScrollingRows[index] is not MessageLoadingPlaceholderViewModel)
             {
-                ScrollingRows.RemoveAt(index);
+                continue;
             }
+            var first = index;
+            while (first > 0 && ScrollingRows[first - 1] is MessageLoadingPlaceholderViewModel)
+            {
+                first--;
+            }
+            ((FeedCollection<FeedRowViewModel>)ScrollingRows).RemoveRange(first, index - first + 1);
+            index = first;
         }
         NotifyRegions();
     }

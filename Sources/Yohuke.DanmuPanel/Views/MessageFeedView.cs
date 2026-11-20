@@ -121,6 +121,13 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
                     UpdateReadingState(scroll.IsFollowingLatest);
                 }
             }
+            else if (args.PropertyName == nameof(FeedViewModel.HasNewerHistory))
+            {
+                if (scroll is not null)
+                {
+                    UpdateReadingState(scroll.IsFollowingLatest);
+                }
+            }
             else if (args.PropertyName == nameof(FeedViewModel.MessageTextScale))
             {
                 UpdateTextScale();
@@ -324,7 +331,11 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
 
     private void UpdateReadingState(bool followingLatest)
     {
-        Model.IsReadingHistory = Model.ScrollingItems.Count > 0 && !followingLatest;
+        Model.IsReadingHistory = Model.ScrollingItems.Count > 0 && (!followingLatest || Model.HasNewerHistory);
+        if (followingLatest)
+        {
+            Model.ResumeLiveDanmuAtLatest();
+        }
     }
 
     private void OnViewportUpdateStarted()
@@ -543,12 +554,19 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
         return Task.CompletedTask;
     }
 
-    private Task ScrollToLatestAsync()
+    private async Task ScrollToLatestAsync()
     {
+        var version = Model.WindowRevision;
+        await Model.ShowLatestAsync();
+        if (version != Model.WindowRevision)
+        {
+            return;
+        }
         isScrollToTopPending = false;
         if (scroll is not null)
         {
             scroll.ScrollToLatest();
+            UpdateReadingState(scroll.IsFollowingLatest);
         }
         else
         {
@@ -562,7 +580,6 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
         {
             pinnedList.ScrollIntoView(Model.PinnedItems[0]);
         }
-        return Task.CompletedTask;
     }
 
     private async Task RunAsync(Func<Task> action)

@@ -12,7 +12,10 @@ namespace Yohuke.DanmuPanel.ViewModels;
 public sealed partial class FeedViewModel : ObservableObject, IDisposable
 {
     private const int HISTORY_PAGE_SIZE = 100;
+    private const int BUFFERED_HISTORY_PAGES = 3;
     private const int LOADING_HINT_DELAY_MILLISECONDS = 150;
+    private static readonly TimeSpan LIVE_REFRESH_INTERVAL = TimeSpan.FromMilliseconds(60);
+    private static readonly TimeSpan SNAPSHOT_REFRESH_INTERVAL = TimeSpan.FromMilliseconds(150);
     private readonly PanelRuntime runtime;
     private readonly MessageKind kind;
     private readonly SemaphoreSlim refreshGate = new(1, 1);
@@ -20,8 +23,13 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     private CancellationTokenSource lifetime = new();
     private RoomTabState? room;
     private int retentionCount;
-    private int limit;
-    private string? oldestHistoryId;
+    private MessageFeedPage? scrollingPage;
+    private MessageFeedPage? pinnedPage;
+    private MessageFeedPageRequest? retainedHistory;
+    private MessageFeedPageRequest? retainedPins;
+    private bool keepHistoryWindow;
+    private bool keepPinnedWindow;
+    private bool showNewest;
     private int revision;
     private int unreadCount;
     private int refreshRequested;
@@ -62,6 +70,9 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     public RoomTabState? SelectedRoom => room;
     public bool HasSelectedRoom => room is not null;
     public bool IsReadingHistory { get; set; }
+    public bool HasNewerHistory => scrollingPage?.HasNewer == true;
+    public bool HasOlderPinnedMessages => pinnedPage?.HasOlder == true;
+    public bool HasNewerPinnedMessages => pinnedPage?.HasNewer == true;
     public bool IsLoadingHistory
     {
         get => isLoadingHistory;
@@ -74,6 +85,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     /// <summary>通知视图结束一轮消息布局更新。</summary>
     public event Action? ViewportUpdateCompleted;
     internal int ViewportUpdateDepth { get; private set; }
+    internal int WindowRevision => revision;
 
     public bool IsCompactDisplay => isCompactDisplay;
     public bool IsCompactMessageWrap => isCompactMessageWrap;
@@ -92,12 +104,16 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         readFilter = kind == MessageKind.Danmu ? MessageReadFilter.All : MessageReadFilter.Unread;
         UpdateSortOrder();
         retentionCount = runtime.Configuration.Settings.MessageRetentionCount;
-        limit = retentionCount;
         UpdateLayoutOptions();
-        refreshTimer = new() { Interval = TimeSpan.FromMilliseconds(150) };
+        refreshTimer = new() { Interval = SNAPSHOT_REFRESH_INTERVAL };
         refreshTimer.Tick += OnRefreshTimer;
         runtime.Changed += OnChanged;
-        runtime.MessagesChanged += OnMessagesChanged;
+        runtime.FeedInvalidated += OnMessagesChanged;
+        if (kind == MessageKind.Danmu)
+        {
+            runtime.DanmuCommitted += OnDanmuCommitted;
+            runtime.DanmuTranslationCommitted += OnDanmuTranslationCommitted;
+        }
         runtime.SpecialAttentionChanged += OnSpecialAttentionChanged;
     }
 
@@ -124,10 +140,15 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         IsLoadingHistory = false;
         historyLoadTask = null;
         hasLoadedRoom = false;
-        oldestHistoryId = null;
+        keepHistoryWindow = false;
+        keepPinnedWindow = false;
+        showNewest = false;
+        retainedHistory = null;
+        retainedPins = null;
+        SetPages(null, null);
         retentionCount = runtime.Configuration.Settings.MessageRetentionCount;
-        limit = retentionCount;
         translationRequested.Clear();
+        ClearLiveQueue();
         lifetime.Cancel();
         lifetime.Dispose();
         lifetime = new();
@@ -136,21 +157,6 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         ScrollingItems.Clear();
         ScrollingRows.Clear();
         NotifyRegions();
-    }
-
-    /// <summary>继续加载更早的记录。</summary>
-    public Task LoadMoreAsync()
-    {
-        if (disposed || room is null)
-        {
-            return Task.CompletedTask;
-        }
-        if (historyLoadTask is { IsCompleted: false })
-        {
-            return historyLoadTask;
-        }
-        historyLoadTask = RefreshCoreAsync(loadMore: true);
-        return historyLoadTask;
     }
 
     /// <summary>确认当前房间、类型的全部未读记录，然后刷新当前选择。</summary>
@@ -183,10 +189,11 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     /// <summary>将最新数据库投影应用到已有行。</summary>
     public Task RefreshAsync()
     {
-        return RefreshCoreAsync(loadMore: false);
+        return RefreshCoreAsync();
     }
 
-    private async Task RefreshCoreAsync(bool loadMore)
+    private async Task RefreshCoreAsync(MessageFeedPageDirection? direction = null, bool pagePinned = false,
+        string? targetId = null, CancellationToken requestCancellation = default)
     {
         if (disposed)
         {
@@ -203,8 +210,11 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         {
             return;
         }
-        var cancellationToken = lifetime.Token;
-        var loading = loadMore || !hasLoadedRoom ? ++loadingRevision : 0;
+        using var request = requestCancellation.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, requestCancellation) : null;
+        var cancellationToken = request?.Token ?? lifetime.Token;
+        var loading = direction is MessageFeedPageDirection.Before or MessageFeedPageDirection.After
+            or MessageFeedPageDirection.Around || !hasLoadedRoom ? ++loadingRevision : 0;
         if (loading != 0)
         {
             IsLoadingHistory = true;
@@ -220,111 +230,65 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
             {
                 return;
             }
-            viewportUpdateStarted = true;
-            BeginViewportUpdate();
             if (loading != 0)
             {
+                viewportUpdateStarted = true;
+                BeginViewportUpdate();
                 loadingHint = DispatcherTimer.RunOnce(() =>
                 {
-                    if (!disposed && version == revision && loading == loadingRevision)
+                    if (!disposed && version == revision && loading == loadingRevision && !pagePinned)
                     {
-                        AddLoadingRows();
+                        AddLoadingRows(direction == MessageFeedPageDirection.After);
                     }
                 }, TimeSpan.FromMilliseconds(LOADING_HINT_DELAY_MILLISECONDS), DispatcherPriority.Background);
             }
-            var configuredRetentionCount = runtime.Configuration.Settings.MessageRetentionCount;
-            if (retentionCount != configuredRetentionCount)
-            {
-                retentionCount = configuredRetentionCount;
-                limit = retentionCount;
-            }
-            var requestedLimit = loadMore
-                ? Math.Max(limit, kind == MessageKind.Danmu ? ScrollingItems.Count :
-                    ScrollingItems.Count(item => !item.Record.IsPriority)) + HISTORY_PAGE_SIZE
-                : limit;
-            var snapshot = kind == MessageKind.Danmu
-                ? await runtime.Messages.LoadDanmuTimelineAsync(current.Id, requestedLimit,
-                    IsReadingHistory ? oldestHistoryId : null,
-                    hideEmoticonDanmu: runtime.Configuration.Settings.HideEmoticonDanmu,
-                    danmuRegexFilter: runtime.DanmuFilter, cancellationToken: cancellationToken)
-                : await runtime.Messages.LoadFeedAsync(current.Id, kind, requestedLimit,
-                    IsReadingHistory ? oldestHistoryId : null, cancellationToken,
-                    readFilter: ReadFilter, sortOrder: SortOrder);
+            var (snapshot, historyRequest, pinnedRequest) =
+                await ReadWindowAsync(current, direction, pagePinned, targetId, cancellationToken);
             loadingHint?.Dispose();
             loadingHint = null;
             if (disposed || version != revision || cancellationToken.IsCancellationRequested)
             {
                 return;
             }
-            var records = snapshot.Records;
-            var currentSettings = runtime.Configuration.Settings;
-            displaySettings = MessageDisplaySettings.Capture(currentSettings, displaySettings, runtime.DanmuFilter);
-            var existingItems = Items.ToDictionary(item => item.Record.Id);
-            var translationCandidates = new List<MessageRecord>();
-            var uiBudget = new FeedUiWorkBudget();
-            var expectedItems = new MessageItemViewModel[records.Count];
-            var expected = records.Select(record => record.Id).ToHashSet();
-            for (var index = Items.Count - 1; index >= 0; index--)
+            if (direction == MessageFeedPageDirection.Around && snapshot.Scrolling.Entries.Count == 0)
             {
-                if (!expected.Contains(Items[index].Record.Id))
-                {
-                    Items.RemoveAt(index);
-                    await uiBudget.YieldIfNeededAsync(cancellationToken);
-                }
+                return;
             }
-            for (var index = 0; index < records.Count; index++)
+            var settings = runtime.Configuration.Settings;
+            var display = MessageDisplaySettings.Capture(settings, displaySettings, runtime.DanmuFilter);
+            if (!IsUnchanged(snapshot, display))
             {
-                var record = records[index];
-                var isEventSummary = kind == MessageKind.Danmu && record.Kind != MessageKind.Danmu;
-                var changed = true;
-                var translationBlocked = displaySettings.IsTranslationBlocked(record);
-                var translationPending = !translationBlocked && record.TranslationFingerprint == displaySettings.TranslationFingerprint &&
-                    snapshot.PendingTranslationIds.Contains(record.Id);
-                if (!translationBlocked && displaySettings.TranslationEnabled && record.Kind is MessageKind.Danmu or MessageKind.SuperChat)
+                if (!viewportUpdateStarted)
                 {
-                    var fingerprint = displaySettings.TranslationFingerprint;
-                    if (record.TranslationFingerprint != fingerprint && translationRequested.Add(record.Id + fingerprint))
-                    {
-                        translationCandidates.Add(record);
-                    }
+                    viewportUpdateStarted = true;
+                    BeginViewportUpdate();
                 }
-                if (!existingItems.TryGetValue(record.Id, out var existing))
+                await ApplyWindowAsync(snapshot, display, version, cancellationToken);
+            }
+            if (disposed || version != revision || cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            if (direction == MessageFeedPageDirection.Latest)
+            {
+                keepHistoryWindow = false;
+                keepPinnedWindow = false;
+                showNewest = true;
+            }
+            else if (direction is MessageFeedPageDirection.Before or MessageFeedPageDirection.After or MessageFeedPageDirection.Around)
+            {
+                if (pagePinned)
                 {
-                    var item = MessageItemViewModel.CreateDeferred(record, displaySettings, runtime.Pinyin, translationPending,
-                        isEventSummary);
-                    expectedItems[index] = item;
-                    Items.Insert(index, item);
-                    _ = LoadEmoticonsAsync(item, cancellationToken);
+                    keepPinnedWindow = true;
                 }
                 else
                 {
-                    expectedItems[index] = existing;
-                    changed = !ReferenceEquals(existing.Record, record) ||
-                        !ReferenceEquals(existing.PresentationSettings, displaySettings) || existing.TranslationPending != translationPending;
-                    existing.Apply(record, displaySettings, translationPending);
-                }
-                if (changed)
-                {
-                    await uiBudget.YieldIfNeededAsync(cancellationToken);
-                    if (disposed || version != revision || cancellationToken.IsCancellationRequested)
-                    {
-                        return;
-                    }
+                    keepHistoryWindow = true;
                 }
             }
-            await FeedCollectionSynchronizer.SynchronizeAsync(Items, expectedItems, cancellationToken);
-            await FeedCollectionSynchronizer.SynchronizeAsync(PinnedItems,
-                expectedItems.Where(item => kind == MessageKind.Danmu && item.Record.Kind == MessageKind.Danmu &&
-                    item.Record.IsPinned).ToArray(), cancellationToken);
-            await FeedCollectionSynchronizer.SynchronizeAsync(ScrollingItems,
-                expectedItems.Where(item => kind != MessageKind.Danmu || item.Record.Kind != MessageKind.Danmu ||
-                    !item.Record.IsPinned).ToArray(), cancellationToken);
-            await SynchronizeScrollingRowsAsync(cancellationToken);
-            if (loadMore)
-            {
-                limit = requestedLimit;
-            }
-            oldestHistoryId = snapshot.OldestHistoryId;
+            retainedHistory = RetainedRange(snapshot.Scrolling, historyRequest);
+            retainedPins = RetainedRange(snapshot.Pinned, pinnedRequest);
+            SetPages(snapshot.Scrolling, snapshot.Pinned);
             UnreadCount = snapshot.UnreadCount;
             NotifyRegions();
             if (!hasLoadedRoom)
@@ -332,9 +296,6 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
                 hasLoadedRoom = true;
                 InitialLoadCompleted?.Invoke();
             }
-            SchedulePresentation(version, cancellationToken);
-            TrackBackground(RegisterTranslationsAsync(translationCandidates, displaySettings.TranslationFingerprint,
-                version, cancellationToken));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -412,7 +373,13 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         revision++;
         Volatile.Write(ref room, null);
         runtime.Changed -= OnChanged;
-        runtime.MessagesChanged -= OnMessagesChanged;
+        runtime.FeedInvalidated -= OnMessagesChanged;
+        if (kind == MessageKind.Danmu)
+        {
+            runtime.DanmuCommitted -= OnDanmuCommitted;
+            runtime.DanmuTranslationCommitted -= OnDanmuTranslationCommitted;
+        }
+        ClearLiveQueue();
         runtime.SpecialAttentionChanged -= OnSpecialAttentionChanged;
         refreshTimer.Stop();
         refreshTimer.Tick -= OnRefreshTimer;
@@ -451,6 +418,8 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     {
         if (!disposed)
         {
+            refreshTimer.Interval = kind == MessageKind.Danmu && HasLiveChanges()
+                ? LIVE_REFRESH_INTERVAL : SNAPSHOT_REFRESH_INTERVAL;
             refreshTimer.Start();
         }
     }
@@ -458,10 +427,10 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     private async void OnRefreshTimer(object? sender, EventArgs args)
     {
         refreshTimer.Stop();
-        Interlocked.Exchange(ref refreshRequested, 0);
+        var requiresSnapshot = Interlocked.Exchange(ref refreshRequested, 0) != 0;
         try
         {
-            await RefreshAsync();
+            await FlushChangesAsync(requiresSnapshot);
         }
         catch (Exception exception)
         {
@@ -470,7 +439,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         finally
         {
             Interlocked.Exchange(ref refreshScheduled, 0);
-            if (Volatile.Read(ref refreshRequested) != 0)
+            if (Volatile.Read(ref refreshRequested) != 0 || HasLiveChanges())
             {
                 ScheduleRefresh();
             }

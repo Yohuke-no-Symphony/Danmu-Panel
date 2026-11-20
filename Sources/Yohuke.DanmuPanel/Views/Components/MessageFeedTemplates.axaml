@@ -59,15 +59,27 @@
                 <MenuItem Header="{Loc Key=Panel.MoreHistory}" Command="{Binding LoadMoreCommand}">
                     <MenuItem.Icon><LucideIcon Kind="History" Size="16" /></MenuItem.Icon>
                 </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.MoreRecentHistory}" Command="{Binding LoadNewerCommand}"
+                          IsVisible="{Binding Feed.HasNewerHistory}">
+                    <MenuItem.Icon><LucideIcon Kind="ArrowDown" Size="16" /></MenuItem.Icon>
+                </MenuItem>
                 <MenuItem Header="{Loc Key=Panel.BackToLatest}" Command="{Binding BackToLatestCommand}">
                     <MenuItem.Icon><LucideIcon Kind="ArrowDownToLine" Size="16" /></MenuItem.Icon>
                 </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.MoreOlderPinned}" Command="{Binding LoadOlderPinnedCommand}"
+                          IsVisible="{Binding Feed.HasOlderPinnedMessages}" />
+                <MenuItem Header="{Loc Key=Panel.MoreRecentPinned}" Command="{Binding LoadNewerPinnedCommand}"
+                          IsVisible="{Binding Feed.HasNewerPinnedMessages}" />
             </views:LocalizedContextMenu>
         </DataTemplate>
         <DataTemplate x:Key="CardPanelMenu" x:DataType="vm:MessageFeedHeaderViewModel">
             <views:LocalizedContextMenu>
                 <MenuItem Header="{Loc Key=Panel.MoreHistory}" Command="{Binding LoadMoreCommand}">
                     <MenuItem.Icon><LucideIcon Kind="History" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.MoreRecentHistory}" Command="{Binding LoadNewerCommand}"
+                          IsVisible="{Binding Feed.HasNewerHistory}">
+                    <MenuItem.Icon><LucideIcon Kind="ArrowDown" Size="16" /></MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Header="{Loc Key=Panel.BackToTop}" Command="{Binding BackToTopCommand}">
                     <MenuItem.Icon><LucideIcon Kind="ArrowUpToLine" Size="16" /></MenuItem.Icon>
@@ -97,9 +109,17 @@
                 <MenuItem Header="{Loc Key=Panel.MoreHistory}" Command="{Binding Header.LoadMoreCommand}">
                     <MenuItem.Icon><LucideIcon Kind="History" Size="16" /></MenuItem.Icon>
                 </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.MoreRecentHistory}" Command="{Binding Header.LoadNewerCommand}"
+                          IsVisible="{Binding Header.Feed.HasNewerHistory}">
+                    <MenuItem.Icon><LucideIcon Kind="ArrowDown" Size="16" /></MenuItem.Icon>
+                </MenuItem>
                 <MenuItem Header="{Loc Key=Panel.BackToLatest}" Command="{Binding Header.BackToLatestCommand}">
                     <MenuItem.Icon><LucideIcon Kind="ArrowDownToLine" Size="16" /></MenuItem.Icon>
                 </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.MoreOlderPinned}" Command="{Binding Header.LoadOlderPinnedCommand}"
+                          IsVisible="{Binding Header.Feed.HasOlderPinnedMessages}" />
+                <MenuItem Header="{Loc Key=Panel.MoreRecentPinned}" Command="{Binding Header.LoadNewerPinnedCommand}"
+                          IsVisible="{Binding Header.Feed.HasNewerPinnedMessages}" />
             </views:LocalizedContextMenu>
         </DataTemplate>
         <DataTemplate x:Key="SuperChatRowMenu" x:DataType="vm:MessageFeedMenuViewModel">
@@ -117,6 +137,10 @@
                 <MenuItem Header="{Loc Key=Panel.MoreHistory}" Command="{Binding Header.LoadMoreCommand}">
                     <MenuItem.Icon><LucideIcon Kind="History" Size="16" /></MenuItem.Icon>
                 </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.MoreRecentHistory}" Command="{Binding Header.LoadNewerCommand}"
+                          IsVisible="{Binding Header.Feed.HasNewerHistory}">
+                    <MenuItem.Icon><LucideIcon Kind="ArrowDown" Size="16" /></MenuItem.Icon>
+                </MenuItem>
                 <MenuItem Header="{Loc Key=Panel.BackToTop}" Command="{Binding Header.BackToTopCommand}">
                     <MenuItem.Icon><LucideIcon Kind="ArrowUpToLine" Size="16" /></MenuItem.Icon>
                 </MenuItem>
@@ -133,6 +157,10 @@
                 <Separator />
                 <MenuItem Header="{Loc Key=Panel.MoreHistory}" Command="{Binding Header.LoadMoreCommand}">
                     <MenuItem.Icon><LucideIcon Kind="History" Size="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{Loc Key=Panel.MoreRecentHistory}" Command="{Binding Header.LoadNewerCommand}"
+                          IsVisible="{Binding Header.Feed.HasNewerHistory}">
+                    <MenuItem.Icon><LucideIcon Kind="ArrowDown" Size="16" /></MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Header="{Loc Key=Panel.BackToTop}" Command="{Binding Header.BackToTopCommand}">
                     <MenuItem.Icon><LucideIcon Kind="ArrowUpToLine" Size="16" /></MenuItem.Icon>

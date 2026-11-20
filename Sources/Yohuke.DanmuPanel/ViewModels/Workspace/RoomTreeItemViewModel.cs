@@ -129,7 +129,7 @@ public sealed partial class RoomTreeItemViewModel : ObservableObject, IDisposabl
         }
         try
         {
-            using var stream = File.OpenRead(path);
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
             return Bitmap.DecodeToWidth(stream, 64);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or

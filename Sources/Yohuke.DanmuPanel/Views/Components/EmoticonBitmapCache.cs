@@ -225,7 +225,7 @@ internal sealed class EmoticonBitmapCache
             {
                 return new(fileLength, lastWrittenAt, null);
             }
-            using var stream = File.OpenRead(path);
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
             cancellationToken.ThrowIfCancellationRequested();
             LastDecodeThreadId = Environment.CurrentManagedThreadId;
             Interlocked.Increment(ref decodeCount);

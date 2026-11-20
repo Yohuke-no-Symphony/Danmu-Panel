@@ -12,8 +12,6 @@ internal sealed class MessageRecordReadCache
     private readonly Dictionary<string, LinkedListNode<MessageRecordReadCacheEntry>> entries = new(StringComparer.Ordinal);
     private readonly Dictionary<long, LinkedListNode<MessageRecordReadCacheEntry>> sequences = new();
     private readonly LinkedList<MessageRecordReadCacheEntry> recency = new();
-    private long? dataVersion;
-    private long epoch;
 
     internal int Count => entries.Count;
     internal long RetainedTextBytes { get; private set; }
@@ -59,23 +57,14 @@ internal sealed class MessageRecordReadCache
         return record;
     }
 
-    internal void BeginSnapshot(long version)
+    internal bool IsValidated(long sequence, long payloadRevision)
     {
-        if (dataVersion != version)
-        {
-            dataVersion = version;
-            epoch++;
-        }
+        return sequences.TryGetValue(sequence, out var node) && node.Value.PayloadRevision == payloadRevision;
     }
 
-    internal bool IsValidated(long sequence)
+    internal bool TryGetValidated(long sequence, long payloadRevision, out MessageRecordReadCacheEntry entry)
     {
-        return sequences.TryGetValue(sequence, out var node) && node.Value.ValidatedEpoch == epoch;
-    }
-
-    internal bool TryGetValidated(long sequence, out MessageRecordReadCacheEntry entry)
-    {
-        if (sequences.TryGetValue(sequence, out var node) && node.Value.ValidatedEpoch == epoch)
+        if (sequences.TryGetValue(sequence, out var node) && node.Value.PayloadRevision == payloadRevision)
         {
             recency.Remove(node);
             recency.AddLast(node);
@@ -86,7 +75,7 @@ internal sealed class MessageRecordReadCache
         return false;
     }
 
-    internal MessageRecord GetOrDeserialize(long sequence, string id, string payload)
+    internal MessageRecord GetOrDeserialize(long sequence, long payloadRevision, string id, string payload)
     {
         if (sequences.TryGetValue(sequence, out var previousSequence) && previousSequence.Value.Id != id)
         {
@@ -101,33 +90,10 @@ internal sealed class MessageRecordReadCache
         if (entries.TryGetValue(id, out var current))
         {
             current.Value.Sequence = sequence;
-            current.Value.ValidatedEpoch = epoch;
+            current.Value.PayloadRevision = payloadRevision;
             sequences[sequence] = current;
         }
         return record;
-    }
-
-    internal void Invalidate(string id)
-    {
-        if (entries.TryGetValue(id, out var node))
-        {
-            node.Value.ValidatedEpoch = -1;
-        }
-    }
-
-    internal void InvalidateRoom(string roomTabId, MessageKind? kind = null)
-    {
-        var node = recency.First;
-        while (node is not null)
-        {
-            var next = node.Next;
-            var record = node.Value.Record;
-            if (record.RoomTabId == roomTabId && (kind is null || record.Kind == kind))
-            {
-                Remove(node);
-            }
-            node = next;
-        }
     }
 
     internal void Clear()
@@ -135,7 +101,6 @@ internal sealed class MessageRecordReadCache
         entries.Clear();
         sequences.Clear();
         recency.Clear();
-        dataVersion = null;
         RetainedTextBytes = 0;
     }
 

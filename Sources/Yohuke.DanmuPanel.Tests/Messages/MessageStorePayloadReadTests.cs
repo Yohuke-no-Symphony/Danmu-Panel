@@ -57,6 +57,7 @@ public sealed class MessageStorePayloadReadTests(ITestOutputHelper output)
         await store.AppendAsync(Message(0), new());
         await store.AppendAsync(Message(1), new());
         var original = await store.LoadFeedAsync("room", MessageKind.Danmu, 100, null);
+        var originalReads = store.PayloadRowsRead;
         using var external = new SqliteConnection(new SqliteConnectionStringBuilder
         {
             DataSource = directory.DatabasePath, Pooling = false
@@ -72,6 +73,7 @@ public sealed class MessageStorePayloadReadTests(ITestOutputHelper output)
         Assert.NotSame(original.Records[0], refreshed.Records[0]);
         Assert.Same(original.Records[1], refreshed.Records[1]);
         var revalidatedReads = store.PayloadRowsRead;
+        Assert.Equal(originalReads + 1, revalidatedReads);
         var warm = await store.LoadFeedAsync("room", MessageKind.Danmu, 100, null);
         Assert.Equal(revalidatedReads, store.PayloadRowsRead);
         Assert.Same(refreshed.Records[0], warm.Records[0]);

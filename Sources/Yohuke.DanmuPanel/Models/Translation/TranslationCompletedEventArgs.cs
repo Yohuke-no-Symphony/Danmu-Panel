@@ -9,5 +9,6 @@ public sealed class TranslationCompletedEventArgs(TranslationJob job, string tra
     public string RoomTabId { get; } = job.RoomTabId;
     public MessageKind? Kind { get; } = job.Kind;
     public long Generation { get; } = job.Generation;
+    internal string ConfigurationFingerprint { get; } = job.ConfigurationFingerprint;
     public string Translation { get; } = translation;
 }

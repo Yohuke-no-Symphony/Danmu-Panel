@@ -282,6 +282,10 @@ public sealed class PinnedFeedTests
         await model.SelectRoomAsync(Room());
 
         Assert.Empty(model.PinnedItems);
+        Assert.Equal(100, model.ScrollingItems.Count);
+        Assert.Equal(105, model.UnreadCount);
+        Assert.True(model.HasNewerHistory);
+        await model.LoadNewerAsync();
         Assert.Equal(105, model.ScrollingItems.Count);
         Assert.All(model.ScrollingItems, item => Assert.False(item.Record.IsRead));
         await model.SelectReadFilterAsync(MessageReadFilter.Read);
@@ -297,22 +301,26 @@ public sealed class PinnedFeedTests
 
         Assert.Equal(106, model.UnreadCount);
         Assert.DoesNotContain(model.ScrollingItems, item => item.Record.IsPriority);
-        Assert.Equal(101, model.ScrollingItems.Count(item => !item.Record.IsPriority));
+        Assert.Equal(100, model.ScrollingItems.Count(item => !item.Record.IsPriority));
+        Assert.True(model.HasNewerHistory);
         Assert.Same(oldest, model.ScrollingItems.Last(item => !item.Record.IsPriority));
 
         await model.LoadMoreAsync();
 
         Assert.Equal(106, model.UnreadCount);
-        Assert.Equal(201, model.ScrollingItems.Count(item => !item.Record.IsPriority));
-        Assert.Same(oldest, model.ScrollingItems[100]);
+        Assert.Equal(200, model.ScrollingItems.Count(item => !item.Record.IsPriority));
+        Assert.Same(oldest, model.ScrollingItems[99]);
         await model.SelectReadFilterAsync(MessageReadFilter.Unread);
+        Assert.Equal(100, model.Items.Count);
+        Assert.Equal(106, model.UnreadCount);
+        await model.LoadNewerAsync();
         Assert.Equal(106, model.Items.Count);
         Assert.All(model.Items, item => Assert.False(item.Record.IsRead));
     }
 
-    /// <summary>读到普通列表尾部后接收新消息，保留最老行实例，加载更多再追加一百条。</summary>
+    /// <summary>实时窗口只裁剪首行，主动加载历史后仍可沿旧侧翻页。</summary>
     [AvaloniaFact]
-    public async Task ReadingHistoryKeepsOldestViewModelAndLoadMoreAddsOneHundred()
+    public async Task LiveTailMovesWhileBrowsingAndExplicitHistoryLoadsOnePage()
     {
         using var directory = new MessageStoreTestDirectory();
         await using var runtime = CreateRuntime(directory);
@@ -327,7 +335,7 @@ public sealed class PinnedFeedTests
             Pump(window);
             Assert.Equal(100, view.Model.ScrollingItems.Count);
             var initial = view.Model.ScrollingItems.ToArray();
-            var oldest = initial[0];
+            var oldestRetained = initial[1];
             var normalList = FindList(view, "ScrollingMessages");
             await view.Model.WaitForPresentationAsync();
             var viewer = FindScroll(normalList);
@@ -342,18 +350,18 @@ public sealed class PinnedFeedTests
             await view.Model.RefreshAsync();
             Pump(window);
 
-            Assert.Equal(101, view.Model.ScrollingItems.Count);
-            Assert.Same(oldest, view.Model.ScrollingItems[0]);
-            Assert.All(initial, item => Assert.Same(item,
+            Assert.Equal(100, view.Model.ScrollingItems.Count);
+            Assert.Same(oldestRetained, view.Model.ScrollingItems[0]);
+            Assert.DoesNotContain(initial[0], view.Model.ScrollingItems);
+            Assert.All(initial.Skip(1), item => Assert.Same(item,
                 view.Model.ScrollingItems.Single(current => current.Record.Id == item.Record.Id)));
-            Assert.Equal(0, FindScroll(normalList).Offset.Y);
 
             await view.Model.LoadMoreAsync();
             Pump(window);
 
-            Assert.Equal(201, view.Model.ScrollingItems.Count);
-            Assert.Same(oldest, view.Model.ScrollingItems[100]);
-            Assert.All(initial, item => Assert.Same(item,
+            Assert.Equal(200, view.Model.ScrollingItems.Count);
+            Assert.Same(oldestRetained, view.Model.ScrollingItems[100]);
+            Assert.All(initial.Skip(1), item => Assert.Same(item,
                 view.Model.ScrollingItems.Single(current => current.Record.Id == item.Record.Id)));
             Assert.Empty(errors);
         }

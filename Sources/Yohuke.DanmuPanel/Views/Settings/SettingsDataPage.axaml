@@ -35,6 +35,34 @@
                     </settings:SettingsRow>
                 </StackPanel>
             </settings:SettingsCard>
+            <settings:SettingsCard Title="{Loc Key=Settings.CacheManagement}">
+                <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                    <Button x:Name="ClearImageCachesButton" Command="{Binding ClearCacheCommand}"
+                            CommandParameter="{x:Static vm:SettingsCacheScope.Images}"
+                            ToolTip.Tip="{Loc Key=Settings.ClearImageCachesHelp}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <LucideIcon Kind="Image"/>
+                            <TextBlock Text="{Loc Key=Settings.ClearImageCaches}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ClearTranslationCacheButton" Command="{Binding ClearCacheCommand}"
+                            CommandParameter="{x:Static vm:SettingsCacheScope.Translation}"
+                            ToolTip.Tip="{Loc Key=Settings.CacheHelp}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <LucideIcon Kind="Database"/>
+                            <TextBlock Text="{Loc Key=Settings.ClearCache}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ClearAllCachesButton" Command="{Binding ClearCacheCommand}"
+                            CommandParameter="{x:Static vm:SettingsCacheScope.All}"
+                            ToolTip.Tip="{Loc Key=Settings.ClearAllCachesHelp}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <LucideIcon Kind="Trash2"/>
+                            <TextBlock Text="{Loc Key=Settings.ClearAllCaches}"/>
+                        </StackPanel>
+                    </Button>
+                </WrapPanel>
+            </settings:SettingsCard>
             <settings:SettingsCard Title="{Loc Key=Settings.Transfer}">
                 <StackPanel Spacing="14">
                     <Border Background="Transparent">
@@ -73,16 +101,6 @@
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <LucideIcon Kind="Trash2"/>
                             <TextBlock Text="{Loc Key=Settings.ClearAll}"/>
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-            </settings:SettingsCard>
-            <settings:SettingsCard Title="{Loc Key=Settings.ClearCache}">
-                <StackPanel Spacing="14">
-                    <Button Command="{Binding ClearCacheCommand}" ToolTip.Tip="{Loc Key=Settings.CacheHelp}" HorizontalAlignment="Left">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <LucideIcon Kind="Database"/>
-                            <TextBlock Text="{Loc Key=Settings.ClearCache}"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>

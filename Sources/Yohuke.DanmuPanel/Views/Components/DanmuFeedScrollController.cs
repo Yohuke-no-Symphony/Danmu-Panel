@@ -162,11 +162,6 @@ internal sealed class DanmuFeedScrollController : IDisposable
         isUpdatingScroll = true;
         try
         {
-            if (itemsControl.Items.Count > 0)
-            {
-                itemsControl.ScrollIntoView(itemsControl.Items[0]!);
-                scrollViewer.UpdateLayout();
-            }
             scrollViewer.Offset = new(scrollViewer.Offset.X, 0);
             scrollViewer.UpdateLayout();
         }
@@ -297,7 +292,11 @@ internal sealed class DanmuFeedScrollController : IDisposable
 
     private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        OnContentChanged();
+        if (sender is not null && (itemsControl.ContainerFromItem(sender) is not null ||
+            itemsControl.Items.Count > 0 && ReferenceEquals(itemsControl.Items[^1], sender)))
+        {
+            OnContentChanged();
+        }
     }
 
     private void OnContentChanged(bool hasNewMessages = false, bool isCollectionChange = false)
@@ -744,7 +743,7 @@ internal sealed class DanmuFeedScrollController : IDisposable
         }
         isFollowPending = true;
         var requestedSession = session;
-        Dispatcher.UIThread.Post(() => FollowLatest(requestedSession), DispatcherPriority.Normal);
+        Dispatcher.UIThread.Post(() => FollowLatest(requestedSession), DispatcherPriority.Background);
     }
 
     private void FollowLatest(long requestedSession)

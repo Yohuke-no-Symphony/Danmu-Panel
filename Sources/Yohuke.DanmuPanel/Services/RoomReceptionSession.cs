@@ -10,6 +10,7 @@ namespace Yohuke.DanmuPanel.Services;
 /// <summary>一个房间标签的监听生命周期，串行持久化接收消息。</summary>
 public sealed partial class RoomReceptionSession : IAsyncDisposable
 {
+    private static readonly TimeSpan MAX_BATCH_DELAY = TimeSpan.FromMilliseconds(16);
     private readonly RoomTabState room;
     private readonly string cookie;
     private readonly IMessageStore store;
@@ -158,10 +159,7 @@ public sealed partial class RoomReceptionSession : IAsyncDisposable
             try
             {
                 var batch = new List<MessageRecord>(IMessageStore.MAX_BATCH_COUNT) { record };
-                while (batch.Count < IMessageStore.MAX_BATCH_COUNT && incoming.Reader.TryRead(out var next))
-                {
-                    batch.Add(next);
-                }
+                await FillBatchAsync(batch).ConfigureAwait(false);
                 var current = settings();
                 var fingerprint = current.Translation.Enabled
                     ? TranslationRequestFactory.GetConfigurationFingerprint(current.Translation) : null;
@@ -183,6 +181,29 @@ public sealed partial class RoomReceptionSession : IAsyncDisposable
                 storageFailed = true;
                 StopReceiving(exception);
             }
+        }
+    }
+
+    private async Task FillBatchAsync(List<MessageRecord> batch)
+    {
+        using var deadline = new CancellationTokenSource(MAX_BATCH_DELAY);
+        try
+        {
+            while (batch.Count < IMessageStore.MAX_BATCH_COUNT)
+            {
+                while (batch.Count < IMessageStore.MAX_BATCH_COUNT && incoming.Reader.TryRead(out var record))
+                {
+                    batch.Add(record);
+                }
+                if (batch.Count == IMessageStore.MAX_BATCH_COUNT || deadline.IsCancellationRequested ||
+                    !await incoming.Reader.WaitToReadAsync(deadline.Token).ConfigureAwait(false))
+                {
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+        {
         }
     }
 

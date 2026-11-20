@@ -15,11 +15,11 @@ public sealed class EmoticonCacheService : IEmoticonCacheService, IDisposable
 {
     private const int MAX_IMAGE_BYTES = 8 * 1024 * 1024;
     private static readonly TimeSpan DOWNLOAD_TIMEOUT = TimeSpan.FromSeconds(15);
-    private readonly AppDirectoryService directoryService;
+    private readonly ImageCacheDirectory cache;
     private readonly HttpClient httpClient;
     private readonly bool disposeHttpClient;
     private readonly object syncRoot = new();
-    private readonly ConcurrentDictionary<string, Lazy<Task<string>>> downloads = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<(string Url, long Revision), Lazy<Task<string>>> downloads = new();
     private readonly SemaphoreSlim downloadSlots = new(4);
     private readonly CancellationTokenSource lifetime = new();
     private bool isDisposed;
@@ -29,7 +29,7 @@ public sealed class EmoticonCacheService : IEmoticonCacheService, IDisposable
     /// </summary>
     public EmoticonCacheService(AppDirectoryService directoryService, HttpClient? httpClient = null)
     {
-        this.directoryService = directoryService;
+        cache = new(directoryService.EmoticonCacheDirectory);
         this.httpClient = httpClient ?? new();
         disposeHttpClient = httpClient is null;
     }
@@ -49,12 +49,18 @@ public sealed class EmoticonCacheService : IEmoticonCacheService, IDisposable
         lock (syncRoot)
         {
             ObjectDisposedException.ThrowIf(isDisposed, this);
-            var download = downloads.GetOrAdd(uri.AbsoluteUri,
-                _ => new(() => DownloadAndRemoveAsync(uri), LazyThreadSafetyMode.ExecutionAndPublication));
+            var key = (uri.AbsoluteUri, cache.Revision);
+            var download = downloads.GetOrAdd(key,
+                _ => new(() => DownloadAndRemoveAsync(uri, key.Revision), LazyThreadSafetyMode.ExecutionAndPublication));
             task = download.Value;
         }
 
         return await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    internal Task ClearCacheAsync()
+    {
+        return cache.ClearAsync();
     }
 
     /// <inheritdoc/>
@@ -79,7 +85,7 @@ public sealed class EmoticonCacheService : IEmoticonCacheService, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private async Task<string> DownloadAndRemoveAsync(Uri uri)
+    private async Task<string> DownloadAndRemoveAsync(Uri uri, long revision)
     {
         try
         {
@@ -87,7 +93,7 @@ public sealed class EmoticonCacheService : IEmoticonCacheService, IDisposable
 
             try
             {
-                return await DownloadAsync(uri, lifetime.Token).ConfigureAwait(false);
+                return await DownloadAsync(uri, revision, lifetime.Token).ConfigureAwait(false);
             }
             finally
             {
@@ -106,23 +112,23 @@ public sealed class EmoticonCacheService : IEmoticonCacheService, IDisposable
         }
         finally
         {
-            downloads.TryRemove(uri.AbsoluteUri, out _);
+            downloads.TryRemove((uri.AbsoluteUri, revision), out _);
         }
     }
 
-    private async Task<string> DownloadAsync(Uri uri, CancellationToken cancellationToken)
+    private async Task<string> DownloadAsync(Uri uri, long revision, CancellationToken cancellationToken)
     {
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(uri.AbsoluteUri))).ToLowerInvariant();
-        var filePath = Path.Combine(directoryService.EmoticonCacheDirectory, $"{hash}.img");
+        var filePath = Path.Combine(cache.DirectoryPath, $"{hash}.img");
 
-        if (File.Exists(filePath))
+        var header = await ImageCacheDirectory.ReadHeaderAsync(filePath, cancellationToken).ConfigureAwait(false);
+        if (revision != cache.Revision)
         {
-            var cachedBytes = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
-
-            if (IsSupportedImage(cachedBytes))
-            {
-                return filePath;
-            }
+            return "";
+        }
+        if (IsSupportedImage(header.Span))
+        {
+            return filePath;
         }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -160,23 +166,7 @@ public sealed class EmoticonCacheService : IEmoticonCacheService, IDisposable
             return "";
         }
 
-        Directory.CreateDirectory(directoryService.EmoticonCacheDirectory);
-        var temporaryPath = $"{filePath}.{Guid.NewGuid():N}.tmp";
-
-        try
-        {
-            await File.WriteAllBytesAsync(temporaryPath, bytes, timeout.Token).ConfigureAwait(false);
-            timeout.Token.ThrowIfCancellationRequested();
-            File.Move(temporaryPath, filePath, true);
-            return filePath;
-        }
-        finally
-        {
-            if (File.Exists(temporaryPath))
-            {
-                File.Delete(temporaryPath);
-            }
-        }
+        return await cache.TryWriteAsync(filePath, bytes, revision, timeout.Token).ConfigureAwait(false) ? filePath : "";
     }
 
     private static bool IsSupportedImage(ReadOnlySpan<byte> bytes)

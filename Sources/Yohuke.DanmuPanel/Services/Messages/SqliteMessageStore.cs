@@ -11,75 +11,123 @@ namespace Yohuke.DanmuPanel.Services.Messages;
 public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobStore, ITestMessageStore
 {
     private const int QUEUE_CAPACITY = 512;
-    private const int DATABASE_VERSION = 4;
+    private const int READ_QUEUE_CAPACITY = 32;
+    private const int GIFT_PRIORITY_VERSION = 4;
+    private const int DATABASE_VERSION = 5;
     private readonly Channel<MessageStoreOperation> operations = Channel.CreateBounded<MessageStoreOperation>(
         new BoundedChannelOptions(QUEUE_CAPACITY) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
+    private readonly Channel<MessageStoreOperation> latestReads = CreateReadQueue();
+    private readonly Channel<MessageStoreOperation> historyReads = CreateReadQueue();
     private readonly TaskCompletionSource ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly MessageRecordReadCache readCache = new();
+    private readonly MessageRecordReadCache latestReadCache = new();
+    private readonly MessageRecordReadCache historyReadCache = new();
     private readonly Task worker;
+    private readonly Task latestReader;
+    private readonly Task historyReader;
+    private readonly Task checkpointWorker;
 
     /// <summary>创建独立消息数据库并启动有界写入队列。</summary>
     public SqliteMessageStore(string databasePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
-        worker = Task.Run(() => RunAsync(Path.GetFullPath(databasePath)));
+        var path = Path.GetFullPath(databasePath);
+        worker = Task.Run(() => RunAsync(path, operations));
+        latestReader = Task.Run(() => RunAsync(path, latestReads, latestReadCache));
+        historyReader = Task.Run(() => RunAsync(path, historyReads, historyReadCache));
+        checkpointWorker = Task.Run(() => CheckpointAsync(path));
     }
 
     /// <summary>完成已排队的提交，然后关闭数据库。</summary>
     public async ValueTask DisposeAsync()
     {
         operations.Writer.TryComplete();
-        await worker.ConfigureAwait(false);
+        latestReads.Writer.TryComplete();
+        historyReads.Writer.TryComplete();
+        stopCheckpoint.TrySetResult();
+        await Task.WhenAll(worker, latestReader, historyReader, checkpointWorker).ConfigureAwait(false);
     }
 
-    private async Task RunAsync(string databasePath)
+    private static Channel<MessageStoreOperation> CreateReadQueue()
     {
+        return Channel.CreateBounded<MessageStoreOperation>(
+            new BoundedChannelOptions(READ_QUEUE_CAPACITY) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
+    }
+
+    private async Task RunAsync(string databasePath, Channel<MessageStoreOperation> queue, MessageRecordReadCache? cache = null)
+    {
+        var writing = cache is null;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+            if (writing)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+            }
+            else
+            {
+                await ready.Task.ConfigureAwait(false);
+            }
             using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
             {
                 DataSource = databasePath,
-                Mode = SqliteOpenMode.ReadWriteCreate,
+                Mode = writing ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly,
                 Pooling = false
             }.ToString());
             connection.Open();
-            Initialize(connection);
-            ready.TrySetResult();
-            await foreach (var operation in operations.Reader.ReadAllAsync().ConfigureAwait(false))
+            if (writing)
             {
+                Initialize(connection);
+                ready.TrySetResult();
+            }
+            else
+            {
+                Execute(connection, null, "PRAGMA query_only=ON; PRAGMA busy_timeout=5000;");
+            }
+            var checkpointInBackground = false;
+            await foreach (var operation in queue.Reader.ReadAllAsync().ConfigureAwait(false))
+            {
+                if (writing)
+                {
+                    var enabled = Volatile.Read(ref checkpointAvailable);
+                    if (enabled != checkpointInBackground)
+                    {
+                        Execute(connection, null, enabled
+                            ? "PRAGMA wal_autocheckpoint=0;" : "PRAGMA wal_autocheckpoint=1000;");
+                        checkpointInBackground = enabled;
+                    }
+                }
                 operation.Execute(connection);
+                if (writing)
+                {
+                    Interlocked.Increment(ref writerOperations);
+                }
             }
         }
         catch (Exception error)
         {
             ready.TrySetException(error);
-            operations.Writer.TryComplete(error);
-            while (operations.Reader.TryRead(out var operation))
+            queue.Writer.TryComplete(error);
+            while (queue.Reader.TryRead(out var operation))
             {
                 operation.Fail(error);
             }
         }
         finally
         {
-            readCache.Clear();
+            cache?.Clear();
         }
     }
 
-    private async Task<T> EnqueueAsync<T>(Func<SqliteConnection, T> action, CancellationToken cancellationToken)
+    private async Task<T> EnqueueAsync<T>(Func<SqliteConnection, T> action, CancellationToken cancellationToken,
+        Channel<MessageStoreOperation>? queue = null)
     {
         await ready.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         var operation = new MessageStoreOperationOfT<T>(action, cancellationToken);
-        await operations.Writer.WriteAsync(operation, cancellationToken).ConfigureAwait(false);
-        return await operation.Task.ConfigureAwait(false);
+        await (queue ?? operations).Writer.WriteAsync(operation, cancellationToken).ConfigureAwait(false);
+        return await (queue is null ? operation.Task : operation.Task.WaitAsync(cancellationToken)).ConfigureAwait(false);
     }
 
     private void Initialize(SqliteConnection connection)
     {
-        connection.CreateFunction<string, string, bool>("is_emoticon_only", (content, emoticons) =>
-            TranslationTextExtractor.IsEmoticonOnly(content,
-                JsonSerializer.Deserialize<MessageEmoticon[]>(emoticons)!.Select(emoticon => emoticon.Text)),
-            isDeterministic: true);
         Execute(connection, null, "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;");
         using var version = Command(connection, null, "PRAGMA user_version;");
         var databaseVersion = Convert.ToInt32(version.ExecuteScalar(), CultureInfo.InvariantCulture);
@@ -108,8 +156,6 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
                 (room_tab_id, kind, occurred_ms DESC, sequence DESC);
             CREATE INDEX IF NOT EXISTS ix_message_timeline ON message_records
                 (room_tab_id, occurred_ms DESC, sequence DESC);
-            CREATE INDEX IF NOT EXISTS ix_message_unread ON message_records
-                (room_tab_id, kind, json_extract(payload,'$.IsRead'));
             CREATE TABLE IF NOT EXISTS message_events (
                 room_tab_id TEXT NOT NULL, kind INTEGER NOT NULL, source_id TEXT NOT NULL,
                 PRIMARY KEY(room_tab_id,kind,source_id));
@@ -124,7 +170,6 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
                 room_tab_id TEXT NOT NULL, generation INTEGER NOT NULL, fingerprint TEXT NOT NULL,
                 priority INTEGER NOT NULL, created_ms INTEGER NOT NULL, status INTEGER NOT NULL DEFAULT 0,
                 error TEXT, payload TEXT NOT NULL);
-            CREATE INDEX IF NOT EXISTS ix_translation_pending ON translation_jobs(status,priority DESC,created_ms);
             """);
         if (databaseVersion == 1)
         {
@@ -134,10 +179,45 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
             "CREATE INDEX IF NOT EXISTS ix_message_test ON message_records(room_tab_id,is_test);");
         if (databaseVersion < DATABASE_VERSION)
         {
+            UpgradeReadSchema(connection, transaction);
+        }
+        if (databaseVersion < GIFT_PRIORITY_VERSION)
+        {
             ReevaluateGiftPriorities(connection, transaction, ReadOptions(connection, transaction));
+        }
+        if (databaseVersion < DATABASE_VERSION)
+        {
             Execute(connection, transaction, $"PRAGMA user_version={DATABASE_VERSION};");
         }
         transaction.Commit();
+    }
+
+    private static void UpgradeReadSchema(SqliteConnection connection, SqliteTransaction transaction)
+    {
+        using (var column = Command(connection, transaction, """
+            SELECT 1 FROM pragma_table_info('message_records') WHERE name='payload_revision';
+            """))
+        {
+            if (column.ExecuteScalar() is null)
+            {
+                Execute(connection, transaction,
+                    "ALTER TABLE message_records ADD COLUMN payload_revision INTEGER NOT NULL DEFAULT 0;");
+            }
+        }
+        Execute(connection, transaction, """
+            DROP INDEX IF EXISTS ix_message_unread;
+            CREATE INDEX ix_message_unread ON message_records
+                (room_tab_id,kind,json_extract(payload,'$.IsRead'),occurred_ms DESC,sequence DESC,priority);
+            CREATE INDEX IF NOT EXISTS ix_message_priority_time ON message_records
+                (room_tab_id,kind,occurred_ms DESC,sequence DESC) WHERE priority=1;
+            DROP INDEX IF EXISTS ix_translation_pending;
+            CREATE INDEX ix_translation_pending ON translation_jobs(priority DESC,created_ms,id) WHERE status=0;
+            CREATE TRIGGER IF NOT EXISTS message_payload_revision AFTER UPDATE OF payload ON message_records
+                WHEN NEW.payload_revision=OLD.payload_revision AND NEW.payload IS NOT OLD.payload
+            BEGIN
+                UPDATE message_records SET payload_revision=OLD.payload_revision+1 WHERE sequence=NEW.sequence;
+            END;
+            """);
     }
 
     private static SqliteCommand Command(SqliteConnection connection, SqliteTransaction? transaction, string sql,
@@ -166,13 +246,13 @@ public sealed partial class SqliteMessageStore : IMessageStore, ITranslationJobS
         return command.ExecuteScalar() is string payload ? JsonSerializer.Deserialize<MessageRecord>(payload)! : null;
     }
 
-    private void WriteMessage(SqliteConnection connection, SqliteTransaction transaction, MessageRecord record)
+    private static void WriteMessage(SqliteConnection connection, SqliteTransaction transaction, MessageRecord record)
     {
-        readCache.Invalidate(record.Id);
         Execute(connection, transaction, """
             INSERT INTO message_records(id,room_tab_id,kind,occurred_ms,generation,priority,pinned_ms,payload,is_test)
             VALUES($id,$room,$kind,$time,$generation,$priority,$pinned,$payload,$test)
-            ON CONFLICT(id) DO UPDATE SET priority=excluded.priority,pinned_ms=excluded.pinned_ms,payload=excluded.payload,is_test=excluded.is_test;
+            ON CONFLICT(id) DO UPDATE SET priority=excluded.priority,pinned_ms=excluded.pinned_ms,
+                payload=excluded.payload,is_test=excluded.is_test,payload_revision=message_records.payload_revision+1;
             """, ("$id", record.Id), ("$room", record.RoomTabId), ("$kind", (int)record.Kind),
             ("$time", record.Time.ToUnixTimeMilliseconds()), ("$generation", record.Generation),
             ("$priority", record.IsPriority ? 1 : 0), ("$pinned", record.PinnedAt?.ToUnixTimeMilliseconds() ?? 0),

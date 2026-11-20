@@ -336,7 +336,7 @@ internal sealed partial class UserAvatarView : UserControl
     {
         try
         {
-            using var stream = File.OpenRead(path);
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
             return Bitmap.DecodeToWidth(stream, decodeWidth);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or

@@ -10,9 +10,9 @@ public sealed partial class SqliteMessageStore
 {
     private const int MAX_FILTER_CONTENT_CACHE_COUNT = 1024;
     private const string VISIBILITY_PREDICATE = """
-        AND is_record_visible(sequence,
-            CASE WHEN is_cached_message(sequence) THEN NULL ELSE id END,
-            CASE WHEN is_cached_message(sequence) THEN NULL ELSE payload END)
+        AND is_record_visible(sequence,payload_revision,
+            CASE WHEN is_cached_message(sequence,payload_revision) THEN NULL ELSE id END,
+            CASE WHEN is_cached_message(sequence,payload_revision) THEN NULL ELSE payload END)
         """;
     private long payloadRowsRead;
     private long payloadTextBytesRead;
@@ -40,7 +40,8 @@ public sealed partial class SqliteMessageStore
         return EnqueueAsync(connection => ReadFeed(connection, roomTabId, kind, historyLimit, oldestHistoryId,
             hideEmoticonDanmu && kind == MessageKind.Danmu,
             kind == MessageKind.Danmu ? danmuRegexFilter : null,
-            kind == MessageKind.Danmu ? MessageReadFilter.All : readFilter, sortOrder, cancellationToken), cancellationToken);
+            kind == MessageKind.Danmu ? MessageReadFilter.All : readFilter, sortOrder, cancellationToken),
+            cancellationToken, latestReads);
     }
 
     private MessageFeedSnapshot ReadFeed(SqliteConnection connection, string roomTabId, MessageKind kind,
@@ -48,56 +49,52 @@ public sealed partial class SqliteMessageStore
         MessageReadFilter readFilter, MessageSortOrder sortOrder, CancellationToken cancellationToken,
         bool includeEventSummaries = false)
     {
+        return ReadFeedTransaction(connection, latestReadCache, kind, hideEmoticons, filter, includeEventSummaries,
+            (transaction, predicate, _) =>
+            {
+                var (rows, unreadCount) = ReadPriorityRows(connection, transaction, roomTabId, kind,
+                    predicate, readFilter, cancellationToken);
+                var history = ReadHistoryRows(connection, transaction, roomTabId, kind, historyLimit,
+                    oldestHistoryId, predicate + ReadStatusPredicate(readFilter), includeEventSummaries
+                        ? DanmuTimelineHistoryPredicate : "kind=$kind AND priority=0",
+                    readFilter != MessageReadFilter.All, cancellationToken);
+                rows.AddRange(history);
+                var records = LoadFeedRecords(connection, transaction, latestReadCache, rows, cancellationToken);
+                if (kind != MessageKind.Danmu && readFilter != MessageReadFilter.All)
+                {
+                    rows.Sort((left, right) => sortOrder == MessageSortOrder.NewestFirst
+                        ? CompareChronologically(right, left) : CompareChronologically(left, right));
+                }
+                var pending = ReadFeedPending(connection, transaction, records.Values, cancellationToken);
+                return new MessageFeedSnapshot(rows.Select(row => records[row.Sequence].Record).ToArray(), unreadCount)
+                {
+                    OldestHistoryId = history.Count > 0 ? records[history[0].Sequence].Id : null,
+                    PendingTranslationIds = pending
+                };
+            }, cancellationToken);
+    }
+
+    private T ReadFeedTransaction<T>(SqliteConnection connection, MessageRecordReadCache cache, MessageKind kind,
+        bool hideEmoticons, DanmuRegexFilter? filter, bool includeEventSummaries,
+        Func<SqliteTransaction, string, decimal, T> read, CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
         using var transaction = connection.BeginTransaction(deferred: true);
         using var readCancellation = new SqliteReadCancellation(connection, cancellationToken);
         var filtered = false;
         try
         {
-            using (var version = Command(connection, transaction, "PRAGMA data_version;"))
-            {
-                readCache.BeginSnapshot(Convert.ToInt64(version.ExecuteScalar(), CultureInfo.InvariantCulture));
-            }
             var giftMinimum = kind == MessageKind.Gift || includeEventSummaries
                 ? ReadOptions(connection, transaction).GiftAutoPinMinimum : 0;
             filtered = giftMinimum > 0 || hideEmoticons || filter is { Enabled: true };
-            var predicate = filtered ? VISIBILITY_PREDICATE : "";
             if (filtered)
             {
-                RegisterFeedVisibility(connection, hideEmoticons, filter, giftMinimum, cancellationToken);
+                RegisterFeedVisibility(connection, cache, hideEmoticons, filter, giftMinimum, cancellationToken);
             }
-            var (sequences, unreadCount) = ReadPrioritySequences(connection, transaction, roomTabId, kind,
-                predicate, readFilter, cancellationToken);
-            var readPredicate = readFilter switch
-            {
-                MessageReadFilter.Unread => " AND json_extract(payload,'$.IsRead')=0",
-                MessageReadFilter.Read => " AND json_extract(payload,'$.IsRead')=1",
-                _ => ""
-            };
-            var history = ReadHistorySequences(connection, transaction, roomTabId, kind, historyLimit,
-                oldestHistoryId, predicate + readPredicate, includeEventSummaries
-                    ? DanmuTimelineHistoryPredicate : "kind=$kind AND priority=0", cancellationToken);
-            sequences.AddRange(history);
-            var records = LoadFeedRecords(connection, transaction, sequences, cancellationToken);
-            if (kind != MessageKind.Danmu && readFilter != MessageReadFilter.All)
-            {
-                sequences.Sort((left, right) => sortOrder == MessageSortOrder.NewestFirst
-                    ? CompareChronologically(right, left, records) : CompareChronologically(left, right, records));
-            }
-            var pending = ReadFeedPending(connection, transaction, records.Values, cancellationToken);
-            var resultRecords = new MessageRecord[sequences.Count];
-            for (var index = 0; index < sequences.Count; index++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                resultRecords[index] = records[sequences[index]].Record;
-            }
+            var result = read(transaction, filtered ? VISIBILITY_PREDICATE : "", giftMinimum);
             cancellationToken.ThrowIfCancellationRequested();
             transaction.Commit();
-            return new MessageFeedSnapshot(resultRecords, unreadCount)
-            {
-                OldestHistoryId = history.Count > 0 ? records[history[0]].Id : null,
-                PendingTranslationIds = pending
-            };
+            return result;
         }
         catch (SqliteException) when (cancellationToken.IsCancellationRequested)
         {
@@ -107,43 +104,52 @@ public sealed partial class SqliteMessageStore
         {
             if (filtered)
             {
-                connection.CreateFunction<long, bool>("is_cached_message", null);
-                connection.CreateFunction<long, string?, string?, bool>("is_record_visible", null);
+                connection.CreateFunction<long, long, bool>("is_cached_message", null);
+                connection.CreateFunction<long, long, string?, string?, bool>("is_record_visible", null);
             }
         }
     }
 
-    private static int CompareChronologically(long left, long right,
-        IReadOnlyDictionary<long, (string Id, MessageRecord Record)> records)
+    private static int CompareChronologically(SqliteFeedRow left, SqliteFeedRow right)
     {
-        var time = records[left].Record.Time.ToUnixTimeMilliseconds()
-            .CompareTo(records[right].Record.Time.ToUnixTimeMilliseconds());
-        return time != 0 ? time : left.CompareTo(right);
+        var time = left.OccurredMilliseconds.CompareTo(right.OccurredMilliseconds);
+        return time != 0 ? time : left.Sequence.CompareTo(right.Sequence);
     }
 
-    private static (List<long> Sequences, int UnreadCount) ReadPrioritySequences(SqliteConnection connection,
+    private static string ReadStatusPredicate(MessageReadFilter readFilter)
+    {
+        return readFilter switch
+        {
+            MessageReadFilter.Unread => " AND json_extract(payload,'$.IsRead')=0",
+            MessageReadFilter.Read => " AND json_extract(payload,'$.IsRead')=1",
+            _ => ""
+        };
+    }
+
+    private static (List<SqliteFeedRow> Rows, int UnreadCount) ReadPriorityRows(SqliteConnection connection,
         SqliteTransaction transaction, string roomTabId, MessageKind kind, string predicate,
         MessageReadFilter readFilter, CancellationToken cancellationToken)
     {
+        var parameters = new (string, object?)[] { ("$room", roomTabId), ("$kind", (int)kind) };
         var readStatus = kind == MessageKind.Danmu ? "1" : "json_extract(payload,'$.IsRead')";
         using var command = Command(connection, transaction, $"""
-            SELECT sequence,{readStatus} FROM message_records INDEXED BY ix_message_page
+            SELECT sequence,occurred_ms,payload_revision,{readStatus} FROM message_records INDEXED BY ix_message_priority_time
             WHERE room_tab_id=$room AND kind=$kind AND priority=1 {predicate}
             ORDER BY occurred_ms ASC,sequence ASC;
-            """, ("$room", roomTabId), ("$kind", (int)kind));
-        var sequences = new List<long>();
+            """, parameters);
+        var rows = new List<SqliteFeedRow>();
         var unreadCount = 0;
         using (var reader = command.ExecuteReader())
         {
             while (reader.Read())
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var readState = reader.IsDBNull(1) ? (long?)null : reader.GetInt64(1);
+                var readState = reader.IsDBNull(3) ? (long?)null : reader.GetInt64(3);
                 if (readFilter == MessageReadFilter.All ||
                     readFilter == MessageReadFilter.Unread && readState == 0 ||
                     readFilter == MessageReadFilter.Read && readState == 1)
                 {
-                    sequences.Add(reader.GetInt64(0));
+                    rows.Add(ReadFeedRow(reader));
                 }
                 if (readState == 0)
                 {
@@ -157,68 +163,70 @@ public sealed partial class SqliteMessageStore
                 SELECT COUNT(*) FROM message_records
                 WHERE room_tab_id=$room AND kind=$kind AND priority=0
                     AND json_extract(payload,'$.IsRead')=0 {predicate};
-                """, ("$room", roomTabId), ("$kind", (int)kind));
+                """, parameters);
             unreadCount += Convert.ToInt32(unread.ExecuteScalar(), CultureInfo.InvariantCulture);
         }
-        return (sequences, unreadCount);
+        return (rows, unreadCount);
     }
 
-    private static List<long> ReadHistorySequences(SqliteConnection connection, SqliteTransaction transaction,
+    private static List<SqliteFeedRow> ReadHistoryRows(SqliteConnection connection, SqliteTransaction transaction,
         string roomTabId, MessageKind kind, int historyLimit, string? oldestHistoryId, string predicate,
-        string selectionPredicate, CancellationToken cancellationToken)
+        string selectionPredicate, bool readStateIndex, CancellationToken cancellationToken)
     {
+        var index = readStateIndex ? "INDEXED BY ix_message_unread" : "";
         using var command = Command(connection, transaction, $"""
-            SELECT sequence,occurred_ms FROM message_records
+            SELECT sequence,occurred_ms,payload_revision FROM message_records {index}
             WHERE room_tab_id=$room AND {selectionPredicate} {predicate}
             ORDER BY occurred_ms DESC,sequence DESC LIMIT $limit;
             """, ("$room", roomTabId), ("$kind", (int)kind), ("$limit", historyLimit));
-        var sequences = new List<long>();
-        var lastTime = 0L;
-        var lastSequence = 0L;
-        using (var reader = command.ExecuteReader())
+        var rows = ReadFeedRows(command, cancellationToken);
+        if (rows.Count == historyLimit && oldestHistoryId is not null)
         {
-            while (reader.Read())
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                lastSequence = reader.GetInt64(0);
-                lastTime = reader.GetInt64(1);
-                sequences.Add(lastSequence);
-            }
-        }
-        if (sequences.Count == historyLimit && oldestHistoryId is not null)
-        {
+            var last = rows[^1];
             using var retained = Command(connection, transaction, $"""
-                SELECT sequence FROM message_records
+                SELECT sequence,occurred_ms,payload_revision FROM message_records {index}
                 WHERE room_tab_id=$room AND {selectionPredicate}
                     AND (occurred_ms,sequence)<($lastTime,$lastSequence)
                     AND (occurred_ms,sequence)>=(
                         SELECT occurred_ms,sequence FROM message_records WHERE id=$oldest)
                     {predicate}
                 ORDER BY occurred_ms DESC,sequence DESC;
-                """, ("$room", roomTabId), ("$kind", (int)kind), ("$lastTime", lastTime),
-                ("$lastSequence", lastSequence), ("$oldest", oldestHistoryId));
-            using var reader = retained.ExecuteReader();
-            while (reader.Read())
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                sequences.Add(reader.GetInt64(0));
-            }
+                """, ("$room", roomTabId), ("$kind", (int)kind), ("$lastTime", last.OccurredMilliseconds),
+                ("$lastSequence", last.Sequence), ("$oldest", oldestHistoryId));
+            rows.AddRange(ReadFeedRows(retained, cancellationToken));
         }
-        sequences.Reverse();
-        return sequences;
+        rows.Reverse();
+        return rows;
     }
 
-    private void RegisterFeedVisibility(SqliteConnection connection, bool hideEmoticons, DanmuRegexFilter? filter,
-        decimal giftMinimum, CancellationToken cancellationToken)
+    private static List<SqliteFeedRow> ReadFeedRows(SqliteCommand command, CancellationToken cancellationToken)
+    {
+        var rows = new List<SqliteFeedRow>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            rows.Add(ReadFeedRow(reader));
+        }
+        return rows;
+    }
+
+    private static SqliteFeedRow ReadFeedRow(SqliteDataReader reader)
+    {
+        return new SqliteFeedRow(reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2));
+    }
+
+    private void RegisterFeedVisibility(SqliteConnection connection, MessageRecordReadCache cache, bool hideEmoticons,
+        DanmuRegexFilter? filter, decimal giftMinimum, CancellationToken cancellationToken)
     {
         var matches = new Dictionary<string, bool>(StringComparer.Ordinal);
-        connection.CreateFunction<long, bool>("is_cached_message", readCache.IsValidated);
-        connection.CreateFunction<long, string?, string?, bool>("is_record_visible", (sequence, id, payload) =>
+        connection.CreateFunction<long, long, bool>("is_cached_message", cache.IsValidated);
+        connection.CreateFunction<long, long, string?, string?, bool>("is_record_visible", (sequence, payloadRevision, id, payload) =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             Interlocked.Increment(ref feedVisibilityEvaluations);
-            var record = payload is not null ? CaptureFeedPayload(sequence, id!, payload) :
-                readCache.TryGetValidated(sequence, out var entry) ? entry.Record :
+            var record = payload is not null ? CaptureFeedPayload(cache, sequence, payloadRevision, id!, payload) :
+                cache.TryGetValidated(sequence, payloadRevision, out var entry) ? entry.Record :
                 throw new InvalidOperationException("A validated message cache entry disappeared during SQL evaluation.");
             if (record.Kind == MessageKind.Gift && record.TotalPrice < giftMinimum)
             {
@@ -252,20 +260,21 @@ public sealed partial class SqliteMessageStore
     }
 
     private Dictionary<long, (string Id, MessageRecord Record)> LoadFeedRecords(SqliteConnection connection,
-        SqliteTransaction transaction, IReadOnlyList<long> sequences, CancellationToken cancellationToken)
+        SqliteTransaction transaction, MessageRecordReadCache cache, IReadOnlyList<SqliteFeedRow> rows,
+        CancellationToken cancellationToken)
     {
-        var records = new Dictionary<long, (string Id, MessageRecord Record)>(sequences.Count);
+        var records = new Dictionary<long, (string Id, MessageRecord Record)>(rows.Count);
         var missing = new List<long>();
-        foreach (var sequence in sequences)
+        foreach (var row in rows)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (readCache.TryGetValidated(sequence, out var entry))
+            if (cache.TryGetValidated(row.Sequence, row.PayloadRevision, out var entry))
             {
-                records.Add(sequence, (entry.Id, entry.Record));
+                records.Add(row.Sequence, (entry.Id, entry.Record));
             }
             else
             {
-                missing.Add(sequence);
+                missing.Add(row.Sequence);
             }
         }
         if (missing.Count == 0)
@@ -273,7 +282,7 @@ public sealed partial class SqliteMessageStore
             return records;
         }
         using var command = Command(connection, transaction, """
-            SELECT sequence,id,payload FROM message_records
+            SELECT sequence,id,payload,payload_revision FROM message_records
             WHERE sequence IN (SELECT value FROM json_each($sequences));
             """, ("$sequences", JsonSerializer.Serialize(missing)));
         using var reader = command.ExecuteReader();
@@ -282,7 +291,7 @@ public sealed partial class SqliteMessageStore
             cancellationToken.ThrowIfCancellationRequested();
             var sequence = reader.GetInt64(0);
             var id = reader.GetString(1);
-            records.Add(sequence, (id, CaptureFeedPayload(sequence, id, reader.GetString(2))));
+            records.Add(sequence, (id, CaptureFeedPayload(cache, sequence, reader.GetInt64(3), id, reader.GetString(2))));
         }
         return records;
     }
@@ -294,7 +303,10 @@ public sealed partial class SqliteMessageStore
         foreach (var entry in records)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            visible.Add(entry.Id, entry.Record);
+            if (entry.Record.TranslationFingerprint is not null)
+            {
+                visible.Add(entry.Id, entry.Record);
+            }
         }
         var pending = new HashSet<string>(StringComparer.Ordinal);
         if (visible.Count == 0)
@@ -302,8 +314,9 @@ public sealed partial class SqliteMessageStore
             return pending;
         }
         using var command = Command(connection, transaction, """
-            SELECT id,generation,fingerprint FROM translation_jobs
-            WHERE id IN (SELECT value FROM json_each($ids)) AND status=0;
+            SELECT job.id,job.generation,job.fingerprint
+            FROM json_each($ids) AS page CROSS JOIN translation_jobs AS job ON job.id=page.value
+            WHERE job.status=0;
             """, ("$ids", JsonSerializer.Serialize(visible.Keys)));
         using var reader = command.ExecuteReader();
         while (reader.Read())
@@ -319,10 +332,11 @@ public sealed partial class SqliteMessageStore
         return pending;
     }
 
-    private MessageRecord CaptureFeedPayload(long sequence, string id, string payload)
+    private MessageRecord CaptureFeedPayload(MessageRecordReadCache cache, long sequence, long payloadRevision,
+        string id, string payload)
     {
         Interlocked.Increment(ref payloadRowsRead);
         Interlocked.Add(ref payloadTextBytesRead, (long)payload.Length * sizeof(char));
-        return readCache.GetOrDeserialize(sequence, id, payload);
+        return cache.GetOrDeserialize(sequence, payloadRevision, id, payload);
     }
 }

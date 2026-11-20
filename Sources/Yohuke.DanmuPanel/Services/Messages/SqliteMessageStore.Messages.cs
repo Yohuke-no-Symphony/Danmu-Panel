@@ -82,14 +82,14 @@ public sealed partial class SqliteMessageStore
                 SELECT payload FROM message_records WHERE room_tab_id=$room AND kind=$kind
                 ORDER BY priority DESC,pinned_ms DESC,occurred_ms DESC,sequence DESC LIMIT $limit OFFSET $offset;
                 """, ("$room", roomTabId), ("$kind", (int)kind), ("$offset", offset), ("$limit", limit));
-            return ReadMessages(command);
-        }, cancellationToken);
+            return ReadMessages(command, cancellationToken);
+        }, cancellationToken, offset == 0 ? latestReads : historyReads);
     }
 
     /// <inheritdoc />
     public Task<MessageRecord?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
     {
-        return EnqueueAsync(connection => ReadMessage(connection, null, id), cancellationToken);
+        return EnqueueAsync(connection => ReadMessage(connection, null, id), cancellationToken, latestReads);
     }
 
     /// <inheritdoc />
@@ -103,8 +103,8 @@ public sealed partial class SqliteMessageStore
                 SELECT payload FROM message_records WHERE room_tab_id=$room AND kind=$kind AND is_test=0
                 ORDER BY occurred_ms DESC,sequence DESC LIMIT $limit;
                 """, ("$room", roomTabId), ("$kind", (int)kind), ("$limit", limit));
-            return ReadMessages(command);
-        }, cancellationToken);
+            return ReadMessages(command, cancellationToken);
+        }, cancellationToken, latestReads);
     }
 
     /// <inheritdoc />
@@ -238,7 +238,6 @@ public sealed partial class SqliteMessageStore
                     WHERE room_tab_id=$room;
                     """, ("$room", roomTabId));
             }
-            readCache.InvalidateRoom(roomTabId, kind);
             Execute(connection, transaction, "DELETE FROM message_records WHERE room_tab_id=$room AND kind=$kind;",
                 ("$room", roomTabId), ("$kind", (int)kind));
             transaction.Commit();
@@ -471,9 +470,8 @@ public sealed partial class SqliteMessageStore
         };
     }
 
-    private void ClearRoom(SqliteConnection connection, SqliteTransaction transaction, string roomTabId)
+    private static void ClearRoom(SqliteConnection connection, SqliteTransaction transaction, string roomTabId)
     {
-        readCache.InvalidateRoom(roomTabId);
         Execute(connection, transaction, """
             INSERT INTO message_rooms(id,generation,cleared_before) VALUES($room,1,$cutoff)
             ON CONFLICT(id) DO UPDATE SET generation=generation+1,cleared_before=excluded.cleared_before;
@@ -482,14 +480,23 @@ public sealed partial class SqliteMessageStore
             """, ("$room", roomTabId), ("$cutoff", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
     }
 
-    private static List<MessageRecord> ReadMessages(SqliteCommand command)
+    private static List<MessageRecord> ReadMessages(SqliteCommand command, CancellationToken cancellationToken = default)
     {
         var records = new List<MessageRecord>();
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
+        using var cancellation = new SqliteReadCancellation(command.Connection!, cancellationToken);
+        try
         {
-            records.Add(JsonSerializer.Deserialize<MessageRecord>(reader.GetString(0))!);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                records.Add(JsonSerializer.Deserialize<MessageRecord>(reader.GetString(0))!);
+            }
+            return records;
         }
-        return records;
+        catch (SqliteException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
     }
 }

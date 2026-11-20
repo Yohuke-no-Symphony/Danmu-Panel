@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
+using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Services.Messages;
 using Yohuke.DanmuPanel.Services.Appearance;
 using Yohuke.DanmuPanel.Services.Translation;
@@ -42,6 +43,9 @@ public sealed partial class PanelRuntime : IAsyncDisposable
 
     /// <summary>通知消息或译文变化；类型为空时重读该房间的所有消息面板。</summary>
     public event Action<string, MessageKind?>? MessagesChanged;
+    internal event Action<string, MessageKind?>? FeedInvalidated;
+    internal event Action<MessageRecord>? DanmuCommitted;
+    internal event Action<TranslationCompletedEventArgs>? DanmuTranslationCommitted;
 
     /// <summary>组合应用依赖，不自动连接直播间。</summary>
     public PanelRuntime(ConfigurationService configurationStore, PanelConfiguration configuration, IPinyinService? pinyin = null)
@@ -63,10 +67,21 @@ public sealed partial class PanelRuntime : IAsyncDisposable
         translationCache = new(directories.TranslationCacheDatabasePath);
         translationService = new(new OpenAiCompatibleTranslationClient(translationHttp), translationCache);
         scheduler = new(Messages, translationService);
-        TestMessages = new(Messages, () => Configuration.Settings, roomId => MessagesChanged?.Invoke(roomId, null),
+        TestMessages = new(Messages, () => Configuration.Settings, roomId => InvalidateFeeds(roomId, null),
             () => scheduler.NotifyWorkAvailable());
-        scheduler.Completed += (_, args) => MessagesChanged?.Invoke(args.RoomTabId, args.Kind);
-        scheduler.PendingChanged += (roomId, kind) => MessagesChanged?.Invoke(roomId, kind);
+        scheduler.Completed += (_, args) =>
+        {
+            if (args.Kind == MessageKind.Danmu)
+            {
+                DanmuTranslationCommitted?.Invoke(args);
+                MessagesChanged?.Invoke(args.RoomTabId, args.Kind);
+            }
+            else
+            {
+                InvalidateFeeds(args.RoomTabId, args.Kind);
+            }
+        };
+        scheduler.PendingChanged += InvalidateFeeds;
         scheduler.Error += message => ReportError(message, I18n.Localization.Get("Panel.Log.Translation"));
         Emoticons = new(directories);
         Avatars = new(directories);
@@ -207,6 +222,18 @@ public sealed partial class PanelRuntime : IAsyncDisposable
         return translationCache.ClearAsync();
     }
 
+    /// <summary>清空表情原图、头像及头像缓存资料。</summary>
+    public Task ClearImageCachesAsync()
+    {
+        return Task.WhenAll(Emoticons.ClearCacheAsync(), Avatars.ClearCacheAsync());
+    }
+
+    /// <summary>清空数据管理页统计的全部缓存。</summary>
+    public Task ClearAllCachesAsync()
+    {
+        return Task.WhenAll(ClearImageCachesAsync(), ClearTranslationCacheAsync());
+    }
+
     /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
@@ -238,6 +265,32 @@ public sealed partial class PanelRuntime : IAsyncDisposable
         }
     }
 
+    internal void PublishCommittedMessage(MessageRecord message)
+    {
+        try
+        {
+            if (message.Kind == MessageKind.Danmu && !message.IsHistory)
+            {
+                DanmuCommitted?.Invoke(message);
+                MessagesChanged?.Invoke(message.RoomTabId, message.Kind);
+            }
+            else
+            {
+                InvalidateFeeds(message.RoomTabId, message.Kind);
+            }
+        }
+        finally
+        {
+            scheduler.NotifyWorkAvailable();
+        }
+    }
+
+    private void InvalidateFeeds(string roomTabId, MessageKind? kind)
+    {
+        FeedInvalidated?.Invoke(roomTabId, kind);
+        MessagesChanged?.Invoke(roomTabId, kind);
+    }
+
     private void OnAccountsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs args)
     {
         accountBinding.Synchronize(Configuration.Accounts);
@@ -249,11 +302,7 @@ public sealed partial class PanelRuntime : IAsyncDisposable
         var account = PanelAccountSelector.Resolve(Configuration, workspace, room);
         var session = new RoomReceptionSession(room, account?.Cookie ?? "", Messages, () => Volatile.Read(ref receptionSettings),
             new BilibiliLiveDanmuSocketFactory(), new BilibiliDanmuHistoryService(), redPockets: new BilibiliRedPocketService());
-        session.Committed += message =>
-        {
-            scheduler.NotifyWorkAvailable();
-            MessagesChanged?.Invoke(message.RoomTabId, message.Kind);
-        };
+        session.Committed += PublishCommittedMessage;
         session.StatusChanged += status =>
         {
             statuses[room.Id] = status;

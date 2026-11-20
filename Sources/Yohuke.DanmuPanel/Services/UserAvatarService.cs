@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Yohuke.DanmuPanel.Models.Workspace;
+using UserAvatarCacheKey = (long UserUid, long CacheRevision);
 
 namespace Yohuke.DanmuPanel.Services;
 
@@ -16,12 +17,12 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
     private readonly TimeProvider timeProvider;
     private readonly string metadataDirectory;
     private readonly object syncRoot = new();
-    private readonly Dictionary<long, Task<UserAvatarCacheEntry>> entries = [];
-    private readonly Dictionary<long, Task<string>> refreshes = [];
-    private readonly Dictionary<long, int> callers = [];
-    private readonly HashSet<long> loadingUsers = [];
-    private readonly LinkedList<long> recency = [];
-    private readonly Dictionary<long, LinkedListNode<long>> recencyNodes = [];
+    private readonly Dictionary<UserAvatarCacheKey, Task<UserAvatarCacheEntry>> entries = [];
+    private readonly Dictionary<UserAvatarCacheKey, Task<string>> refreshes = [];
+    private readonly Dictionary<UserAvatarCacheKey, int> callers = [];
+    private readonly HashSet<UserAvatarCacheKey> loadingUsers = [];
+    private readonly LinkedList<UserAvatarCacheKey> recency = [];
+    private readonly Dictionary<UserAvatarCacheKey, LinkedListNode<UserAvatarCacheKey>> recencyNodes = [];
     private readonly int maxCachedUsers;
     private readonly SemaphoreSlim querySlots = new(4, 4);
     private readonly CancellationTokenSource lifetime = new();
@@ -68,7 +69,8 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
         {
             return "";
         }
-        var loading = BorrowEntry(userUid);
+        var key = (UserUid: userUid, CacheRevision: images.Cache.Revision);
+        var loading = BorrowEntry(key);
         try
         {
             await loading.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -76,7 +78,11 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
             lock (syncRoot)
             {
                 ObjectDisposedException.ThrowIf(isDisposed, this);
-                var entry = entries[userUid].GetAwaiter().GetResult();
+                if (key.CacheRevision != images.Cache.Revision)
+                {
+                    return "";
+                }
+                var entry = entries[key].GetAwaiter().GetResult();
                 var path = GetCachedPath(userUid, entry);
                 var now = timeProvider.GetUtcNow();
                 if (path.Length > 0 && entry.LastCheckSucceeded && entry.LastCheckedAt <= now &&
@@ -85,10 +91,10 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
                 {
                     return path;
                 }
-                if (!refreshes.TryGetValue(userUid, out refreshing!))
+                if (!refreshes.TryGetValue(key, out refreshing!))
                 {
-                    refreshing = Task.Run(() => RefreshAndRemoveAsync(userUid, entry, path));
-                    refreshes.Add(userUid, refreshing);
+                    refreshing = Task.Run(() => RefreshAndRemoveAsync(key, entry, path));
+                    refreshes.Add(key, refreshing);
                 }
                 if (path.Length > 0)
                 {
@@ -99,7 +105,7 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
         }
         finally
         {
-            ReleaseEntry(userUid);
+            ReleaseEntry(key);
         }
     }
 
@@ -112,7 +118,8 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
         {
             return;
         }
-        var loading = BorrowEntry(userUid);
+        var key = (UserUid: userUid, CacheRevision: images.Cache.Revision);
+        var loading = BorrowEntry(key);
         try
         {
             await loading.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -123,7 +130,11 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
                 lock (syncRoot)
                 {
                     ObjectDisposedException.ThrowIf(isDisposed, this);
-                    var entry = entries[userUid].GetAwaiter().GetResult();
+                    if (key.CacheRevision != images.Cache.Revision)
+                    {
+                        return;
+                    }
+                    var entry = entries[key].GetAwaiter().GetResult();
                     var path = GetEntryPath(userUid, entry);
                     if (!string.Equals(path, invalidPath, StringComparison.Ordinal))
                     {
@@ -134,10 +145,10 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
                     {
                         return;
                     }
-                    if (!refreshes.TryGetValue(userUid, out pending!))
+                    if (!refreshes.TryGetValue(key, out pending!))
                     {
-                        pending = Task.Run(() => InvalidateAndRemoveAsync(userUid, entry, path));
-                        refreshes.Add(userUid, pending);
+                        pending = Task.Run(() => InvalidateAndRemoveAsync(key, entry, path));
+                        refreshes.Add(key, pending);
                         invalidating = true;
                     }
                 }
@@ -150,7 +161,7 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
         }
         finally
         {
-            ReleaseEntry(userUid);
+            ReleaseEntry(key);
         }
     }
 
@@ -168,12 +179,14 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
         return new(BeginDispose());
     }
 
-    private async Task<UserAvatarCacheEntry> LoadEntryAsync(long userUid)
+    private async Task<UserAvatarCacheEntry> LoadEntryAsync(UserAvatarCacheKey key)
     {
         try
         {
-            var bytes = await File.ReadAllBytesAsync(MetadataPath(userUid), lifetime.Token).ConfigureAwait(false);
-            var entry = JsonSerializer.Deserialize<UserAvatarCacheEntry>(bytes);
+            await using var stream = new FileStream(MetadataPath(key.UserUid), FileMode.Open, FileAccess.Read,
+                FileShare.Read | FileShare.Delete, bufferSize: 4096, useAsync: true);
+            var entry = await JsonSerializer.DeserializeAsync<UserAvatarCacheEntry>(stream, cancellationToken: lifetime.Token)
+                .ConfigureAwait(false);
             return entry is not null && entry.AvatarUrl is not null &&
                 (entry.AvatarUrl.Length == 0 || IsValidUrl(entry.AvatarUrl)) ? entry : new();
         }
@@ -186,20 +199,24 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
         {
             lock (syncRoot)
             {
-                loadingUsers.Remove(userUid);
+                loadingUsers.Remove(key);
                 TrimEntries();
             }
         }
     }
 
-    private async Task<string> RefreshAndRemoveAsync(long userUid, UserAvatarCacheEntry entry, string previousPath)
+    private async Task<string> RefreshAndRemoveAsync(UserAvatarCacheKey key, UserAvatarCacheEntry entry, string previousPath)
     {
         try
         {
-            var (path, changed) = await RefreshAsync(userUid, entry, previousPath).ConfigureAwait(false);
+            var (path, changed) = await RefreshAsync(key, entry, previousPath).ConfigureAwait(false);
+            if (key.CacheRevision != images.Cache.Revision)
+            {
+                return "";
+            }
             if (changed && !lifetime.IsCancellationRequested)
             {
-                PublishChange(userUid);
+                PublishChange(key.UserUid);
             }
             return path;
         }
@@ -207,25 +224,28 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
         {
             lock (syncRoot)
             {
-                refreshes.Remove(userUid);
+                refreshes.Remove(key);
                 TrimEntries();
             }
         }
     }
 
-    private async Task<string> InvalidateAndRemoveAsync(long userUid, UserAvatarCacheEntry entry, string path)
+    private async Task<string> InvalidateAndRemoveAsync(UserAvatarCacheKey key, UserAvatarCacheEntry entry, string path)
     {
         try
         {
             try
             {
-                File.Delete(path);
+                if (!await images.Cache.TryDeleteAsync(path, key.CacheRevision).ConfigureAwait(false))
+                {
+                    return "";
+                }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                Trace.TraceWarning("Invalid user avatar could not be removed for {0}: {1}", userUid,
+                Trace.TraceWarning("Invalid user avatar could not be removed for {0}: {1}", key.UserUid,
                     exception.GetType().Name);
-                await StoreEntryAsync(userUid, entry with
+                await StoreEntryAsync(key, entry with
                 {
                     LastCheckedAt = timeProvider.GetUtcNow(),
                     LastCheckSucceeded = false,
@@ -234,7 +254,7 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
                 }).ConfigureAwait(false);
                 return path;
             }
-            await StoreEntryAsync(userUid, new()
+            await StoreEntryAsync(key, new()
             {
                 LastInvalidatedUrl = entry.AvatarUrl,
                 LastInvalidatedAt = timeProvider.GetUtcNow()
@@ -245,13 +265,13 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
         {
             lock (syncRoot)
             {
-                refreshes.Remove(userUid);
+                refreshes.Remove(key);
                 TrimEntries();
             }
         }
     }
 
-    private async Task<(string Path, bool Changed)> RefreshAsync(long userUid, UserAvatarCacheEntry entry,
+    private async Task<(string Path, bool Changed)> RefreshAsync(UserAvatarCacheKey key, UserAvatarCacheEntry entry,
         string previousPath)
     {
         try
@@ -260,7 +280,11 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
             await querySlots.WaitAsync(lifetime.Token).ConfigureAwait(false);
             try
             {
-                url = await source.GetAvatarUrlAsync(userUid, lifetime.Token).ConfigureAwait(false);
+                if (key.CacheRevision != images.Cache.Revision)
+                {
+                    return ("", false);
+                }
+                url = await source.GetAvatarUrlAsync(key.UserUid, lifetime.Token).ConfigureAwait(false);
             }
             finally
             {
@@ -268,7 +292,8 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
             }
             if (IsValidUrl(url))
             {
-                var path = await images.DownloadAvatarAsync(CacheKey(userUid), url, lifetime.Token).ConfigureAwait(false);
+                var path = await images.DownloadAvatarAsync(CacheKey(key.UserUid), url, key.CacheRevision, lifetime.Token)
+                    .ConfigureAwait(false);
                 if (path.Length > 0)
                 {
                     var now = timeProvider.GetUtcNow();
@@ -279,7 +304,7 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
                         LastCheckedAt = now,
                         LastCheckSucceeded = true
                     };
-                    await StoreEntryAsync(userUid, updated).ConfigureAwait(false);
+                    await StoreEntryAsync(key, updated).ConfigureAwait(false);
                     return (path, !string.Equals(previousPath, path, StringComparison.Ordinal));
                 }
             }
@@ -291,10 +316,10 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
         catch (Exception exception) when (exception is HttpRequestException or IOException or UnauthorizedAccessException or
                                            OperationCanceledException or Newtonsoft.Json.JsonException)
         {
-            Trace.TraceWarning("User avatar refresh failed for {0}: {1}", userUid, exception.GetType().Name);
+            Trace.TraceWarning("User avatar refresh failed for {0}: {1}", key.UserUid, exception.GetType().Name);
         }
 
-        await StoreEntryAsync(userUid, entry with
+        await StoreEntryAsync(key, entry with
         {
             LastCheckedAt = timeProvider.GetUtcNow(),
             LastCheckSucceeded = false
@@ -302,36 +327,21 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
         return (previousPath, false);
     }
 
-    private async Task StoreEntryAsync(long userUid, UserAvatarCacheEntry entry)
+    private async Task StoreEntryAsync(UserAvatarCacheKey key, UserAvatarCacheEntry entry)
     {
         lock (syncRoot)
         {
-            entries[userUid] = Task.FromResult(entry);
+            entries[key] = Task.FromResult(entry);
         }
-        var path = MetadataPath(userUid);
-        var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
         try
         {
-            Directory.CreateDirectory(metadataDirectory);
-            await File.WriteAllBytesAsync(temporary, JsonSerializer.SerializeToUtf8Bytes(entry), lifetime.Token)
+            await images.Cache.TryWriteAsync(MetadataPath(key.UserUid), JsonSerializer.SerializeToUtf8Bytes(entry),
+                key.CacheRevision, lifetime.Token)
                 .ConfigureAwait(false);
-            lifetime.Token.ThrowIfCancellationRequested();
-            File.Move(temporary, path, true);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or OperationCanceledException)
         {
-            Trace.TraceWarning("User avatar metadata could not be saved for {0}: {1}", userUid, exception.GetType().Name);
-        }
-        finally
-        {
-            try
-            {
-                File.Delete(temporary);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                Trace.TraceWarning("User avatar metadata temporary file could not be removed: {0}", exception.GetType().Name);
-            }
+            Trace.TraceWarning("User avatar metadata could not be saved for {0}: {1}", key.UserUid, exception.GetType().Name);
         }
     }
 
@@ -370,50 +380,50 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
         return timestamp != default && timestamp <= now && now - timestamp < duration;
     }
 
-    private Task<UserAvatarCacheEntry> BorrowEntry(long userUid)
+    private Task<UserAvatarCacheEntry> BorrowEntry(UserAvatarCacheKey key)
     {
         lock (syncRoot)
         {
             ObjectDisposedException.ThrowIf(isDisposed, this);
-            if (!entries.TryGetValue(userUid, out var loading))
+            if (!entries.TryGetValue(key, out var loading))
             {
-                loadingUsers.Add(userUid);
-                loading = Task.Run(() => LoadEntryAsync(userUid));
-                entries.Add(userUid, loading);
+                loadingUsers.Add(key);
+                loading = Task.Run(() => LoadEntryAsync(key));
+                entries.Add(key, loading);
             }
-            callers[userUid] = callers.GetValueOrDefault(userUid) + 1;
-            TouchUser(userUid);
+            callers[key] = callers.GetValueOrDefault(key) + 1;
+            TouchUser(key);
             TrimEntries();
             return loading;
         }
     }
 
-    private void ReleaseEntry(long userUid)
+    private void ReleaseEntry(UserAvatarCacheKey key)
     {
         lock (syncRoot)
         {
-            if (callers[userUid] == 1)
+            if (callers[key] == 1)
             {
-                callers.Remove(userUid);
+                callers.Remove(key);
             }
             else
             {
-                callers[userUid]--;
+                callers[key]--;
             }
             TrimEntries();
         }
     }
 
-    private void TouchUser(long userUid)
+    private void TouchUser(UserAvatarCacheKey key)
     {
-        if (recencyNodes.TryGetValue(userUid, out var node))
+        if (recencyNodes.TryGetValue(key, out var node))
         {
             recency.Remove(node);
         }
         else
         {
-            node = new(userUid);
-            recencyNodes.Add(userUid, node);
+            node = new(key);
+            recencyNodes.Add(key, node);
         }
         recency.AddLast(node);
     }
@@ -424,11 +434,11 @@ public sealed class UserAvatarService : IUserAvatarService, IDisposable, IAsyncD
         while (entries.Count > maxCachedUsers && node is not null)
         {
             var next = node.Next;
-            var userUid = node.Value;
-            if (!callers.ContainsKey(userUid) && !refreshes.ContainsKey(userUid) && !loadingUsers.Contains(userUid))
+            var key = node.Value;
+            if (!callers.ContainsKey(key) && !refreshes.ContainsKey(key) && !loadingUsers.Contains(key))
             {
-                entries.Remove(userUid);
-                recencyNodes.Remove(userUid);
+                entries.Remove(key);
+                recencyNodes.Remove(key);
                 recency.Remove(node);
             }
             node = next;

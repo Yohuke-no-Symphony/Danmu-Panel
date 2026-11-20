@@ -34,25 +34,14 @@ public sealed partial class FeedViewModel
 
         using var request = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lifetime.Token);
         var token = request.Token;
-        version = revision;
-        await RefreshAsync();
-        while (!disposed && revision == version && room?.Id == current.Id && ReadFilter == filter)
+        var visible = Items.FirstOrDefault(value => value.Record.Id == record.Id);
+        if (visible is not null)
         {
-            token.ThrowIfCancellationRequested();
-            var item = Items.FirstOrDefault(value => value.Record.Id == record.Id);
-            if (item is not null)
-            {
-                return item;
-            }
-
-            var previousCount = Items.Count;
-            await LoadMoreAsync();
-            token.ThrowIfCancellationRequested();
-            if (Items.Count <= previousCount)
-            {
-                return null;
-            }
+            return visible;
         }
-        return null;
+        await RefreshCoreAsync(MessageFeedPageDirection.Around, targetId: record.Id, requestCancellation: token);
+        token.ThrowIfCancellationRequested();
+        return !disposed && revision == expectedVersion && ReadFilter == filter
+            ? Items.FirstOrDefault(value => value.Record.Id == record.Id) : null;
     }
 }

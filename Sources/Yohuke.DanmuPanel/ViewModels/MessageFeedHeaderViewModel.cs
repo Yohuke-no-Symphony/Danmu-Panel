@@ -15,6 +15,9 @@ public sealed class MessageFeedHeaderViewModel : ObservableObject
     public IAsyncRelayCommand BackToTopCommand { get; }
     public IAsyncRelayCommand MarkAllReadCommand { get; }
     public IAsyncRelayCommand LoadMoreCommand { get; }
+    public IAsyncRelayCommand LoadNewerCommand { get; }
+    public IAsyncRelayCommand LoadOlderPinnedCommand { get; }
+    public IAsyncRelayCommand LoadNewerPinnedCommand { get; }
 
     /// <summary>连接消息数据状态与由视图提供的导航和确认操作。</summary>
     public MessageFeedHeaderViewModel(FeedViewModel feed, Func<Task> clear, Func<Task> latest,
@@ -27,6 +30,9 @@ public sealed class MessageFeedHeaderViewModel : ObservableObject
         BackToTopCommand = CreateCommand(top);
         MarkAllReadCommand = CreateCommand(feed.MarkAllReadAsync);
         LoadMoreCommand = CreateCommand(feed.LoadMoreAsync);
+        LoadNewerCommand = CreateCommand(feed.LoadNewerAsync);
+        LoadOlderPinnedCommand = CreateCommand(feed.LoadOlderPinnedAsync);
+        LoadNewerPinnedCommand = CreateCommand(feed.LoadNewerPinnedAsync);
         feed.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName == nameof(FeedViewModel.MessageTextScale))

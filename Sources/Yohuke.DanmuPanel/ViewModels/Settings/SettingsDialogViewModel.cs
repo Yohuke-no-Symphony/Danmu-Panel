@@ -26,7 +26,7 @@ public sealed partial class SettingsDialogViewModel : ObservableObject
     public IRelayCommand ExportCommand { get; }
     public IRelayCommand ClearCurrentCommand { get; }
     public IRelayCommand ClearAllCommand { get; }
-    public IAsyncRelayCommand ClearCacheCommand { get; }
+    public IAsyncRelayCommand<SettingsCacheScope> ClearCacheCommand { get; }
     public IRelayCommand CheckForUpdatesCommand { get; }
     public string CurrentVersion => AppUpdateVersion.Current.ToString();
     public bool IsInteractive => !IsOperating;
@@ -43,7 +43,7 @@ public sealed partial class SettingsDialogViewModel : ObservableObject
 
     /// <summary>创建不持有控件的页面状态及由宿主提供的服务命令。</summary>
     public SettingsDialogViewModel(PanelSettings settings, bool supportsNativeMenus, Func<Task> save,
-        Action import, Action export, Action<bool> clear, Func<Task> clearCache, Action checkForUpdates,
+        Action import, Action export, Action<bool> clear, Func<SettingsCacheScope, Task> clearCache, Action checkForUpdates,
         SettingsDataViewModel data)
     {
         Appearance = new(settings, supportsNativeMenus);
@@ -57,7 +57,7 @@ public sealed partial class SettingsDialogViewModel : ObservableObject
         ExportCommand = new RelayCommand(export);
         ClearCurrentCommand = new RelayCommand(() => clear(false));
         ClearAllCommand = new RelayCommand(() => clear(true));
-        ClearCacheCommand = new AsyncRelayCommand(clearCache);
+        ClearCacheCommand = new AsyncRelayCommand<SettingsCacheScope>(clearCache);
         CheckForUpdatesCommand = new RelayCommand(checkForUpdates);
     }
 

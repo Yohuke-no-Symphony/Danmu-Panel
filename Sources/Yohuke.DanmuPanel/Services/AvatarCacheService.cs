@@ -24,15 +24,16 @@ public sealed class AvatarCacheService : IRoomAvatarService, IDisposable
         ".gif"
     };
 
-    private readonly AppDirectoryService directoryService;
     private readonly HttpClient httpClient;
     private readonly bool disposeHttpClient;
-    private readonly ConcurrentDictionary<string, Lazy<Task<string>>> downloads = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<(string Path, long Revision), Lazy<Task<string>>> downloads = new();
     private readonly Dictionary<string, AvatarDownloadOwnerGate> ownerLocks = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim downloadSlots = new(4);
     private readonly CancellationTokenSource lifetime = new();
     private readonly object syncRoot = new();
     private bool isDisposed;
+
+    internal ImageCacheDirectory Cache { get; }
 
     internal int ActiveOwnerGateCount
     {
@@ -50,9 +51,14 @@ public sealed class AvatarCacheService : IRoomAvatarService, IDisposable
     /// </summary>
     public AvatarCacheService(AppDirectoryService directoryService, HttpClient? httpClient = null)
     {
-        this.directoryService = directoryService;
+        Cache = new(directoryService.AvatarCacheDirectory);
         this.httpClient = httpClient ?? new();
         disposeHttpClient = httpClient is null;
+    }
+
+    internal Task ClearCacheAsync()
+    {
+        return Cache.ClearAsync();
     }
 
     /// <summary>
@@ -208,10 +214,19 @@ public sealed class AvatarCacheService : IRoomAvatarService, IDisposable
     /// <summary>
     /// 下载头像并返回缓存文件路径。
     /// </summary>
-    public async Task<string> DownloadAvatarAsync(
+    public Task<string> DownloadAvatarAsync(
         string roomId,
         string? avatarUrl,
         CancellationToken cancellationToken = default)
+    {
+        return DownloadAvatarAsync(roomId, avatarUrl, Cache.Revision, cancellationToken);
+    }
+
+    internal async Task<string> DownloadAvatarAsync(
+        string roomId,
+        string? avatarUrl,
+        long revision,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(roomId) ||
             string.IsNullOrWhiteSpace(avatarUrl) ||
@@ -226,13 +241,13 @@ public sealed class AvatarCacheService : IRoomAvatarService, IDisposable
         lock (syncRoot)
         {
             ObjectDisposedException.ThrowIf(isDisposed, this);
-            task = downloads.GetOrAdd(filePath, _ => new(() => DownloadAndRemoveAsync(roomId, uri, filePath),
+            task = downloads.GetOrAdd((filePath, revision), _ => new(() => DownloadAndRemoveAsync(roomId, uri, filePath, revision),
                 LazyThreadSafetyMode.ExecutionAndPublication)).Value;
         }
         return await task.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<string> DownloadAndRemoveAsync(string roomId, Uri uri, string filePath)
+    private async Task<string> DownloadAndRemoveAsync(string roomId, Uri uri, string filePath, long revision)
     {
         var ownerKey = NormalizeFileNamePart(roomId);
         var ownerGate = BorrowOwnerGate(ownerKey);
@@ -244,7 +259,7 @@ public sealed class AvatarCacheService : IRoomAvatarService, IDisposable
                 await downloadSlots.WaitAsync(lifetime.Token).ConfigureAwait(false);
                 try
                 {
-                    return await DownloadAsync(roomId, uri, filePath, lifetime.Token).ConfigureAwait(false);
+                    return await DownloadAsync(roomId, uri, filePath, revision, lifetime.Token).ConfigureAwait(false);
                 }
                 finally
                 {
@@ -269,7 +284,7 @@ public sealed class AvatarCacheService : IRoomAvatarService, IDisposable
         finally
         {
             ReturnOwnerGate(ownerKey, ownerGate);
-            downloads.TryRemove(filePath, out _);
+            downloads.TryRemove((filePath, revision), out _);
         }
     }
 
@@ -300,9 +315,15 @@ public sealed class AvatarCacheService : IRoomAvatarService, IDisposable
         }
     }
 
-    private async Task<string> DownloadAsync(string roomId, Uri uri, string filePath, CancellationToken cancellationToken)
+    private async Task<string> DownloadAsync(string roomId, Uri uri, string filePath, long revision,
+        CancellationToken cancellationToken)
     {
-        if (File.Exists(filePath) && IsSupportedImage(await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false)))
+        var header = await ImageCacheDirectory.ReadHeaderAsync(filePath, cancellationToken).ConfigureAwait(false);
+        if (revision != Cache.Revision)
+        {
+            return "";
+        }
+        if (IsSupportedImage(header.Span))
         {
             return filePath;
         }
@@ -333,23 +354,9 @@ public sealed class AvatarCacheService : IRoomAvatarService, IDisposable
         {
             return "";
         }
-        Directory.CreateDirectory(directoryService.AvatarCacheDirectory);
-        var temporary = $"{filePath}.{Guid.NewGuid():N}.tmp";
-        try
-        {
-            await File.WriteAllBytesAsync(temporary, bytes, timeout.Token).ConfigureAwait(false);
-            timeout.Token.ThrowIfCancellationRequested();
-            File.Move(temporary, filePath, true);
-            DeleteOldRoomAvatarFiles(roomId, filePath);
-            return filePath;
-        }
-        finally
-        {
-            if (File.Exists(temporary))
-            {
-                File.Delete(temporary);
-            }
-        }
+        var stored = await Cache.TryWriteAsync(filePath, bytes, revision, timeout.Token,
+            () => DeleteOldRoomAvatarFiles(roomId, filePath)).ConfigureAwait(false);
+        return stored ? filePath : "";
     }
 
     private static bool IsSupportedImage(ReadOnlySpan<byte> bytes)
@@ -381,7 +388,7 @@ public sealed class AvatarCacheService : IRoomAvatarService, IDisposable
     /// </summary>
     public string GetAvatarFilePath(string roomId, string avatarUrl)
     {
-        return Path.Combine(directoryService.AvatarCacheDirectory, CreateCacheFileName(roomId, avatarUrl));
+        return Path.Combine(Cache.DirectoryPath, CreateCacheFileName(roomId, avatarUrl));
     }
 
     /// <summary>
@@ -400,7 +407,7 @@ public sealed class AvatarCacheService : IRoomAvatarService, IDisposable
     {
         var prefix = $"{NormalizeFileNamePart(roomId)}-";
 
-        foreach (var filePath in Directory.EnumerateFiles(directoryService.AvatarCacheDirectory, $"{prefix}*"))
+        foreach (var filePath in Directory.EnumerateFiles(Cache.DirectoryPath, $"{prefix}*"))
         {
             if (string.Equals(filePath, currentFilePath, StringComparison.OrdinalIgnoreCase))
             {

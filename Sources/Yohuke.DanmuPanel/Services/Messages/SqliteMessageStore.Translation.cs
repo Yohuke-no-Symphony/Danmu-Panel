@@ -88,7 +88,7 @@ public sealed partial class SqliteMessageStore
             using var command = Command(connection, null,
                 "SELECT payload FROM translation_jobs WHERE status=0 ORDER BY priority DESC,created_ms,id LIMIT $limit;", ("$limit", limit));
             return ReadJobs(command);
-        }, cancellationToken);
+        }, cancellationToken, latestReads);
     }
 
     /// <inheritdoc />

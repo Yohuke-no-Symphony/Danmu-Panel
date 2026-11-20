@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
@@ -12,6 +13,7 @@ using Xunit;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Services;
+using Yohuke.DanmuPanel.Services.Messages;
 using Yohuke.DanmuPanel.Tests.Messages;
 using Yohuke.DanmuPanel.ViewModels;
 using Yohuke.DanmuPanel.Views;
@@ -205,7 +207,7 @@ public sealed class AsyncHistoryLoadingTests
         }.ToString());
         external.Open();
         using var command = external.CreateCommand();
-        command.CommandText = "DROP TABLE translation_jobs;";
+        command.CommandText = "DROP TABLE message_records;";
         command.ExecuteNonQuery();
 
         await Assert.ThrowsAsync<SqliteException>(() => model.LoadMoreAsync());
@@ -309,44 +311,53 @@ public sealed class AsyncHistoryLoadingTests
         }
     }
 
-    /// <summary>历史集合分批应用时，输入优先级的房间切换会取消剩余旧批次。</summary>
+    /// <summary>历史页正在投影时，输入优先级的房间切换会取消剩余旧行更新。</summary>
     [AvaloniaFact]
     public async Task SwitchingRoomsDuringHistoryUiBatchRejectsTheRemainingOldRows()
     {
         using var directory = new MessageStoreTestDirectory();
         var pinyin = new BlockingPinyinService();
-        await using var runtime = new PanelRuntime(new(directory.Path), Configuration(), pinyin);
+        var configuration = Configuration();
+        await using var runtime = new PanelRuntime(new(directory.Path), configuration, pinyin);
         var other = new RoomTabState { Id = "other", RoomId = "456" };
         await runtime.TestMessages.AddAsync(Room(), new() { UserName = "old viewer", Content = "旧房间历史", Count = 250 });
         await runtime.TestMessages.AddAsync(other, new() { UserName = "new viewer", Content = "新房间消息", Count = 3 });
         using var model = new FeedViewModel(runtime, MessageKind.Danmu);
         var switchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         Task? switching = null;
+        MessageItemViewModel[] originalRows = [];
         var appliedRows = 0;
         var switchedAfterRows = 0;
-        NotifyCollectionChangedEventHandler onChanged = (_, args) =>
+        var publishedOldRowsAfterSwitch = false;
+        PropertyChangedEventHandler onRowChanged = (_, args) =>
         {
-            if (args.Action != NotifyCollectionChangedAction.Add || switching is not null ||
-                model.SelectedRoom?.Id != "tab")
+            if (args.PropertyName != nameof(MessageItemViewModel.ShowUserAvatars) || ++appliedRows != 1)
             {
                 return;
             }
-            appliedRows += args.NewItems!.Count;
-            if (appliedRows == 20)
+            Dispatcher.UIThread.Post(() =>
             {
-                Dispatcher.UIThread.Post(() =>
-                {
-                    switchedAfterRows = appliedRows;
-                    switching = model.SelectRoomAsync(other);
-                    switchStarted.TrySetResult();
-                }, DispatcherPriority.Input);
-            }
+                switchedAfterRows = appliedRows;
+                switching = model.SelectRoomAsync(other);
+                switchStarted.TrySetResult();
+            }, DispatcherPriority.Input);
+        };
+        NotifyCollectionChangedEventHandler onItemsChanged = (_, args) =>
+        {
+            publishedOldRowsAfterSwitch |= model.SelectedRoom?.Id == other.Id && args.NewItems is not null &&
+                args.NewItems.OfType<MessageItemViewModel>().Any(item => item.Record.RoomTabId != other.Id);
         };
         try
         {
             await model.SelectRoomAsync(Room());
             await pinyin.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            model.Items.CollectionChanged += onChanged;
+            originalRows = model.Items.ToArray();
+            foreach (var item in originalRows)
+            {
+                item.PropertyChanged += onRowChanged;
+            }
+            model.Items.CollectionChanged += onItemsChanged;
+            configuration.Settings.ShowUserAvatars = !configuration.Settings.ShowUserAvatars;
 
             var oldHistory = model.LoadMoreAsync();
             await switchStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -354,7 +365,9 @@ public sealed class AsyncHistoryLoadingTests
             pinyin.Release.TrySetResult();
             await model.WaitForPresentationAsync().WaitAsync(TimeSpan.FromSeconds(10));
 
-            Assert.Equal(20, switchedAfterRows);
+            Assert.InRange(switchedAfterRows, 1, originalRows.Length - 1);
+            Assert.Equal(switchedAfterRows, appliedRows);
+            Assert.False(publishedOldRowsAfterSwitch);
             Assert.Equal("other", model.SelectedRoom!.Id);
             Assert.Equal(3, model.Items.Count);
             Assert.All(model.Items, item => Assert.Equal("other", item.Record.RoomTabId));
@@ -363,7 +376,11 @@ public sealed class AsyncHistoryLoadingTests
         }
         finally
         {
-            model.Items.CollectionChanged -= onChanged;
+            model.Items.CollectionChanged -= onItemsChanged;
+            foreach (var item in originalRows)
+            {
+                item.PropertyChanged -= onRowChanged;
+            }
             pinyin.Release.TrySetResult();
         }
     }
@@ -593,15 +610,23 @@ public sealed class AsyncHistoryLoadingTests
             Time = DateTimeOffset.FromUnixTimeSeconds(1800000000 + index)
         }).ToArray();
         await runtime.Messages.AppendTestMessagesAsync(messages, configuration.Settings.Reading);
+        const string BLOCKING_ROOM = "history-reader-blocker";
+        await runtime.Messages.AppendTestMessagesAsync([new()
+        {
+            RoomTabId = BLOCKING_ROOM, RoomId = "456", Kind = MessageKind.Danmu,
+            IsTest = true, UserName = "观众", Content = new string('a', 50000) + "!"
+        }], configuration.Settings.Reading);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var filter = new DanmuRegexFilter(new() { Rules = [new() { Pattern = "^(a+)+$", BlockDisplay = true }] });
+        filter.PatternTimedOut += _ =>
+        {
+            entered.TrySetResult();
+            release.Task.WaitAsync(TimeSpan.FromSeconds(20)).GetAwaiter().GetResult();
+        };
         var errors = new List<Exception>();
         var view = new MessageFeedView(runtime, MessageKind.Danmu, errors.Add);
         var window = new Window { Width = 440, Height = 380, Content = view };
-        using var external = new SqliteConnection(new SqliteConnectionStringBuilder
-        {
-            DataSource = directory.DatabasePath, Pooling = false
-        }.ToString());
-        external.Open();
-        SqliteTransaction? blocker = null;
         ListBox? list = null;
         ScrollViewer? viewer = null;
         FeedRowViewModel? trackedRow = null;
@@ -675,11 +700,10 @@ public sealed class AsyncHistoryLoadingTests
                 await FrameAsync();
             }
             Assert.False(runtime.IsListening(Room()));
-            blocker = external.BeginTransaction();
-            var blockedAppend = runtime.Messages.AppendAsync(new()
-            {
-                Id = "queue-barrier", RoomTabId = "barrier", RoomId = "456", Kind = MessageKind.Danmu, Content = "barrier"
-            }, configuration.Settings.Reading);
+            var blockedRead = runtime.Messages.LoadWindowAsync(BLOCKING_ROOM, MessageKind.Danmu,
+                new(1, MessageFeedPageDirection.Before, new MessageFeedCursor(long.MaxValue, long.MaxValue)),
+                danmuRegexFilter: filter);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
             var loading = view.Model.LoadMoreAsync();
             Assert.Empty(view.Model.ScrollingRows.OfType<MessageLoadingPlaceholderViewModel>());
             for (var frame = 0; frame < 40 && !view.Model.ScrollingRows.OfType<MessageLoadingPlaceholderViewModel>().Any(); frame++)
@@ -733,10 +757,8 @@ public sealed class AsyncHistoryLoadingTests
             Assert.False(loading.IsCompleted);
             Assert.Equal(3, view.Model.ScrollingRows.OfType<MessageLoadingPlaceholderViewModel>().Count());
 
-            blocker.Rollback();
-            blocker.Dispose();
-            blocker = null;
-            await blockedAppend.WaitAsync(TimeSpan.FromSeconds(10));
+            release.TrySetResult();
+            await blockedRead.WaitAsync(TimeSpan.FromSeconds(10));
             await loading.WaitAsync(TimeSpan.FromSeconds(15));
             await view.Model.WaitForPresentationAsync().WaitAsync(TimeSpan.FromSeconds(15));
             for (var frame = 0; frame < 4; frame++)
@@ -761,7 +783,7 @@ public sealed class AsyncHistoryLoadingTests
         }
         finally
         {
-            blocker?.Dispose();
+            release.TrySetResult();
             window.LayoutUpdated -= OnLayout;
             view.Model.ScrollingRows.CollectionChanged -= OnRowsChanged;
             if (viewer is not null)
