@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Yohuke.DanmuPanel.Services;
 using Yohuke.DanmuPanel.ViewModels;
 
 namespace Yohuke.DanmuPanel.Views.Components;
@@ -771,7 +772,7 @@ internal sealed partial class DanmuFeedScrollController : IDisposable
         }
 
         var revision = contentRevision;
-        ApplyFollowPosition(requestedSession);
+        var positioned = ApplyFollowPosition(requestedSession);
         if (!IsCurrentFollowSession(requestedSession))
         {
             return;
@@ -784,40 +785,41 @@ internal sealed partial class DanmuFeedScrollController : IDisposable
         {
             QueueFollowLatest(afterInput: true);
         }
-        else
+        else if (positioned)
         {
             Dispatcher.UIThread.Post(() => SettleFollowLatest(requestedSession, requestedAttempt), DispatcherPriority.Background);
         }
     }
 
-    private void ApplyFollowPosition(long requestedSession)
+    private bool ApplyFollowPosition(long requestedSession)
     {
         if (itemsControl.ItemCount == 0)
         {
-            return;
+            return true;
         }
 
         isUpdatingScroll = true;
         try
         {
-            // 末行已实现时，先完成正文子树的待测量工作，再读取滚动范围。
-            if (itemsControl.ItemsPanelRoot is null || itemsControl.ContainerFromIndex(itemsControl.ItemCount - 1) is not null)
+            // ScrollIntoView 可能跳过虚拟面板的测量，先更新集合变动后失效的条目坐标。
+            if (!HasValidLayout() || itemsControl.ItemsPanelRoot is null ||
+                itemsControl.ContainerFromIndex(itemsControl.ItemCount - 1) is not null)
             {
                 scrollViewer.UpdateLayout();
             }
             if (!IsCurrentFollowSession(requestedSession) || itemsControl.ItemCount == 0)
             {
-                return;
+                return true;
             }
 
             var lastIndex = itemsControl.ItemCount - 1;
-            if (itemsControl.ContainerFromIndex(lastIndex) is null)
+            if (HasValidLayout() && itemsControl.ContainerFromIndex(lastIndex) is null)
             {
                 itemsControl.ScrollIntoView(lastIndex);
             }
             if (!IsCurrentFollowSession(requestedSession))
             {
-                return;
+                return true;
             }
             if (!HasValidLayout() || itemsControl.ContainerFromIndex(lastIndex) is
                 ({ IsMeasureValid: false } or { IsArrangeValid: false }))
@@ -832,6 +834,12 @@ internal sealed partial class DanmuFeedScrollController : IDisposable
                     scrollViewer.UpdateLayout();
                 }
             }
+            return true;
+        }
+        catch (Exception exception)
+        {
+            AppExceptionHandler.Report(nameof(DanmuFeedScrollController), exception);
+            return false;
         }
         finally
         {
@@ -846,9 +854,9 @@ internal sealed partial class DanmuFeedScrollController : IDisposable
             return;
         }
 
-        if (!IsAtLatest())
+        if (!IsAtLatest() && !ApplyFollowPosition(requestedSession))
         {
-            ApplyFollowPosition(requestedSession);
+            return;
         }
         if (!followNewMessages && IsCurrentFollowAttempt(requestedSession, requestedAttempt))
         {

@@ -21,7 +21,23 @@ public static class StartupLog
     {
         var secrets = sensitiveValues?.ToArray();
         var safeMessage = DiagnosticSanitizer.Sanitize(message, secrets);
+        WriteEntry(level, safeMessage, error, secrets);
 
+        var sourceName = source ?? (Localization.IsInitialized ? Localization.Get("Services.Log.Startup") : "Startup");
+        try
+        {
+            Written?.Invoke(level, sourceName, safeMessage, error);
+        }
+        catch (Exception exception)
+        {
+            WriteEntry(AppLogLevel.ERROR, "Failed to publish an application log entry.", exception, secrets);
+        }
+    }
+
+    private static void WriteEntry(AppLogLevel level, string safeMessage, Exception? error, string[]? secrets)
+    {
+        var details = error is null ? "" : Environment.NewLine + DiagnosticSanitizer.Sanitize(error.ToString(), secrets);
+        var entry = $"{DateTimeOffset.Now:O} {level} {safeMessage}{details}";
         try
         {
             var directory = Path.Combine(
@@ -42,15 +58,26 @@ public static class StartupLog
                     isInitialized = true;
                 }
 
-                var details = error is null ? "" : Environment.NewLine + DiagnosticSanitizer.Sanitize(error.ToString(), secrets);
-                File.AppendAllText(path, $"{DateTimeOffset.Now:O} {level} {safeMessage}{details}{Environment.NewLine}");
+                File.AppendAllText(path, entry + Environment.NewLine);
             }
         }
-        catch
+        catch (Exception exception)
+        {
+            WriteToStandardError(entry + Environment.NewLine + DiagnosticSanitizer.Sanitize(exception.ToString(), secrets));
+        }
+    }
+
+    internal static void WriteToStandardError(string entry)
+    {
+        try
+        {
+            Console.Error.WriteLine(entry);
+        }
+        catch (IOException)
         {
         }
-
-        var sourceName = source ?? (Localization.IsInitialized ? Localization.Get("Services.Log.Startup") : "Startup");
-        Written?.Invoke(level, sourceName, safeMessage, error);
+        catch (ObjectDisposedException)
+        {
+        }
     }
 }

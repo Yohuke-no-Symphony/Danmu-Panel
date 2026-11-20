@@ -39,7 +39,7 @@ public partial class App
         Func<ConfigurationService> createConfigurationStore)
     {
         Dispatcher.UIThread.VerifyAccess();
-        logBridge = new(log, () => [runtime?.Configuration.Settings.Translation.ApiKey ?? string.Empty]);
+        logBridge = new(log, GetLogSensitiveValues);
         var loadingWindow = new StartupWindow();
         return new(desktop, loadingWindow, token => InitializeApplicationAsync(loadingWindow, createConfigurationStore, token),
             AbandonStartupAsync, CreateStartupFailureWindow);
@@ -223,7 +223,7 @@ public partial class App
             {
                 IsReadOnly = true,
                 TextWrapping = TextWrapping.Wrap,
-                Text = DiagnosticSanitizer.Sanitize(exception.ToString(), [runtime?.Configuration.Settings.Translation.ApiKey ?? ""]),
+                Text = DiagnosticSanitizer.Sanitize(exception.ToString(), GetLogSensitiveValues()),
                 Margin = new Thickness(20)
             }
         };
@@ -232,6 +232,6 @@ public partial class App
     private void LogStartupFailure(Exception exception)
     {
         StartupLog.Append(LocalizedExceptionText.Get(exception), AppLogLevel.ERROR, error: exception,
-            sensitiveValues: [runtime?.Configuration.Settings.Translation.ApiKey ?? ""]);
+            sensitiveValues: GetLogSensitiveValues());
     }
 }

@@ -9,8 +9,10 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Xunit;
+using Yohuke.DanmuPanel.Models.Logging;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
+using Yohuke.DanmuPanel.Services;
 using Yohuke.DanmuPanel.Services.Translation;
 using Yohuke.DanmuPanel.ViewModels;
 using Yohuke.DanmuPanel.Views.Components;
@@ -22,6 +24,83 @@ public sealed class FeedFollowSchedulingTests
 {
     private const int MAX_CORRECTIONS_BEFORE_FUSE = 16;
     private static readonly IPinyinService pinyin = new PinyinService();
+
+    /// <summary>虚拟列表头部补入历史并追加末行时，跟随必须使用更新后的布局。</summary>
+    [AvaloniaFact]
+    public void FollowingLatestRefreshesLayoutAfterInsertingBeforeRealizedRows()
+    {
+        using var log = new AppLogService();
+        using var bridge = new AppLogRuntimeBridge(log);
+        var (window, list, viewer, controller, items) = CreateFeed();
+        using (controller)
+        {
+            try
+            {
+                Assert.Null(list.ContainerFromIndex(0));
+                controller.NotifyLayoutChanged();
+                items.Insert(0, CreateItem("older message before the realized range"));
+                var latest = CreateItem("new message after the realized range");
+                items.Add(latest);
+                Assert.Null(list.ContainerFromItem(latest));
+
+                Pump(window);
+
+                Assert.True(controller.IsFollowingLatest);
+                Assert.NotNull(list.ContainerFromItem(latest));
+                Assert.InRange(Math.Abs(viewer.ScrollBarMaximum.Y - viewer.Offset.Y), 0, 1);
+                Assert.Empty(log.Entries);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+    }
+
+    /// <summary>跟随中的异常进入日志，并释放下一批消息的跟随调度。</summary>
+    [AvaloniaFact]
+    public void FollowFailureIsLoggedAndNewContentCanResumeFollowing()
+    {
+        using var log = new AppLogService();
+        using var bridge = new AppLogRuntimeBridge(log);
+        var (window, list, viewer, controller, items) = CreateFeed();
+        using (controller)
+        {
+            void ThrowOnceAfterLayout(object? sender, EventArgs args)
+            {
+                viewer.LayoutUpdated -= ThrowOnceAfterLayout;
+                throw new InvalidOperationException("Follow layout callback failed.");
+            }
+
+            viewer.LayoutUpdated += ThrowOnceAfterLayout;
+            try
+            {
+                controller.NotifyLayoutChanged();
+                items.Add(CreateItem("arrives during the failing follow"));
+                Pump(window);
+
+                var entry = Assert.Single(log.Entries);
+                Assert.Equal(AppLogLevel.ERROR, entry.Level);
+                Assert.Equal(nameof(DanmuFeedScrollController), entry.Source);
+                Assert.Contains("Follow layout callback failed.", entry.Details);
+                Assert.Contains(nameof(ThrowOnceAfterLayout), entry.Details);
+
+                var latest = CreateItem("the follow scheduler can process this message");
+                items.Add(latest);
+                Pump(window);
+
+                Assert.True(controller.IsFollowingLatest);
+                Assert.NotNull(list.ContainerFromItem(latest));
+                Assert.InRange(Math.Abs(viewer.ScrollBarMaximum.Y - viewer.Offset.Y), 0, 1);
+                Assert.Single(log.Entries);
+            }
+            finally
+            {
+                viewer.LayoutUpdated -= ThrowOnceAfterLayout;
+                window.Close();
+            }
+        }
+    }
 
     /// <summary>持续的延迟偏移纠正不能让跟随任务无限抢占输入，测试会在十六次后自行熔断。</summary>
     [AvaloniaTheory]

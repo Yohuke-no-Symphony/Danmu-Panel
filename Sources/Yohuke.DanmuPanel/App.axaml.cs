@@ -145,10 +145,14 @@ public partial class App : Application
     {
         Dispatcher.UIThread.Post(() =>
         {
-            var key = runtime?.Configuration.Settings.Translation.ApiKey;
             StartupLog.Append(LocalizedExceptionText.Get(exception), Models.Logging.AppLogLevel.ERROR,
-                Localization.Get("Panel.Log.Operation"), exception, [key ?? string.Empty]);
+                Localization.Get("Panel.Log.Operation"), exception, GetLogSensitiveValues());
         });
+    }
+
+    internal string[] GetLogSensitiveValues()
+    {
+        return [runtime?.Configuration.Settings.Translation.ApiKey ?? string.Empty];
     }
 
     private async void CheckStartupUpdates(object? sender, EventArgs args)
