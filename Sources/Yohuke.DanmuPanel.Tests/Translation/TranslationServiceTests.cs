@@ -12,7 +12,6 @@ public sealed class TranslationServiceTests
     [InlineData(true)]
     public async Task RefreshMakesANewRequestWithoutWaitingForAnOlderRequest(bool previousFails)
     {
-        await using var cache = new SqliteTranslationCache(":memory:");
         var previousStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var previousResponse = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
@@ -24,7 +23,7 @@ public sealed class TranslationServiceTests
                 return await previousResponse.Task.WaitAsync(token);
             }
             return "新译文";
-        }), cache);
+        }));
         var request = TranslationRequestFactory.Create(new TranslationSettings(), "hello")!;
         var previous = service.TranslateAsync(request);
         await previousStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
@@ -43,7 +42,6 @@ public sealed class TranslationServiceTests
         }
 
         Assert.Equal("新译文", await service.TranslateAsync(request));
-        Assert.Equal("新译文", await cache.GetAsync(request.CacheKey));
         Assert.Equal(2, Volatile.Read(ref calls));
     }
 
@@ -51,21 +49,25 @@ public sealed class TranslationServiceTests
     [Fact]
     public async Task ConcurrentRefreshesEachRequestTheModelAndKeepTheLatestResultCached()
     {
-        await using var cache = new SqliteTranslationCache(":memory:");
         var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var firstResponse = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
         await using var service = new TranslationService(new DelegateTranslationClient(async (_, token) =>
         {
-            if (Interlocked.Increment(ref calls) == 1)
+            var call = Interlocked.Increment(ref calls);
+            if (call == 1)
+            {
+                return "缓存译文";
+            }
+            if (call == 2)
             {
                 firstStarted.TrySetResult();
                 return await firstResponse.Task.WaitAsync(token);
             }
             return "第二次重译";
-        }), cache);
+        }));
         var request = TranslationRequestFactory.Create(new TranslationSettings(), "hello")!;
-        await cache.SetAsync(request.CacheKey, "缓存译文");
+        Assert.Equal("缓存译文", await service.TranslateAsync(request));
 
         var first = service.RefreshAsync(request);
         await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
@@ -77,28 +79,31 @@ public sealed class TranslationServiceTests
         Assert.Equal("第一次重译", await first.WaitAsync(TimeSpan.FromSeconds(3)));
         Assert.Equal("第二次重译", await second.WaitAsync(TimeSpan.FromSeconds(3)));
         Assert.Equal("第二次重译", await service.TranslateAsync(request));
-        Assert.Equal(2, Volatile.Read(ref calls));
+        Assert.Equal(3, Volatile.Read(ref calls));
     }
 
     /// <summary>取消重译不影响旧请求的等待者，也不允许被取代的旧请求更新缓存。</summary>
     [Fact]
     public async Task CancellingARefreshKeepsTheOlderRequestAlive()
     {
-        await using var cache = new SqliteTranslationCache(":memory:");
         var previousStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var previousResponse = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
         var client = new DelegateTranslationClient(async (_, token) =>
         {
-            if (Interlocked.Increment(ref calls) == 1)
+            var call = Interlocked.Increment(ref calls);
+            if (call == 1)
             {
                 previousStarted.TrySetResult();
                 return await previousResponse.Task.WaitAsync(token);
             }
-            await Task.Delay(Timeout.Infinite, token);
-            return "unreachable";
+            if (call == 2)
+            {
+                await Task.Delay(Timeout.Infinite, token);
+            }
+            return "当前译文";
         });
-        await using var service = new TranslationService(client, cache);
+        await using var service = new TranslationService(client);
         using var cancellation = new CancellationTokenSource();
         var request = TranslationRequestFactory.Create(new TranslationSettings(), "hello")!;
         var previous = service.TranslateAsync(request);
@@ -110,16 +115,15 @@ public sealed class TranslationServiceTests
         previousResponse.SetResult("旧译文");
 
         Assert.Equal("旧译文", await previous.WaitAsync(TimeSpan.FromSeconds(3)));
-        Assert.Null(await cache.GetAsync(request.CacheKey));
-        Assert.Equal(2, Volatile.Read(ref calls));
+        Assert.Equal("当前译文", await service.TranslateAsync(request));
+        Assert.Equal(3, Volatile.Read(ref calls));
     }
 
     [Fact]
     public async Task ConcurrentDuplicateMessagesShareOneRequestAndSubsequentRequestUsesCache()
     {
-        await using var cache = new SqliteTranslationCache(":memory:");
         var client = new ControlledTranslationClient();
-        await using var service = new TranslationService(client, cache);
+        await using var service = new TranslationService(client);
         var request = TranslationRequestFactory.Create(new TranslationSettings(), "hello")!;
         var calls = Enumerable.Range(0, 20).Select(_ => service.TranslateAsync(request)).ToArray();
         await client.Started.Task.WaitAsync(TimeSpan.FromSeconds(3));
@@ -133,9 +137,8 @@ public sealed class TranslationServiceTests
     [Fact]
     public async Task CancellingOneWaiterKeepsOtherMessagesTranslationAlive()
     {
-        await using var cache = new SqliteTranslationCache(":memory:");
         var client = new ControlledTranslationClient();
-        await using var service = new TranslationService(client, cache);
+        await using var service = new TranslationService(client);
         using var cancellation = new CancellationTokenSource();
         var request = TranslationRequestFactory.Create(new TranslationSettings(), "hello")!;
         var first = service.TranslateAsync(request, cancellation.Token);
@@ -151,26 +154,28 @@ public sealed class TranslationServiceTests
     [Fact]
     public async Task FailuresAreNotCached()
     {
-        await using var cache = new SqliteTranslationCache(":memory:");
         var client = new ControlledTranslationClient();
-        await using var service = new TranslationService(client, cache);
+        await using var service = new TranslationService(client);
         var request = TranslationRequestFactory.Create(new TranslationSettings(), "hello")!;
         var first = service.TranslateAsync(request);
         client.Response.SetException(new TranslationException("failed"));
         await Assert.ThrowsAsync<TranslationException>(() => first);
         await Assert.ThrowsAsync<TranslationException>(() => service.TranslateAsync(request));
         Assert.Equal(2, client.Calls);
-        Assert.Null(await cache.GetAsync(request.CacheKey));
     }
 
     [Fact]
     public async Task CancellingAllWaitersCancelsTheSharedNetworkRequest()
     {
-        await using var cache = new SqliteTranslationCache(":memory:");
         var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
         var client = new DelegateTranslationClient(async (_, token) =>
         {
+            if (Interlocked.Increment(ref calls) > 1)
+            {
+                return "重试译文";
+            }
             started.TrySetResult();
             try
             {
@@ -183,7 +188,7 @@ public sealed class TranslationServiceTests
                 throw;
             }
         });
-        await using var service = new TranslationService(client, cache);
+        await using var service = new TranslationService(client);
         using var cancellation = new CancellationTokenSource();
         var request = TranslationRequestFactory.Create(new TranslationSettings(), "hello")!;
         var pending = service.TranslateAsync(request, cancellation.Token);
@@ -191,7 +196,7 @@ public sealed class TranslationServiceTests
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
         await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(3));
-        Assert.Null(await cache.GetAsync(request.CacheKey));
+        Assert.Equal("重试译文", await service.TranslateAsync(request).WaitAsync(TimeSpan.FromSeconds(3)));
+        Assert.Equal(2, Volatile.Read(ref calls));
     }
-
 }

@@ -44,15 +44,11 @@ public sealed class MessageFeedInteractionTests
             await runtime.Messages.AppendAsync(record, new(), fingerprint);
             Assert.True(await runtime.Messages.ApplyTranslationAsync(record.Id, record.Generation, fingerprint, "旧译文"));
         }
-        await using var cache = new SqliteTranslationCache(":memory:");
         var request = TranslationRequestFactory.Create(settings, message.Content)!;
-        await cache.SetAsync(request.CacheKey, "旧译文");
         var calls = 0;
         await using var service = new TranslationService(new DelegateTranslationClient((_, _) =>
-        {
-            calls++;
-            return Task.FromResult("新译文");
-        }), cache);
+            Task.FromResult(Interlocked.Increment(ref calls) == 1 ? "旧译文" : "新译文")));
+        Assert.Equal("旧译文", await service.TranslateAsync(request));
         await using var scheduler = new TranslationScheduler(runtime.Messages, service);
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         scheduler.Completed += (_, _) => completed.TrySetResult();
@@ -80,13 +76,11 @@ public sealed class MessageFeedInteractionTests
             await view.Model.RefreshAsync();
             await view.Model.WaitForPresentationAsync();
 
-            Assert.Equal(1, calls);
             Assert.Equal("新译文", (await runtime.Messages.GetByIdAsync(message.Id))!.Translation);
             Assert.Equal("新译文", view.Model.Items.Single(item => item.Record.Id == message.Id).Translation);
-            Assert.Equal("新译文", await cache.GetAsync(request.CacheKey));
             Assert.Equal("旧译文", (await runtime.Messages.GetByIdAsync(other.Id))!.Translation);
             Assert.Equal("新译文", await service.TranslateAsync(request));
-            Assert.Equal(1, calls);
+            Assert.Equal(2, Volatile.Read(ref calls));
         }
         finally
         {

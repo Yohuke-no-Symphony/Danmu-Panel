@@ -1,8 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using Avalonia.Styling;
 using Avalonia.Threading;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Layouts;
@@ -41,108 +39,6 @@ public partial class App : Application
         AvaloniaXamlLoader.Load(this);
     }
 
-    /// <inheritdoc/>
-    public override void OnFrameworkInitializationCompleted()
-    {
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-        {
-            logBridge = new(log,
-                () => [runtime?.Configuration.Settings.Translation.ApiKey ?? string.Empty]);
-            try
-            {
-                var configStore = new ConfigurationService();
-                var configuration = configStore.Load();
-                Localization.SetLanguage(configuration.Settings.Language);
-                RequestedThemeVariant = configuration.Settings.Theme switch
-                {
-                    "light" => ThemeVariant.Light,
-                    "dark" => ThemeVariant.Dark,
-                    _ => ThemeVariant.Default
-                };
-                if (configuration.Workspaces.Count == 0)
-                {
-                    configuration.Workspaces.Add(new() { Name = Localization.Get("Panel.DefaultWorkspace") });
-                }
-                runtime = new(configStore, configuration);
-                runtime.Colors.Apply(this, configuration.Settings.ColorScheme);
-                workspace = new(runtime, ReportFailure);
-                var panels = new Dictionary<string, Control> { ["workspace"] = workspace };
-                foreach (var (id, kind) in new[]
-                {
-                    (WorkbenchPanelIds.DANMU, MessageKind.Danmu),
-                    (WorkbenchPanelIds.SUPER_CHAT, MessageKind.SuperChat),
-                    (WorkbenchPanelIds.GIFT, MessageKind.Gift),
-                    (WorkbenchPanelIds.GUARD, MessageKind.Guard),
-                    (WorkbenchPanelIds.RED_POCKET, MessageKind.RedPocket)
-                })
-                {
-                    var view = new MessageFeedView(runtime, kind, ReportFailure, NavigateToMessageAsync);
-                    feeds.Add(view);
-                    panels.Add(id, view);
-                }
-                testMessages = new(runtime, ReportFailure);
-                panels.Add("testMessages", testMessages);
-                logPanel = new(log);
-                panels.Add("log", logPanel);
-                shell = new(panels, workspace.Toolbar, configStore.DirectoryPath)
-                {
-                    UseWindowMenuOnMac = configuration.Settings.UseWindowMenuOnMac
-                };
-                NativeMenu.GetMenu(this)!.Items.OfType<NativeMenuItem>().First().Command = shell.AboutCommand;
-                workspace.HostWindow = shell;
-                workspace.SelectedRoomChanged += SelectRoom;
-                Localization.LanguageChanged += RefreshLanguage;
-                shell.SettingsRequested += OpenSettings;
-                shell.ClearRoomRequested += () => Clear(false);
-                shell.ClearAllRequested += () => Clear(true);
-                shell.OperationFailed += ReportFailure;
-                shell.Closed += OnShellClosed;
-                shell.BeforeCloseAsync = async () =>
-                {
-                    if (updateModel is not null)
-                    {
-                        await updateModel.CancelPendingAsync();
-                    }
-                    await testMessages.FinishPendingAsync();
-                    await runtime.DisposeAsync();
-                    foreach (var feed in feeds)
-                    {
-                        feed.Model.Dispose();
-                    }
-                    workspace.Dispose();
-                    testMessages.Dispose();
-                    Localization.LanguageChanged -= RefreshLanguage;
-                };
-                shell.Opened += async (_, _) =>
-                {
-                    try
-                    {
-                        await runtime.InitializeAsync();
-                        await SelectRoomAsync(workspace.SelectedRoom);
-                    }
-                    catch (Exception exception)
-                    {
-                        ReportFailure(exception);
-                    }
-                };
-                shell.Opened += CheckStartupUpdates;
-                desktop.MainWindow = shell;
-            }
-            catch (Exception exception)
-            {
-                StartupLog.Append(LocalizedExceptionText.Get(exception), Models.Logging.AppLogLevel.ERROR, error: exception);
-                DisposeLog();
-                desktop.MainWindow = new Window
-                {
-                    Title = Localization.Get("Panel.StartupFailed"), Width = 650, Height = 300,
-                    Content = new TextBox { IsReadOnly = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-                        Text = DiagnosticSanitizer.Sanitize(exception.ToString()), Margin = new Thickness(20) }
-                };
-            }
-        }
-        base.OnFrameworkInitializationCompleted();
-    }
-
     private async void SelectRoom(RoomTabState? room)
     {
         try
@@ -155,10 +51,11 @@ public partial class App : Application
         }
     }
 
-    private Task SelectRoomAsync(RoomTabState? room)
+    private Task SelectRoomAsync(RoomTabState? room, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         testMessages?.SelectRoom(room);
-        return Task.WhenAll(feeds.Select(feed => feed.Model.SelectRoomAsync(room)));
+        return Task.WhenAll(feeds.Select(feed => feed.Model.SelectRoomAsync(room, cancellationToken)));
     }
 
     private async Task NavigateToMessageAsync(MessageRecord record)

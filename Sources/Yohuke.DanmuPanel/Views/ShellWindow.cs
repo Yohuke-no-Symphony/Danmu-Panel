@@ -126,9 +126,9 @@ public sealed class ShellWindow : Window
     }
 
     /// <summary>加载并恢复共享布局，可在显示窗口前等待完成。</summary>
-    public Task InitializeLayoutAsync()
+    public Task InitializeLayoutAsync(CancellationToken cancellationToken = default)
     {
-        return initialization ??= InitializeCoreAsync();
+        return initialization ??= InitializeCoreAsync(cancellationToken);
     }
 
     /// <summary>显示或激活指定面板。</summary>
@@ -175,9 +175,10 @@ public sealed class ShellWindow : Window
         }
     }
 
-    private async Task InitializeCoreAsync()
+    private async Task InitializeCoreAsync(CancellationToken cancellationToken)
     {
-        var state = await layoutStore.LoadAsync();
+        var state = await Task.Run(() => layoutStore.LoadAsync(cancellationToken), cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         layouts = new(this, panels, state, layoutStore, RegisterFloatingWindow, UnregisterFloatingWindow);
         layouts.PersistenceFailed += ReportFailure;
         dockHost.Content = layouts.Host;

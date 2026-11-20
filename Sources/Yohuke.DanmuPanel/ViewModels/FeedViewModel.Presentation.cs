@@ -1,3 +1,4 @@
+using Avalonia.Threading;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Services.Messages;
@@ -6,8 +7,9 @@ namespace Yohuke.DanmuPanel.ViewModels;
 
 public sealed partial class FeedViewModel
 {
-    private readonly HashSet<MessageItemViewModel> preparingItems = [];
+    private FeedPresentationQueue presentationQueue = new();
     private readonly HashSet<Task> backgroundTasks = [];
+    internal Func<MessageItemViewModel, bool>? IsVisibleForPresentation { get; set; }
 
     internal async Task WaitForPresentationAsync()
     {
@@ -24,77 +26,112 @@ public sealed partial class FeedViewModel
         }
     }
 
-    private void SchedulePresentation(int version, CancellationToken cancellationToken)
+    internal void PrioritizePresentation(MessageItemViewModel item)
     {
-        var pending = Items.Where(item => item.IsPresentationPending && preparingItems.Add(item)).ToArray();
-        if (pending.Length > 0)
+        if (!disposed && item.IsPresentationPending && ContainsActiveItem(item))
         {
-            TrackBackground(PreparePresentationAsync(pending, version, cancellationToken));
+            presentationQueue.Enqueue(item, visible: true);
+            StartPresentationIfNeeded(revision, lifetime.Token);
         }
     }
 
-    private async Task PreparePresentationAsync(IReadOnlyList<MessageItemViewModel> pending, int version,
-        CancellationToken cancellationToken)
+    internal void DeprioritizePresentation(MessageItemViewModel item)
+    {
+        if (item.IsPresentationPending && IsVisibleForPresentation?.Invoke(item) != true)
+        {
+            presentationQueue.Deprioritize(item);
+        }
+    }
+
+    private void SchedulePresentation(int version, CancellationToken cancellationToken,
+        IEnumerable<MessageItemViewModel>? candidates = null)
+    {
+        var queue = presentationQueue;
+        foreach (var item in candidates ?? Items)
+        {
+            if (item.IsPresentationPending)
+            {
+                queue.Enqueue(item, IsVisibleForPresentation?.Invoke(item) == true);
+            }
+        }
+        StartPresentationIfNeeded(version, cancellationToken);
+    }
+
+    private void StartPresentationIfNeeded(int version, CancellationToken cancellationToken)
+    {
+        var queue = presentationQueue;
+        if (queue.HasWaiting && !queue.IsRunning)
+        {
+            queue.IsRunning = true;
+            TrackBackground(PreparePresentationAsync(queue, version, cancellationToken));
+        }
+    }
+
+    private async Task PreparePresentationAsync(FeedPresentationQueue queue, int version, CancellationToken cancellationToken)
     {
         var inFlight = new Dictionary<Task<MessagePresentationSnapshot>, MessageItemViewModel>();
         try
         {
             BeginViewportUpdate();
-            var uiBudget = new FeedUiWorkBudget();
-            var next = 0;
-            while (next < pending.Count || inFlight.Count > 0)
+            await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Background, cancellationToken);
+            var budget = new FeedUiWorkBudget();
+            while (WindowIsCurrent(version, cancellationToken))
             {
-                if (disposed || version != revision || cancellationToken.IsCancellationRequested)
+                while (inFlight.Count < runtime.Presentations.WorkerCount && queue.Take() is { } next)
                 {
-                    return;
-                }
-                while (next < pending.Count && inFlight.Count < runtime.Presentations.WorkerCount)
-                {
-                    var item = pending[next++];
-                    if (!Items.Contains(item) || !item.IsPresentationPending)
+                    if (!ContainsActiveItem(next) || !next.IsPresentationPending)
                     {
-                        preparingItems.Remove(item);
+                        queue.Remove(next);
                         continue;
                     }
-                    inFlight.Add(runtime.Presentations.PrepareAsync(item.Record,
-                        item.PresentationSettings.PresentationOptions, cancellationToken), item);
+                    var work = runtime.Presentations.PrepareAsync(next.Record,
+                        next.PresentationSettings.PresentationOptions, cancellationToken, next.Emoticons);
+                    inFlight.Add(work, next);
                 }
                 if (inFlight.Count == 0)
                 {
-                    continue;
+                    break;
                 }
-                var completed = await Task.WhenAny(inFlight.Keys);
-                var completedItem = inFlight[completed];
+
+                Task<MessagePresentationSnapshot>? completed = null;
+                foreach (var task in inFlight.Keys)
+                {
+                    if (task.IsCompleted)
+                    {
+                        completed = task;
+                        break;
+                    }
+                }
+                completed ??= await Task.WhenAny(inFlight.Keys);
+                var item = inFlight[completed];
                 inFlight.Remove(completed);
                 try
                 {
                     var prepared = await completed;
-                    if (disposed || version != revision || cancellationToken.IsCancellationRequested)
+                    if (!WindowIsCurrent(version, cancellationToken))
                     {
                         return;
                     }
-                    if (Items.Contains(completedItem) && completedItem.IsPresentationPending &&
-                        !completedItem.ApplyPresentation(prepared))
+                    queue.Remove(item);
+                    if (ContainsActiveItem(item) && item.IsPresentationPending && !item.ApplyPresentation(prepared))
                     {
-                        inFlight.Add(runtime.Presentations.PrepareAsync(completedItem.Record,
-                            completedItem.PresentationSettings.PresentationOptions, cancellationToken), completedItem);
-                    }
-                    else
-                    {
-                        preparingItems.Remove(completedItem);
+                        queue.Enqueue(item, IsVisibleForPresentation?.Invoke(item) == true);
                     }
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
-                    throw;
+                    return;
                 }
                 catch (Exception error)
                 {
-                    completedItem.FailPresentation();
-                    preparingItems.Remove(completedItem);
-                    Failed?.Invoke(error);
+                    queue.Remove(item);
+                    if (WindowIsCurrent(version, cancellationToken) && ContainsActiveItem(item))
+                    {
+                        item.FailPresentation();
+                        Failed?.Invoke(error);
+                    }
                 }
-                await uiBudget.YieldIfNeededAsync(cancellationToken);
+                await budget.YieldIfNeededAsync(cancellationToken);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -102,11 +139,20 @@ public sealed partial class FeedViewModel
         }
         catch (Exception error)
         {
-            if (!disposed && version == revision)
+            if (WindowIsCurrent(version, cancellationToken))
             {
-                foreach (var item in pending)
+                while (queue.Take() is { } item)
                 {
+                    queue.Remove(item);
                     item.FailPresentation();
+                }
+                foreach (var item in inFlight.Values)
+                {
+                    queue.Remove(item);
+                    if (ContainsActiveItem(item))
+                    {
+                        item.FailPresentation();
+                    }
                 }
                 Failed?.Invoke(error);
             }
@@ -115,27 +161,24 @@ public sealed partial class FeedViewModel
         {
             try
             {
-                try
+                if (inFlight.Count != 0)
                 {
                     await Task.WhenAll(inFlight.Keys);
                 }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+            }
+            catch (Exception error)
+            {
+                if (WindowIsCurrent(version, cancellationToken))
                 {
-                }
-                catch (Exception error)
-                {
-                    if (!disposed && version == revision)
-                    {
-                        Failed?.Invoke(error);
-                    }
+                    Failed?.Invoke(error);
                 }
             }
             finally
             {
-                foreach (var item in pending)
-                {
-                    preparingItems.Remove(item);
-                }
+                queue.IsRunning = false;
                 EndViewportUpdate();
             }
         }
@@ -166,10 +209,10 @@ public sealed partial class FeedViewModel
                 {
                     return;
                 }
-                foreach (var item in Items)
+                foreach (var record in batch)
                 {
-                    if (queued.Contains(item.Record.Id) && batch.Any(record => record.Id == item.Record.Id &&
-                            record.Generation == item.Record.Generation))
+                    if (queued.Contains(record.Id) && activeItems.TryGetValue(record.Id, out var item) &&
+                        record.Generation == item.Record.Generation)
                     {
                         item.SetTranslationPending(true);
                     }

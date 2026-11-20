@@ -287,6 +287,19 @@ public sealed class SettingsView : UserControl
             SetStatus(Localization.Format("Settings.InvalidMessageRetentionCount", PanelSettings.MAX_MESSAGE_RETENTION_COUNT));
             return false;
         }
+        if (translation.CacheCapacity is not { } cacheCapacity || cacheCapacity != decimal.Truncate(cacheCapacity) ||
+            cacheCapacity is < 0 or > TranslationSettings.MAX_CACHE_CAPACITY)
+        {
+            SetStatus(Localization.Format("Settings.InvalidTranslationCacheCapacity", TranslationSettings.MAX_CACHE_CAPACITY));
+            return false;
+        }
+        if (translation.CacheTtlMinutes is not { } cacheTtlMinutes || cacheTtlMinutes != decimal.Truncate(cacheTtlMinutes) ||
+            cacheTtlMinutes is < TranslationSettings.MIN_CACHE_TTL_MINUTES or > TranslationSettings.MAX_CACHE_TTL_MINUTES)
+        {
+            SetStatus(Localization.Format("Settings.InvalidTranslationCacheTtl",
+                TranslationSettings.MIN_CACHE_TTL_MINUTES, TranslationSettings.MAX_CACHE_TTL_MINUTES));
+            return false;
+        }
         if (!DanmuRegexEditor.Model.TryCreateSettings(out var danmuRegexSettings, out var invalidRuleNumber))
         {
             SetStatus(Localization.Format("Settings.DanmuRegexInvalidPattern", invalidRuleNumber));
@@ -331,6 +344,8 @@ public sealed class SettingsView : UserControl
                 ExtraSystemPrompt = translation.ExtraPrompt ?? "",
                 DisplayMode = (TranslationDisplayMode)translation.DisplayMode,
                 BacklogMode = (TranslationBacklogMode)translation.BacklogMode,
+                CacheCapacity = (int)cacheCapacity,
+                CacheTtlMinutes = (int)cacheTtlMinutes,
                 Glossary = terms.SelectMany(entry => entry.GetEntries()).ToList()
             },
             Reading = new()

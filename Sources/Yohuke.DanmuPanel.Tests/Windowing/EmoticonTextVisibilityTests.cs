@@ -242,7 +242,7 @@ public sealed class EmoticonTextVisibilityTests
         }
     }
 
-    /// <summary>消息行并存的普通和紧凑正文只为可见分支创建注音，模式切换恢复正确内容。</summary>
+    /// <summary>消息行仅创建当前正文分支，切换模式释放原分支，宽度变化复用新分支。</summary>
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]
@@ -265,22 +265,42 @@ public sealed class EmoticonTextVisibilityTests
         {
             window.Show();
             await EmoticonImageTestHelper.LoadAsync(window);
-            var regular = Assert.Single(row.GetVisualDescendants().OfType<EmoticonTextBlock>(),
-                block => block.Classes.Contains("regularFeedContent") && block.Classes.Contains("originalText") &&
-                    !block.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any());
-            var marquee = Assert.Single(row.GetVisualDescendants().OfType<HoverMarqueeTextBlock>(),
-                block => block.Classes.Contains("originalText") &&
-                    !block.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any());
-            var marqueeText = Assert.IsType<EmoticonTextBlock>(Assert.IsType<ScrollViewer>(marquee.Content).Content);
-            Assert.Equal(!compact, regular.HasAnnotations);
-            Assert.Equal(compact, marqueeText.HasAnnotations);
+            var original = FindOriginal(compact);
+            Assert.True(original.HasAnnotations);
 
             host.Classes.Set("compactDanmu", !compact);
             await EmoticonImageTestHelper.LoadAsync(window);
 
-            Assert.Equal(compact, regular.HasAnnotations);
-            Assert.Equal(!compact, marqueeText.HasAnnotations);
-            Assert.Equal("你好世界", compact ? marqueeText.Text : regular.Text);
+            var switched = FindOriginal(!compact);
+            Assert.Null(original.GetVisualRoot());
+            Assert.False(original.HasAnnotations);
+            Assert.True(switched.HasAnnotations);
+            Assert.Equal("你好世界", switched.ContentText);
+
+            window.Width = 520;
+            await EmoticonImageTestHelper.LoadAsync(window);
+            Assert.Same(switched, FindOriginal(!compact));
+
+            row.DataContext = null;
+            Assert.Null(switched.DataContext);
+            Assert.Null(switched.GetVisualRoot());
+            row.DataContext = new MessageItemViewModel(new()
+            {
+                Kind = MessageKind.Danmu, UserName = "新观众", Content = "晚上好"
+            }, new() { ShowDanmuPinyin = true }, new PinyinService());
+            await EmoticonImageTestHelper.LoadAsync(window);
+            Assert.Same(switched, FindOriginal(!compact));
+            Assert.Equal("晚上好", switched.ContentText);
+
+            EmoticonTextBlock FindOriginal(bool marqueeMode)
+            {
+                var branches = row.GetVisualDescendants().OfType<Control>()
+                    .Where(block => block.Classes.Contains("originalText")).ToArray();
+                var branch = Assert.Single(branches);
+                return marqueeMode
+                    ? Assert.Single(Assert.IsType<HoverMarqueeTextBlock>(branch).GetVisualDescendants().OfType<EmoticonTextBlock>())
+                    : Assert.IsType<EmoticonTextBlock>(branch);
+            }
         }
         finally
         {

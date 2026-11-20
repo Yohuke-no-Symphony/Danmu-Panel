@@ -358,6 +358,10 @@ public sealed class SettingsShareServiceTests
     [InlineData("\"Translation\":{\"Glossary\":[{}]}")]
     [InlineData("\"Translation\":{\"DisplayMode\":-1}")]
     [InlineData("\"Translation\":{\"BacklogMode\":100}")]
+    [InlineData("\"Translation\":{\"CacheCapacity\":-1}")]
+    [InlineData("\"Translation\":{\"CacheCapacity\":10001}")]
+    [InlineData("\"Translation\":{\"CacheTtlMinutes\":0}")]
+    [InlineData("\"Translation\":{\"CacheTtlMinutes\":43201}")]
     [InlineData("\"Reading\":null")]
     [InlineData("\"Reading\":{\"GiftReadResetPolicy\":3}")]
     [InlineData("\"Reading\":{\"GiftAutoPinMinimum\":-0.01}")]
@@ -483,6 +487,8 @@ public sealed class SettingsShareServiceTests
                 ExtraSystemPrompt = "保持人名",
                 DisplayMode = TranslationDisplayMode.TranslationOnly,
                 BacklogMode = TranslationBacklogMode.AllMessages,
+                CacheCapacity = 2400,
+                CacheTtlMinutes = 360,
                 Glossary =
                 [
                     new() { Source = "主播", Target = "配信者", TargetLanguage = "ja-JP" },

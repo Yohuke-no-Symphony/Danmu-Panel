@@ -33,12 +33,11 @@ public sealed class TranslationRegexBlockingTests
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var completedCount = 0;
         var shouldBlock = enabled || blockTranslation;
-        await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient((request, _) =>
         {
             requests.Enqueue(request.Text);
             return Task.FromResult("translated " + request.Text);
-        }), cache);
+        }));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.Error += errors.Enqueue;
         scheduler.PendingChanged += (room, kind) =>
@@ -89,12 +88,11 @@ public sealed class TranslationRegexBlockingTests
         var currentFingerprint = TranslationRequestFactory.GetConfigurationFingerprint(currentSettings);
         var requestSeen = new TaskCompletionSource<TranslationRequest>(TaskCreationOptions.RunContinuationsAsynchronously);
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient((request, _) =>
         {
             requestSeen.TrySetResult(request);
             return Task.FromResult("復元した翻訳");
-        }), cache);
+        }));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.Completed += (_, _) => completed.TrySetResult();
 
@@ -122,8 +120,7 @@ public sealed class TranslationRegexBlockingTests
         Assert.True(await store.FailAsync(Assert.Single(await store.GetPendingAsync(10)), "skipped:regex"));
         var client = new ControlledTranslationClient();
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var cache = new SqliteTranslationCache(":memory:");
-        await using var service = new TranslationService(client, cache);
+        await using var service = new TranslationService(client);
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.Completed += (_, _) => completed.TrySetResult();
         settings.Enabled = false;
@@ -156,7 +153,6 @@ public sealed class TranslationRegexBlockingTests
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
         var errors = new ConcurrentQueue<string>();
-        await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient(async (_, token) =>
         {
             if (Interlocked.Increment(ref calls) == 1)
@@ -173,7 +169,7 @@ public sealed class TranslationRegexBlockingTests
                 }
             }
             return "current translation";
-        }), cache);
+        }));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.Error += errors.Enqueue;
         scheduler.PendingChanged += (_, _) => skipped.TrySetResult();
@@ -213,10 +209,13 @@ public sealed class TranslationRegexBlockingTests
         var client = new ControlledTranslationClient();
         var skipped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var cache = new SqliteTranslationCache(":memory:");
         var request = TranslationRequestFactory.Create(settings, message.Content)!;
-        await cache.SetAsync(request.CacheKey, "cached old translation");
-        await using var service = new TranslationService(client, cache);
+        var calls = 0;
+        await using var service = new TranslationService(new DelegateTranslationClient((value, cancellationToken) =>
+            Interlocked.Increment(ref calls) == 1
+                ? Task.FromResult("cached old translation")
+                : client.TranslateAsync(value, cancellationToken)));
+        Assert.Equal("cached old translation", await service.TranslateAsync(request));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.PendingChanged += (_, _) => skipped.TrySetResult();
         scheduler.Completed += (_, _) => completed.TrySetResult();
@@ -230,9 +229,9 @@ public sealed class TranslationRegexBlockingTests
         await client.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         client.Response.TrySetResult("fresh translation");
         await completed.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.Equal(1, client.Calls);
         Assert.Equal("fresh translation", (await store.GetByIdAsync(message.Id))!.Translation);
-        Assert.Equal("fresh translation", await cache.GetAsync(request.CacheKey));
+        Assert.Equal("fresh translation", await service.TranslateAsync(request));
+        Assert.Equal(1, client.Calls);
     }
 
     /// <summary>同一有效翻译规则的重新保存和显示模式切换不取消或重复请求。</summary>
@@ -247,8 +246,7 @@ public sealed class TranslationRegexBlockingTests
         await store.AppendAsync(Message("allowed in flight"), new(), TranslationRequestFactory.GetConfigurationFingerprint(settings));
         var client = new ControlledTranslationClient();
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var cache = new SqliteTranslationCache(":memory:");
-        await using var service = new TranslationService(client, cache);
+        await using var service = new TranslationService(client);
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.Completed += (_, _) => completed.TrySetResult();
         await scheduler.StartAsync(settings, danmuFilter: Filter(false, true));
@@ -281,7 +279,6 @@ public sealed class TranslationRegexBlockingTests
         var skipped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var completions = new ConcurrentQueue<string>();
         var calls = 0;
-        await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient(async (_, token) =>
         {
             Interlocked.Increment(ref calls);
@@ -296,7 +293,7 @@ public sealed class TranslationRegexBlockingTests
                 cancelled.TrySetResult();
                 throw;
             }
-        }), cache);
+        }));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.PendingChanged += (_, _) => skipped.TrySetResult();
         scheduler.Completed += (_, args) => completions.Enqueue(args.Translation);
@@ -328,12 +325,11 @@ public sealed class TranslationRegexBlockingTests
         var skipped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var requests = new ConcurrentQueue<string>();
-        await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient((request, _) =>
         {
             requests.Enqueue(request.Text);
             return Task.FromResult("translated " + request.Text);
-        }), cache);
+        }));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.PendingChanged += (_, _) => skipped.TrySetResult();
         scheduler.Completed += (_, args) =>
@@ -383,12 +379,11 @@ public sealed class TranslationRegexBlockingTests
         });
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var requests = new ConcurrentQueue<string>();
-        await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient((request, _) =>
         {
             requests.Enqueue(request.Text);
             return Task.FromResult("translated");
-        }), cache);
+        }));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.Completed += (_, _) => completed.TrySetResult();
 
@@ -430,12 +425,11 @@ public sealed class TranslationRegexBlockingTests
         var errors = new ConcurrentQueue<string>();
         var completedCount = 0;
         filter.PatternTimedOut += _ => timedOut.TrySetResult();
-        await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient((request, _) =>
         {
             requests.Enqueue(request.Text);
             return Task.FromResult(request.Text == "aaa" ? "restored short message" : "long message");
-        }), cache);
+        }));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.Error += errors.Enqueue;
         scheduler.PendingChanged += (_, _) => skipped.TrySetResult();

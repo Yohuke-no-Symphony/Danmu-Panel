@@ -24,7 +24,11 @@ internal sealed class MessageFeedRow : Button
     private static readonly StyledProperty<MessageUserNameRole> UserNameRoleProperty =
         AvaloniaProperty.Register<MessageFeedRow, MessageUserNameRole>(nameof(MessageItemViewModel.UserNameRole));
     private static MessageFeedRowTemplates Templates { get; } = new();
+    private readonly MessageKind kind;
+    private readonly IUserAvatarService? avatars;
+    private readonly EmoticonBitmapCache? bitmapCache;
     private readonly bool canCopy;
+    private bool isEventSummary;
     private bool isCopyHoldEligible;
     private bool suppressClick;
     private Point copyPressPosition;
@@ -42,6 +46,9 @@ internal sealed class MessageFeedRow : Button
 
     internal MessageFeedRow(MessageKind kind, IUserAvatarService? avatars = null, EmoticonBitmapCache? bitmapCache = null)
     {
+        this.kind = kind;
+        this.avatars = avatars;
+        this.bitmapCache = bitmapCache;
         this.Bind(IsSpecialAttentionProperty, new Binding(nameof(MessageItemViewModel.IsSpecialAttention)));
         this.Bind(IsPingedProperty, new Binding(nameof(MessageItemViewModel.IsPinged)));
         if (kind == MessageKind.Danmu)
@@ -53,20 +60,10 @@ internal sealed class MessageFeedRow : Button
         Gestures.SetIsHoldingEnabled(this, canCopy);
         Gestures.SetIsHoldWithMouseEnabled(this, canCopy);
         Holding += OnHolding;
-        var content = Templates.Build(kind);
-        foreach (var redPocket in content.GetVisualDescendants().OfType<RedPocketContentSurface>())
+        if (kind != MessageKind.Danmu)
         {
-            redPocket.AvatarService = avatars;
+            SetRowContent(false);
         }
-        foreach (var avatar in content.GetVisualDescendants().OfType<UserAvatarView>())
-        {
-            avatar.AvatarService = avatars;
-        }
-        foreach (var body in content.GetVisualDescendants().OfType<MessageBodyPanel>())
-        {
-            body.SetServices(avatars, bitmapCache);
-        }
-        Content = content;
         HorizontalAlignment = HorizontalAlignment.Stretch;
         HorizontalContentAlignment = HorizontalAlignment.Stretch;
         Classes.Add(kind == MessageKind.SuperChat ? "scFeedButton" : "danmuFeedButton");
@@ -75,6 +72,16 @@ internal sealed class MessageFeedRow : Button
             RenderTransform = new TranslateTransform();
             Classes.Add("messageCardButton");
         }
+    }
+
+    /// <inheritdoc />
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        if (Content is null)
+        {
+            SetRowContent(DataContext is MessageItemViewModel { IsEventSummary: true });
+        }
+        return base.MeasureOverride(availableSize);
     }
 
     /// <inheritdoc />
@@ -148,6 +155,11 @@ internal sealed class MessageFeedRow : Button
         CancelCopyInteraction();
         PseudoClasses.Set(":pinged", false);
         base.OnDataContextChanged(e);
+        if (kind == MessageKind.Danmu && DataContext is MessageItemViewModel item &&
+            (Content is null || isEventSummary != item.IsEventSummary))
+        {
+            SetRowContent(item.IsEventSummary);
+        }
         UpdatePingState();
     }
 
@@ -196,6 +208,33 @@ internal sealed class MessageFeedRow : Button
     {
         PseudoClasses.Set(":pinged", this.GetVisualRoot() is not null && IsEffectivelyVisible &&
             DataContext is MessageItemViewModel { IsPinged: true });
+    }
+
+    private void SetRowContent(bool showSummary)
+    {
+        isEventSummary = showSummary;
+        Content = null;
+        var content = Templates.Build(kind, showSummary);
+        if (content is MessageEventSummarySurface summary)
+        {
+            summary.SetServices(avatars, bitmapCache);
+        }
+        foreach (var descendant in content.GetVisualDescendants())
+        {
+            switch (descendant)
+            {
+                case RedPocketContentSurface redPocket:
+                    redPocket.AvatarService = avatars;
+                    break;
+                case UserAvatarView avatar:
+                    avatar.AvatarService = avatars;
+                    break;
+                case MessageBodyPanel body:
+                    body.SetServices(avatars, bitmapCache);
+                    break;
+            }
+        }
+        Content = content;
     }
 
     private void OnHolding(object? sender, HoldingRoutedEventArgs e)

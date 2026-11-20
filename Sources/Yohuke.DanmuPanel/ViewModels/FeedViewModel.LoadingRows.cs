@@ -34,10 +34,4 @@ public sealed partial class FeedViewModel
         }
         NotifyRegions();
     }
-
-    private Task SynchronizeScrollingRowsAsync(CancellationToken cancellationToken)
-    {
-        return FeedCollectionSynchronizer.SynchronizeAsync(ScrollingRows, ScrollingItems,
-            cancellationToken, static row => row is MessageLoadingPlaceholderViewModel);
-    }
 }

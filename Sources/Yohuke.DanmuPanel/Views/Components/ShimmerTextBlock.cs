@@ -13,6 +13,7 @@ public sealed class ShimmerTextBlock : TemplatedControl
 {
     private readonly TextBlock textBlock = new();
     private readonly List<Visual> visibilityAncestors = [];
+    private TextBlock? translationLineMetrics;
     private CompositionCustomVisual? animationVisual;
     private bool isAttached;
     private bool isInViewport;
@@ -23,6 +24,8 @@ public sealed class ShimmerTextBlock : TemplatedControl
 
     public static readonly StyledProperty<string?> TextProperty = TextBlock.TextProperty.AddOwner<ShimmerTextBlock>();
     public static readonly StyledProperty<double> LineSpacingProperty = TextBlock.LineSpacingProperty.AddOwner<ShimmerTextBlock>();
+    public static readonly StyledProperty<bool> MatchTranslationLineHeightProperty =
+        AvaloniaProperty.Register<ShimmerTextBlock, bool>(nameof(MatchTranslationLineHeight));
 
     public double LineSpacing
     {
@@ -34,6 +37,13 @@ public sealed class ShimmerTextBlock : TemplatedControl
     {
         get => GetValue(TextProperty);
         set => SetValue(TextProperty, value);
+    }
+
+    /// <summary>使用与完成的单行译文一致的自然行高。</summary>
+    public bool MatchTranslationLineHeight
+    {
+        get => GetValue(MatchTranslationLineHeightProperty);
+        set => SetValue(MatchTranslationLineHeightProperty, value);
     }
 
     static ShimmerTextBlock()
@@ -52,13 +62,30 @@ public sealed class ShimmerTextBlock : TemplatedControl
             isInViewport = args.EffectiveViewport.Intersects(new Rect(Bounds.Size));
             UpdateAnimation();
         };
-        PropertyChanged += (_, args) =>
+    }
+
+    /// <inheritdoc />
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsVisibleProperty)
         {
-            if (args.Property == IsVisibleProperty)
-            {
-                UpdateAnimation();
-            }
-        };
+            UpdateAnimation();
+        }
+        if (change.Property == MatchTranslationLineHeightProperty && !MatchTranslationLineHeight)
+        {
+            translationLineMetrics = null;
+            ClearValue(TextBlock.LineHeightProperty);
+        }
+        if (MatchTranslationLineHeight && (change.Property == MatchTranslationLineHeightProperty ||
+            change.Property == FontFamilyProperty || change.Property == FontSizeProperty ||
+            change.Property == FontStyleProperty || change.Property == FontWeightProperty ||
+            change.Property == FontStretchProperty))
+        {
+            translationLineMetrics ??= new() { Text = "\u200B" };
+            SetCurrentValue(TextBlock.LineHeightProperty,
+                MessageTranslationTextBlock.MeasureNaturalLineHeight(translationLineMetrics, this));
+        }
     }
 
     /// <inheritdoc />

@@ -29,13 +29,14 @@ public sealed class AppearanceRenderingTests
         var settings = runtime.Configuration.Settings;
         settings.CompactDanmuDisplay = compact;
         settings.CompactDanmuWrap = false;
+        var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation);
         var record = new MessageRecord
         {
             RoomTabId = "tab", RoomId = "123", Kind = MessageKind.Danmu,
-            UserName = "观众", Content = "原文", Translation = "translated text",
-            TranslationFingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation)
+            UserName = "观众", Content = "原文"
         };
-        await runtime.Messages.AppendAsync(record, new());
+        await runtime.Messages.AppendAsync(record, new(), fingerprint);
+        Assert.True(await runtime.Messages.ApplyTranslationAsync(record.Id, record.Generation, fingerprint, "translated text"));
         var first = new MessageFeedView(runtime, MessageKind.Danmu, exception => throw exception);
         var second = new MessageFeedView(runtime, MessageKind.Danmu, exception => throw exception);
         var window = new Window { Width = 800, Height = 400, Content = first };
@@ -54,17 +55,21 @@ public sealed class AppearanceRenderingTests
             foreach (var view in new[] { first, second })
             {
                 var body = Assert.Single(view.GetVisualDescendants().OfType<MessageBodyPanel>(), control => control.IsEffectivelyVisible);
-                var original = body.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("originalText"));
-                var translation = body.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("translatedText"));
-                var originalMarquee = body.GetVisualDescendants().OfType<HoverMarqueeTextBlock>().Single(text => text.Classes.Contains("originalText"));
-                var translationMarquee = body.GetVisualDescendants().OfType<HoverMarqueeTextBlock>().Single(text => text.Classes.Contains("translatedText"));
-                AssertColor("#123456", original.Foreground);
-                AssertColor("#80654321", translation.Foreground);
-                AssertColor("#123456", originalMarquee.Foreground);
-                AssertColor("#80654321", translationMarquee.Foreground);
+                var original = Assert.Single(body.GetVisualDescendants().OfType<Control>(), control => control.Classes.Contains("originalText"));
+                var translation = Assert.Single(body.GetVisualDescendants().OfType<Control>(), control => control.Classes.Contains("translatedText"));
+                if (compact)
+                {
+                    AssertColor("#123456", Assert.IsType<HoverMarqueeTextBlock>(original).Foreground);
+                    AssertColor("#80654321", Assert.IsType<HoverMarqueeTextBlock>(translation).Foreground);
+                }
+                else
+                {
+                    AssertColor("#123456", Assert.IsAssignableFrom<TextBlock>(original).Foreground);
+                    AssertColor("#80654321", Assert.IsAssignableFrom<TextBlock>(translation).Foreground);
+                }
+                Assert.True(original.IsEffectivelyVisible);
+                Assert.True(translation.IsEffectivelyVisible);
                 Assert.Equal(1, translation.Opacity);
-                Assert.Equal(1, translationMarquee.Opacity);
-                Assert.Equal(compact, originalMarquee.IsVisible);
             }
         }
         finally

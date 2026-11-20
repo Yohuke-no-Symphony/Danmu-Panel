@@ -5,6 +5,7 @@ using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Services.Appearance;
 using Yohuke.DanmuPanel.Services.Messages;
+using Yohuke.DanmuPanel.Services.Translation;
 
 namespace Yohuke.DanmuPanel.Services.Settings;
 
@@ -150,6 +151,7 @@ public sealed class SettingsShareService
         {
             throw new InvalidDataException("The translation settings or glossary are invalid.");
         }
+        TranslationCacheSettingsValidator.Validate(translation);
         if (translation.Enabled && (!Uri.TryCreate(translation.BaseUrl, UriKind.Absolute, out var endpoint) ||
             endpoint.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(endpoint.Query) ||
             !string.IsNullOrEmpty(endpoint.Fragment) || !string.IsNullOrEmpty(endpoint.UserInfo) ||

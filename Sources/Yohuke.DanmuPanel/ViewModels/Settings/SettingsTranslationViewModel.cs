@@ -17,6 +17,8 @@ public sealed partial class SettingsTranslationViewModel : ObservableObject
     [ObservableProperty] private string? extraPrompt;
     [ObservableProperty] private int displayMode;
     [ObservableProperty] private int backlogMode;
+    [ObservableProperty] private decimal? cacheCapacity;
+    [ObservableProperty] private decimal? cacheTtlMinutes;
     [ObservableProperty] private GlossaryRow? selectedGlossary;
     private TranslationProviderOption selectedProvider;
     private TranslationLanguageOption selectedLanguage;
@@ -26,6 +28,9 @@ public sealed partial class SettingsTranslationViewModel : ObservableObject
         "Settings.Bilingual", "Settings.TranslationOnly");
     public IReadOnlyList<SettingsChoiceOption> BacklogModeOptions { get; } = SettingsChoiceOption.Create(
         "Settings.Realtime", "Settings.AllMessages");
+    public int MaximumCacheCapacity => TranslationSettings.MAX_CACHE_CAPACITY;
+    public int MinimumCacheTtlMinutes => TranslationSettings.MIN_CACHE_TTL_MINUTES;
+    public int MaximumCacheTtlMinutes => TranslationSettings.MAX_CACHE_TTL_MINUTES;
     public IReadOnlyList<TranslationLanguageOption> Languages { get; }
     public ObservableCollection<GlossaryRow> Glossary { get; }
     public IAsyncRelayCommand AddGlossaryTermCommand { get; }
@@ -81,6 +86,8 @@ public sealed partial class SettingsTranslationViewModel : ObservableObject
         extraPrompt = snapshot.ExtraSystemPrompt;
         displayMode = (int)snapshot.DisplayMode;
         backlogMode = (int)snapshot.BacklogMode;
+        cacheCapacity = snapshot.CacheCapacity;
+        cacheTtlMinutes = snapshot.CacheTtlMinutes;
         selectedProvider = Providers.FirstOrDefault(option => string.Equals(option.BaseUrl,
             snapshot.BaseUrl.Trim().TrimEnd('/'), StringComparison.OrdinalIgnoreCase)) ?? Providers[^1];
         var languages = TranslationLanguageOption.Presets.ToList();

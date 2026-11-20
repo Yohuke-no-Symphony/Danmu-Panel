@@ -66,22 +66,27 @@ public sealed class RedPocketViewModel : ObservableObject
         OnPropertyChanged(nameof(IsContentPending));
     }
 
-    internal static string FormatValue(RedPocketData data, bool includeGiftLabel = true)
+    internal static string FormatValue(RedPocketData data, bool includeGiftLabel = true, MessageDisplaySettings? display = null)
     {
         if (data.Type is 3 or 5 && (data.TotalBattery ?? data.TotalPrice) is { } battery)
         {
-            return Localization.Format("RedPocket.BatteryValue", battery / 100m);
+            return FormatText("RedPocket.BatteryValue", battery / 100m);
         }
         if (data.Type == 4)
         {
-            return Localization.Get("RedPocket.Intimacy");
+            return display?.GetText("RedPocket.Intimacy") ?? Localization.Get("RedPocket.Intimacy");
         }
         if (data.TotalPrice is { } price)
         {
-            return Localization.Format(includeGiftLabel ? "RedPocket.GiftValue" : "Panel.EventSummary.Value", price / 1000m);
+            return FormatText(includeGiftLabel ? "RedPocket.GiftValue" : "Panel.EventSummary.Value", price / 1000m);
         }
         return data.Price is { } senderPrice
-            ? Localization.Format("RedPocket.BatteryValue", senderPrice)
+            ? FormatText("RedPocket.BatteryValue", senderPrice)
             : "";
+
+        string FormatText(string key, decimal value)
+        {
+            return display?.FormatText(key, value) ?? Localization.Format(key, value);
+        }
     }
 }

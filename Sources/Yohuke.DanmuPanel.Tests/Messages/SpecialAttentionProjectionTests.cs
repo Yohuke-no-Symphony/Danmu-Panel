@@ -42,23 +42,26 @@ public sealed class SpecialAttentionProjectionTests
         Assert.True(added.IsSpecialAttention(99));
     }
 
-    /// <summary>同一可变配置中的关注变更仅通知强调状态，不重算正文、译文或拼音。</summary>
+    /// <summary>关注变更通知强调状态和昵称角色，保留已生成的正文拼音。</summary>
     [Fact]
-    public void InPlaceMembershipChangesNotifyOnlyTheAttentionState()
+    public void InPlaceMembershipChangesNotifyAttentionAndNameRole()
     {
         var settings = new PanelSettings { ShowDanmuPinyin = true };
         var record = new MessageRecord { Kind = MessageKind.Danmu, UserUid = 42, UserName = "用户", Content = "你好" };
         var model = new MessageItemViewModel(record, settings, new PinyinService());
         var annotations = model.ContentPinyin;
         var changed = new List<string?>();
+        string[] expectedChanges = [nameof(MessageItemViewModel.IsSpecialAttention), nameof(MessageItemViewModel.UserNameRole)];
         model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
         Assert.False(model.IsSpecialAttention);
+        Assert.Equal(MessageUserNameRole.Regular, model.UserNameRole);
 
         settings.SpecialAttention.Users.Add(new() { UserUid = 42 });
         model.Update(record, settings);
 
         Assert.True(model.IsSpecialAttention);
-        Assert.Equal(new[] { nameof(MessageItemViewModel.IsSpecialAttention) }, changed);
+        Assert.Equal(MessageUserNameRole.SpecialAttention, model.UserNameRole);
+        Assert.Equal(expectedChanges, changed);
         Assert.Same(annotations, model.ContentPinyin);
         changed.Clear();
         settings.SpecialAttention.Users[0].DisplayName = "renamed";
@@ -69,7 +72,8 @@ public sealed class SpecialAttentionProjectionTests
         model.Update(record, settings);
 
         Assert.False(model.IsSpecialAttention);
-        Assert.Equal(new[] { nameof(MessageItemViewModel.IsSpecialAttention) }, changed);
+        Assert.Equal(MessageUserNameRole.Regular, model.UserNameRole);
+        Assert.Equal(expectedChanges, changed);
         Assert.Same(annotations, model.ContentPinyin);
     }
 

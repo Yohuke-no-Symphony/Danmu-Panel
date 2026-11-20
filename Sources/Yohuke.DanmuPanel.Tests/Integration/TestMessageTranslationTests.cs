@@ -23,13 +23,12 @@ public sealed class TestMessageTranslationTests
     {
         using var directory = new MessageStoreTestDirectory();
         await using var store = new SqliteMessageStore(directory.DatabasePath);
-        await using var cache = new SqliteTranslationCache(Path.Combine(directory.Path, "translations.db"));
         var requested = new TaskCompletionSource<TranslationRequest>(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var translationService = new TranslationService(new DelegateTranslationClient((request, _) =>
         {
             requested.TrySetResult(request);
             return Task.FromResult("配信ありがとうございます");
-        }), cache);
+        }));
         await using var scheduler = new TranslationScheduler(store, translationService);
         var completion = new TaskCompletionSource<TranslationCompletedEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
         scheduler.Completed += (_, args) => completion.TrySetResult(args);
@@ -99,13 +98,12 @@ public sealed class TestMessageTranslationTests
     {
         using var directory = new MessageStoreTestDirectory();
         await using var store = new SqliteMessageStore(directory.DatabasePath);
-        await using var cache = new SqliteTranslationCache(Path.Combine(directory.Path, "translations.db"));
         var calls = 0;
         await using var translationService = new TranslationService(new DelegateTranslationClient((_, _) =>
         {
             Interlocked.Increment(ref calls);
             return Task.FromResult("こんばんは");
-        }), cache);
+        }));
         await using var scheduler = new TranslationScheduler(store, translationService);
         var completions = Channel.CreateUnbounded<TranslationCompletedEventArgs>();
         scheduler.Completed += (_, args) => completions.Writer.TryWrite(args);
@@ -123,7 +121,6 @@ public sealed class TestMessageTranslationTests
         var first = await completions.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(1, Volatile.Read(ref calls));
         var request = Assert.IsType<TranslationRequest>(TranslationRequestFactory.Create(settings.Translation, "Good evening", []));
-        Assert.Equal("こんばんは", await cache.GetAsync(request.CacheKey));
 
         Assert.Equal(1, await service.AddAsync(room, new()
         {

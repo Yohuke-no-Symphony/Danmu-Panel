@@ -50,9 +50,7 @@ public sealed class TranslationPlaceholderTests
             Pump(window);
             var item = Assert.Single(view.Model.Items);
             var row = FindRow(view, message.Id);
-            var placeholder = Assert.Single(row.GetVisualDescendants().OfType<ShimmerTextBlock>(),
-                value => !value.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any());
-            Assert.False(placeholder.IsEffectivelyVisible);
+            Assert.Empty(row.GetVisualDescendants().OfType<ShimmerTextBlock>());
 
             settings.Translation.Enabled = true;
             await view.Model.RefreshAsync();
@@ -61,6 +59,7 @@ public sealed class TranslationPlaceholderTests
 
             Assert.True(item.IsTranslating);
             Assert.True(item.ShowOriginal);
+            var placeholder = Assert.Single(row.GetVisualDescendants().OfType<ShimmerTextBlock>());
             Assert.True(placeholder.IsEffectivelyVisible);
             Assert.True(placeholder.IsShimmering);
             Assert.Equal(Localization.Get("Panel.Translating"), placeholder.Text);
@@ -78,12 +77,15 @@ public sealed class TranslationPlaceholderTests
             await view.Model.RefreshAsync();
             await view.Model.WaitForPresentationAsync();
             Pump(window);
-            Assert.False(placeholder.IsEffectivelyVisible);
+            Assert.Null(placeholder.GetVisualRoot());
             Assert.False(placeholder.IsShimmering);
             settings.Translation.Enabled = true;
             await view.Model.RefreshAsync();
             await view.Model.WaitForPresentationAsync();
             Pump(window);
+            var previousPlaceholder = placeholder;
+            placeholder = Assert.Single(row.GetVisualDescendants().OfType<ShimmerTextBlock>());
+            Assert.NotSame(previousPlaceholder, placeholder);
             Assert.True(placeholder.IsEffectivelyVisible);
 
             var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation);
@@ -95,7 +97,7 @@ public sealed class TranslationPlaceholderTests
             Assert.Same(item, Assert.Single(view.Model.Items));
             Assert.Same(row, FindRow(view, message.Id));
             Assert.False(item.IsTranslating);
-            Assert.False(placeholder.IsEffectivelyVisible);
+            Assert.Null(placeholder.GetVisualRoot());
             Assert.False(placeholder.IsShimmering);
             Assert.True(item.HasTranslation);
             Assert.Equal(mode == TranslationDisplayMode.Bilingual, item.ShowOriginal);
@@ -156,7 +158,7 @@ public sealed class TranslationPlaceholderTests
             Assert.True(item.ShowOriginal);
             var translationLine = body.GetVisualDescendants().OfType<Grid>().Single(grid => grid.Classes.Contains("translationLine"));
             Assert.False(translationLine.IsVisible);
-            Assert.False(Assert.Single(body.GetVisualDescendants().OfType<ShimmerTextBlock>()).IsShimmering);
+            Assert.Empty(body.GetVisualDescendants().OfType<ShimmerTextBlock>());
             Assert.Single(row.GetVisualDescendants().OfType<Control>(), control =>
                 control.Classes.Contains("originalText") && control.IsEffectivelyVisible);
             Assert.DoesNotContain(row.GetVisualDescendants().OfType<Control>(), control =>

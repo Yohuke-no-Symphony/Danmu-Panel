@@ -16,18 +16,18 @@ public sealed partial class FeedViewModel
             Dispatcher.UIThread.Post(OnSpecialAttentionChanged);
             return;
         }
-        var current = MessageDisplaySettings.Capture(runtime.Configuration.Settings, displaySettings, runtime.DanmuFilter);
-        if (ReferenceEquals(current, displaySettings))
+        Interlocked.Increment(ref projectionOptionsRevision);
+        var followed = runtime.Configuration.Settings.SpecialAttention.Users.Select(user => user.UserUid).ToHashSet();
+        if (!Items.Any(item => item.Record.Kind == MessageKind.Danmu && item.IsSpecialAttention != followed.Contains(item.UserUid)))
         {
             return;
         }
-        displaySettings = current;
         BeginViewportUpdate();
         try
         {
             foreach (var item in Items)
             {
-                item.Apply(item.Record, current, item.TranslationPending);
+                item.UpdateSpecialAttention(followed.Contains(item.UserUid));
             }
         }
         finally

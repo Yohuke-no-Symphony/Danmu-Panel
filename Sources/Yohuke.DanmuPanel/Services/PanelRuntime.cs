@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using Yohuke.DanmuPanel.I18n;
+using Yohuke.DanmuPanel.Models.Logging;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Models.Translation;
@@ -16,7 +18,8 @@ public sealed partial class PanelRuntime : IAsyncDisposable
     private readonly HttpClient translationHttp = new();
     private readonly TranslationScheduler scheduler;
     private readonly TranslationService translationService;
-    private readonly SqliteTranslationCache translationCache;
+    private readonly TranslationCacheSnapshotStore translationCacheSnapshot;
+    private readonly AppDirectoryService directories;
     private readonly Dictionary<string, string> translationCacheFingerprints;
     private readonly SemaphoreSlim lifecycle = new(1, 1);
     private readonly BilibiliAccountSessionBinding accountBinding;
@@ -63,9 +66,13 @@ public sealed partial class PanelRuntime : IAsyncDisposable
         configuration.Accounts.CollectionChanged += OnAccountsChanged;
         var database = Path.Combine(configurationStore.DirectoryPath, "messages.db");
         Messages = new(database);
-        var directories = new AppDirectoryService(configurationStore.DirectoryPath);
-        translationCache = new(directories.TranslationCacheDatabasePath);
-        translationService = new(new OpenAiCompatibleTranslationClient(translationHttp), translationCache);
+        directories = new(configurationStore.DirectoryPath);
+        var translation = configuration.Settings.Translation;
+        translationService = new(new OpenAiCompatibleTranslationClient(translationHttp), translation.CacheCapacity,
+            translation.CacheTtlMinutes);
+        translationCacheSnapshot = new(directories.TranslationCacheSnapshotPath, translationService, error =>
+            StartupLog.Append(Localization.Get("Panel.Log.TranslationCacheSnapshotFailed"), AppLogLevel.WARNING,
+                Localization.Get("Panel.Log.Translation"), error, [Configuration.Settings.Translation.ApiKey]));
         scheduler = new(Messages, translationService);
         TestMessages = new(Messages, () => Configuration.Settings, roomId => InvalidateFeeds(roomId, null),
             () => scheduler.NotifyWorkAvailable());
@@ -88,12 +95,31 @@ public sealed partial class PanelRuntime : IAsyncDisposable
         UserAvatars = new(directories, Avatars);
     }
 
-    /// <summary>应用保存的阅读规则并恢复翻译队列。</summary>
-    public async Task InitializeAsync()
+    /// <summary>恢复翻译缓存和待办、应用阅读规则并校验已保存的账号。</summary>
+    public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        await Messages.ReevaluateReadOptionsAsync(Configuration.Settings.Reading);
-        await scheduler.StartAsync(Configuration.Settings.Translation, danmuFilter: DanmuFilter);
-        await Task.WhenAll(Configuration.Accounts.Select(account => AccountSessions.ValidateAsync(account.Id)));
+        await RestoreTranslationCacheAsync(cancellationToken);
+        await InitializeMessagesAsync(cancellationToken);
+        await ValidateAccountsAsync(cancellationToken);
+    }
+
+    internal Task RestoreTranslationCacheAsync(CancellationToken cancellationToken)
+    {
+        return translationCacheSnapshot.RestoreAsync(cancellationToken);
+    }
+
+    internal async Task InitializeMessagesAsync(CancellationToken cancellationToken)
+    {
+        await Messages.ReevaluateReadOptionsAsync(Configuration.Settings.Reading, cancellationToken);
+        await scheduler.StartAsync(Configuration.Settings.Translation, cancellationToken, DanmuFilter);
+    }
+
+    internal async Task ValidateAccountsAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await Task.WhenAll(Configuration.Accounts.Select(account => AccountSessions.ValidateAsync(account.Id,
+            cancellationToken: cancellationToken)));
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     /// <summary>读取房间监听状态。</summary>
@@ -135,9 +161,11 @@ public sealed partial class PanelRuntime : IAsyncDisposable
         Configuration.Settings.Translation.CacheFingerprints = translationCacheFingerprints;
         var danmuFilter = CreateDanmuFilter();
         var nextReceptionSettings = CaptureReceptionSettings();
+        var translation = nextReceptionSettings.Translation;
         await ConfigurationStore.SaveAsync(Configuration);
         await Messages.ReevaluateReadOptionsAsync(Configuration.Settings.Reading);
-        await scheduler.UpdateSettingsAsync(Configuration.Settings.Translation, danmuFilter: danmuFilter);
+        await scheduler.UpdateSettingsAsync(translation, danmuFilter: danmuFilter);
+        translationService.ConfigureCache(translation.CacheCapacity, translation.CacheTtlMinutes);
         DanmuFilter = danmuFilter;
         Volatile.Write(ref receptionSettings, nextReceptionSettings);
         SpecialAttentionChanged?.Invoke();
@@ -219,7 +247,13 @@ public sealed partial class PanelRuntime : IAsyncDisposable
     /// <summary>清空共享译文缓存，不修改已经保存的消息译文。</summary>
     public Task ClearTranslationCacheAsync()
     {
-        return translationCache.ClearAsync();
+        return Task.WhenAll(translationCacheSnapshot.ClearAsync(), Task.Run(() =>
+        {
+            foreach (var path in directories.LegacyTranslationCachePaths)
+            {
+                File.Delete(path);
+            }
+        }));
     }
 
     /// <summary>清空表情原图、头像及头像缓存资料。</summary>
@@ -235,7 +269,17 @@ public sealed partial class PanelRuntime : IAsyncDisposable
     }
 
     /// <inheritdoc/>
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
+    {
+        return DisposeCoreAsync(saveState: true);
+    }
+
+    internal ValueTask AbandonStartupAsync()
+    {
+        return DisposeCoreAsync(saveState: false);
+    }
+
+    private async ValueTask DisposeCoreAsync(bool saveState)
     {
         await lifecycle.WaitAsync();
         try
@@ -247,8 +291,11 @@ public sealed partial class PanelRuntime : IAsyncDisposable
             await scheduler.DisposeAsync();
             await Presentations.DisposeAsync();
             await translationService.DisposeAsync();
-            await translationCache.DisposeAsync();
-            await ConfigurationStore.SaveAsync(Configuration);
+            if (saveState)
+            {
+                await translationCacheSnapshot.SaveAsync();
+                await ConfigurationStore.SaveAsync(Configuration);
+            }
             Emoticons.Dispose();
             await UserAvatars.DisposeAsync();
             Avatars.Dispose();
@@ -256,8 +303,8 @@ public sealed partial class PanelRuntime : IAsyncDisposable
             Configuration.Accounts.CollectionChanged -= OnAccountsChanged;
             accountBinding.Dispose();
             AccountSessions.Dispose();
-            await Messages.DisposeAsync();
             translationHttp.Dispose();
+            await Messages.DisposeAsync();
         }
         finally
         {

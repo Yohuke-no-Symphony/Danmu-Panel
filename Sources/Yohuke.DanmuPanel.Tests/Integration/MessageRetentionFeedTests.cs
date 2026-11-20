@@ -1,9 +1,17 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Services;
 using Yohuke.DanmuPanel.Tests.Messages;
+using Yohuke.DanmuPanel.Tests.Windowing;
 using Yohuke.DanmuPanel.ViewModels;
+using Yohuke.DanmuPanel.Views;
 using Xunit;
 
 namespace Yohuke.DanmuPanel.Tests.Integration;
@@ -117,36 +125,117 @@ public sealed class MessageRetentionFeedTests
     [AvaloniaFact]
     public async Task ChangingCountKeepsTheCurrentHistoryBoundary()
     {
+        const int INITIAL_COUNT = 40;
+        const int ARRIVING_COUNT = 6;
         using var directory = new MessageStoreTestDirectory();
-        await using var runtime = new PanelRuntime(new(directory.Path), new()
+        var configuration = new PanelConfiguration
         {
-            Settings = new() { MessageRetentionCount = 5 }
-        });
+            Settings = new()
+            {
+                MessageRetentionCount = INITIAL_COUNT, CompactDanmuDisplay = true, CompactDanmuWrap = false,
+                ShowUserPinyin = false, ShowDanmuPinyin = false, ShowUserAvatars = false, AutoScrollLongMessages = false
+            }
+        };
+        configuration.Settings.Translation.Enabled = false;
+        await using var runtime = new PanelRuntime(new(directory.Path), configuration);
         await AppendAsync(runtime, MessageKind.Danmu, 0, 450);
-        using var model = new FeedViewModel(runtime, MessageKind.Danmu);
-        await model.SelectRoomAsync(Room());
-        var anchor = model.ScrollingItems[0];
-        model.IsReadingHistory = true;
-        await AppendAsync(runtime, MessageKind.Danmu, 450, 6);
-        await model.RefreshAsync();
-        Assert.Equal(11, model.ScrollingItems.Count);
+        var errors = new List<Exception>();
+        var view = new MessageFeedView(runtime, MessageKind.Danmu, errors.Add);
+        var model = view.Model;
+        var window = new Window { Width = 560, Height = 280, Content = view };
+        try
+        {
+            await model.SelectRoomAsync(Room());
+            await model.WaitForPresentationAsync();
+            window.Show();
+            await SettleAsync();
+            var list = Assert.Single(view.GetVisualDescendants().OfType<ListBox>(), value => value.Name == "ScrollingMessages");
+            var viewer = Assert.Single(list.GetVisualDescendants().OfType<ScrollViewer>(), value => value.TemplatedParent == list);
+            var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),
+                value => value.TemplatedParent == viewer);
+            var rowHeight = FirstVisible().Height;
+            var target = rowHeight * 10.5;
+            Assert.True(viewer.Offset.Y > target);
+            var gesture = ScrollGestureEventArgs.GetNextFreeId();
+            presenter.RaiseEvent(new ScrollGestureEventArgs(gesture, new(0, target - viewer.Offset.Y)));
+            presenter.RaiseEvent(new ScrollGestureEndedEventArgs(gesture));
+            await SettleAsync();
+            Assert.True(model.IsReadingHistory);
+            var (anchor, y, _) = FirstVisible();
+            var anchorIndex = model.ScrollingItems.IndexOf(anchor);
+            Assert.InRange(anchorIndex, ARRIVING_COUNT + 1, INITIAL_COUNT - 3);
 
-        runtime.Configuration.Settings.MessageRetentionCount = 2;
-        await runtime.ApplySettingsAsync();
-        await model.RefreshAsync();
+            await AppendAsync(runtime, MessageKind.Danmu, 450, ARRIVING_COUNT);
+            await model.RefreshAsync();
+            await SettleAsync();
+            Assert.Equal(INITIAL_COUNT, model.ScrollingItems.Count);
+            Assert.Equal("message 455", model.ScrollingItems[^1].Record.Content);
+            AssertAnchor();
 
-        Assert.Equal(11, model.ScrollingItems.Count);
-        Assert.Same(anchor, model.ScrollingItems[0]);
-        Assert.True(model.IsReadingHistory);
-        await model.LoadMoreAsync();
-        Assert.Equal(111, model.ScrollingItems.Count);
-        Assert.Same(anchor, model.ScrollingItems[100]);
+            var safeCount = INITIAL_COUNT - model.ScrollingItems.IndexOf(anchor);
+            Assert.InRange(safeCount, 3, INITIAL_COUNT - 1);
+            configuration.Settings.MessageRetentionCount = safeCount;
+            await runtime.ApplySettingsAsync();
+            await model.RefreshAsync();
+            await SettleAsync();
+            Assert.Equal(safeCount, model.ScrollingItems.Count);
+            Assert.Same(anchor, model.ScrollingItems[0]);
+            AssertAnchor();
 
-        await model.SelectRoomAsync(Room());
+            var beforeFreeze = model.ScrollingItems.ToArray();
+            configuration.Settings.MessageRetentionCount = 2;
+            await runtime.ApplySettingsAsync();
+            await model.RefreshAsync();
+            await SettleAsync();
+            Assert.Equal(beforeFreeze, model.ScrollingItems);
+            Assert.True(model.IsReadingHistory);
+            AssertAnchor();
 
-        Assert.Equal(2, model.ScrollingItems.Count);
-        Assert.False(model.IsReadingHistory);
-        Assert.NotNull(await runtime.Messages.GetByIdAsync(anchor.Record.Id));
+            await model.LoadMoreAsync();
+            await SettleAsync();
+            Assert.Equal(safeCount + 100, model.ScrollingItems.Count);
+            Assert.Same(anchor, model.ScrollingItems[100]);
+            AssertAnchor();
+
+            await model.SelectRoomAsync(Room());
+            await model.WaitForPresentationAsync();
+            await SettleAsync();
+            Assert.Equal(new[] { "message 454", "message 455" }, model.ScrollingItems.Select(item => item.Record.Content));
+            Assert.False(model.IsReadingHistory);
+            Assert.NotNull(await runtime.Messages.GetByIdAsync(anchor.Record.Id));
+            Assert.Empty(errors);
+
+            (MessageItemViewModel Item, double Y, double Height) FirstVisible()
+            {
+                var first = list.GetRealizedContainers()
+                    .Where(container => container.IsEffectivelyVisible && list.ItemFromContainer(container) is MessageItemViewModel)
+                    .Select(container => (Container: container, Y: container.TranslatePoint(default, viewer)!.Value.Y))
+                    .Where(value => value.Y < viewer.Viewport.Height && value.Y + value.Container.Bounds.Height > 0)
+                    .MinBy(value => value.Y);
+                return (Assert.IsType<MessageItemViewModel>(list.ItemFromContainer(first.Container)), first.Y, first.Container.Bounds.Height);
+            }
+
+            void AssertAnchor()
+            {
+                var retained = FirstVisible();
+                Assert.Same(anchor, retained.Item);
+                Assert.InRange(Math.Abs(retained.Y - y), 0, 1);
+            }
+        }
+        finally
+        {
+            model.Dispose();
+            window.Close();
+        }
+
+        async Task SettleAsync()
+        {
+            for (var pass = 0; pass < 3; pass++)
+            {
+                PinyinTextRenderingTests.Pump(window);
+                await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Background);
+            }
+        }
     }
 
     /// <summary>弹幕置顶不占普通容量，付费消息的未读窗口独立于已读历史容量。</summary>

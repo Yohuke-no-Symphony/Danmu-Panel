@@ -1,4 +1,4 @@
-using System.Collections.Specialized;
+using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
@@ -94,37 +94,65 @@ public sealed class FeedViewportLifecycleTests
     public async Task DisposingDuringHistoryUiYieldBalancesViewportScopes()
     {
         using var directory = new MessageStoreTestDirectory();
-        await using var runtime = new PanelRuntime(new(directory.Path), new());
-        await runtime.TestMessages.AddAsync(Room(), new() { UserName = "viewer", Content = "历史", Count = 150 });
+        var configuration = new PanelConfiguration();
+        configuration.Settings.MessageRetentionCount = 150;
+        await using var runtime = new PanelRuntime(new(directory.Path), configuration);
+        await runtime.TestMessages.AddAsync(Room(), new() { UserName = "viewer", Content = "历史", Count = 250 });
         using var model = new FeedViewModel(runtime, MessageKind.Danmu);
+        await model.SelectRoomAsync(Room()).WaitAsync(TimeSpan.FromSeconds(5));
+        await model.WaitForPresentationAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        var retained = model.Items.ToArray();
+        Assert.Equal(150, retained.Length);
         var starts = 0;
         var completions = 0;
-        var countAtDispose = 0;
-        var disposed = false;
+        var appliedRows = 0;
+        var disposed = new TaskCompletionSource<(int AppliedRows, int ViewportDepth, bool IsLoading)>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
         model.ViewportUpdateStarted += () => starts++;
         model.ViewportUpdateCompleted += () => completions++;
-        model.Items.CollectionChanged += (_, args) =>
+        PropertyChangedEventHandler onRowChanged = (_, args) =>
         {
-            if (!disposed && args.Action == NotifyCollectionChangedAction.Add && model.Items.Count == 20)
+            if (args.PropertyName == nameof(MessageItemViewModel.ShowUserAvatars) && ++appliedRows == 1)
             {
                 Dispatcher.UIThread.Post(() =>
                 {
-                    countAtDispose = model.Items.Count;
-                    disposed = true;
+                    var state = (appliedRows, model.ViewportUpdateDepth, model.IsLoadingHistory);
                     model.Dispose();
+                    disposed.SetResult(state);
                 }, DispatcherPriority.Input);
             }
         };
+        foreach (var item in retained)
+        {
+            item.PropertyChanged += onRowChanged;
+        }
 
-        await model.SelectRoomAsync(Room()).WaitAsync(TimeSpan.FromSeconds(5));
+        try
+        {
+            configuration.Settings.ShowUserAvatars = !configuration.Settings.ShowUserAvatars;
+            var load = model.LoadMoreAsync();
+            await Task.WhenAll(load, disposed.Task).WaitAsync(TimeSpan.FromSeconds(5));
+            var state = await disposed.Task;
 
-        Assert.True(disposed);
-        Assert.Equal(20, countAtDispose);
-        Assert.Equal(countAtDispose, model.Items.Count);
-        Assert.False(model.IsLoadingHistory);
-        Assert.DoesNotContain(model.ScrollingRows, value => value is MessageLoadingPlaceholderViewModel);
-        Assert.Equal(0, model.ViewportUpdateDepth);
-        Assert.Equal(starts, completions);
+            Assert.InRange(state.AppliedRows, 1, retained.Length - 1);
+            Assert.Equal(state.AppliedRows, appliedRows);
+            Assert.True(state.ViewportDepth > 0);
+            Assert.True(state.IsLoading);
+            Assert.Equal(retained, model.Items);
+            Assert.Equal(retained, model.ScrollingItems);
+            Assert.False(model.IsLoadingHistory);
+            Assert.DoesNotContain(model.ScrollingRows, value => value is MessageLoadingPlaceholderViewModel);
+            Assert.Equal(0, model.ViewportUpdateDepth);
+            Assert.True(starts > 0);
+            Assert.Equal(starts, completions);
+        }
+        finally
+        {
+            foreach (var item in retained)
+            {
+                item.PropertyChanged -= onRowChanged;
+            }
+        }
     }
 
     /// <summary>切房间取消旧拼音等待后，旧作用域和新作用域最终各自完成且不回写旧行。</summary>

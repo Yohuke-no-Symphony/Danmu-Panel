@@ -3,8 +3,6 @@ namespace Yohuke.DanmuPanel.Services.Settings;
 /// <summary>只读统计头像、表情及翻译缓存的本地文件总大小。</summary>
 public sealed class CacheSizeService(AppDirectoryService directories)
 {
-    private static string[] TranslationDatabaseSuffixes { get; } = ["", "-wal", "-shm", "-journal"];
-
     /// <summary>在后台统计缓存文件，跳过符号链接及扫描期间已经删除的文件。</summary>
     public Task<long> GetSizeAsync(CancellationToken cancellationToken = default)
     {
@@ -12,10 +10,11 @@ public sealed class CacheSizeService(AppDirectoryService directories)
         {
             var total = GetDirectorySize(directories.AvatarCacheDirectory, cancellationToken);
             total = checked(total + GetDirectorySize(directories.EmoticonCacheDirectory, cancellationToken));
-            foreach (var suffix in TranslationDatabaseSuffixes)
+            total = checked(total + GetFileSize(directories.TranslationCacheSnapshotPath));
+            foreach (var path in directories.LegacyTranslationCachePaths)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                total = checked(total + GetFileSize(directories.TranslationCacheDatabasePath + suffix));
+                total = checked(total + GetFileSize(path));
             }
             return total;
         }, cancellationToken);

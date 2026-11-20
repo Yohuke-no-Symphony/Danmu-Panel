@@ -46,8 +46,7 @@ public sealed class TranslationPendingResetTests
         var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings);
         await store.AppendAsync(Message(), new(), fingerprint);
         var client = new ControlledTranslationClient();
-        await using var cache = new SqliteTranslationCache(":memory:");
-        await using var service = new TranslationService(client, cache);
+        await using var service = new TranslationService(client);
         await using var scheduler = new TranslationScheduler(store, service);
         using var guard = RejectWrites(directory, guardedTable);
 
@@ -68,8 +67,7 @@ public sealed class TranslationPendingResetTests
         var message = Message();
         await store.AppendAsync(message, new(), originalFingerprint);
         var client = new ControlledTranslationClient();
-        await using var cache = new SqliteTranslationCache(":memory:");
-        await using var service = new TranslationService(client, cache);
+        await using var service = new TranslationService(client);
         await using var scheduler = new TranslationScheduler(store, service);
         using var guard = RejectWrites(directory, "message_records", "translation_jobs");
 
@@ -93,8 +91,7 @@ public sealed class TranslationPendingResetTests
         var previousJob = Assert.Single(await store.GetPendingAsync(10));
         var client = new ControlledTranslationClient();
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var cache = new SqliteTranslationCache(":memory:");
-        await using var service = new TranslationService(client, cache);
+        await using var service = new TranslationService(client);
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.Completed += (_, _) => completed.TrySetResult();
         await scheduler.StartAsync(Settings(false, "ja-JP"));
@@ -145,8 +142,7 @@ public sealed class TranslationPendingResetTests
                 throw;
             }
         });
-        await using var cache = new SqliteTranslationCache(":memory:");
-        await using var service = new TranslationService(client, cache);
+        await using var service = new TranslationService(client);
         await using var scheduler = new TranslationScheduler(store, service);
         await scheduler.StartAsync(settings);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(3));

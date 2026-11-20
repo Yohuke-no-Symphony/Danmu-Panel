@@ -173,6 +173,86 @@ public sealed class PinyinTextRenderingTests
         }
     }
 
+    /// <summary>异步表情到达和同路径替换都保留独立拼音及回复节点，后续汉字仍映射到原文。</summary>
+    [AvaloniaFact]
+    public async Task LoadingAndReplacingAnImagePreservesTheExistingPinyinAndReply()
+    {
+        const string TOKEN = "[笑哭]";
+        const string CONTENT = "好 " + TOKEN + "👩‍💻你\n吗";
+        const int REPLY_PREFIX_LENGTH = 2;
+        var imagePath = Path.Combine(Path.GetTempPath(), $"pinyin-reply-image-{Guid.NewGuid():N}.png");
+        using (var bitmap = new RenderTargetBitmap(new(32, 32)))
+        {
+            bitmap.Save(imagePath);
+        }
+
+        var cache = new EmoticonBitmapCache();
+        var text = CreateText(CONTENT, PinyinLayoutMode.SeparateLine);
+        text.Reply = new(42, "viewer", "");
+        text.ShowReplyAvatar = false;
+        text.BitmapCache = cache;
+        text.Emoticons = [new DanmuEmoticon { Text = TOKEN, ImagePath = imagePath }];
+        var window = CreateWindow(text);
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            var presenter = Assert.Single(text.GetVisualDescendants().OfType<PinyinSeparateLinePresenter>());
+            var reply = Assert.Single(presenter.GetVisualDescendants().OfType<MessageReplyBadge>());
+            var pronunciation = presenter.PronunciationText.Inlines!.OfType<Run>().ToArray();
+            Assert.Contains(pronunciation, run => run.Text == "hǎo");
+            Assert.Contains(pronunciation, run => run.Text == "nǐ");
+            Assert.Empty(presenter.GetVisualDescendants().OfType<Image>());
+
+            await EmoticonImageTestHelper.LoadAsync(window);
+
+            AssertSameCompositionAndHover();
+            var image = Assert.Single(presenter.GetVisualDescendants().OfType<Image>());
+            var originalWidth = image.Bounds.Width;
+            var originalBitmap = image.Source;
+
+            using (var replacement = new RenderTargetBitmap(new(96, 32)))
+            {
+                replacement.Save(imagePath);
+            }
+            File.SetLastWriteTimeUtc(imagePath, DateTime.UtcNow.AddMinutes(1));
+            var decodeHeight = (int)Math.Ceiling(text.EmoticonHeight * window.RenderScaling);
+            using var lease = Assert.IsType<EmoticonBitmapLease>(await cache.AcquireAsync(imagePath, decodeHeight));
+            await EmoticonImageTestHelper.LoadAsync(window);
+
+            AssertSameCompositionAndHover();
+            var replacedImage = Assert.Single(presenter.GetVisualDescendants().OfType<Image>());
+            Assert.NotSame(originalBitmap, replacedImage.Source);
+            Assert.True(replacedImage.Bounds.Width > originalWidth);
+
+            void AssertSameCompositionAndHover()
+            {
+                Assert.Same(presenter, Assert.Single(text.GetVisualDescendants().OfType<PinyinSeparateLinePresenter>()));
+                Assert.Same(reply, Assert.Single(presenter.GetVisualDescendants().OfType<MessageReplyBadge>()));
+                Assert.Equal(pronunciation, presenter.PronunciationText.Inlines!.OfType<Run>());
+                AssertHover('你', "nǐ");
+                AssertHover('吗', "ma");
+            }
+
+            void AssertHover(char hanzi, string pinyin)
+            {
+                var sourceIndex = CONTENT.IndexOf(hanzi);
+                var renderedIndex = sourceIndex + REPLY_PREFIX_LENGTH - TOKEN.Length + 1;
+                window.MouseMove(new(290, 210));
+                window.MouseMove(FindHanziPoint(text, sourceIndex, renderedIndex, window));
+                Pump(window);
+                Assert.Equal(sourceIndex, text.HighlightedSourceStart);
+                AssertHighlightedPronunciation(text, pinyin);
+            }
+        }
+        finally
+        {
+            window.Close();
+            cache.Clear();
+            File.Delete(imagePath);
+        }
+    }
+
     /// <summary>仅表情标记包含汉字时不会生成空注音行，图片缺失仍保留原始标记。</summary>
     [AvaloniaTheory]
     [InlineData(PinyinLayoutMode.Ruby)]

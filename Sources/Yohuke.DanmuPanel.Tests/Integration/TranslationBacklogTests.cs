@@ -20,7 +20,6 @@ public sealed class TranslationBacklogTests
     {
         using var directory = new MessageStoreTestDirectory();
         await using var store = new SqliteMessageStore(directory.DatabasePath);
-        await using var cache = new SqliteTranslationCache(":memory:");
         var settings = new TranslationSettings { Enabled = true, Model = "test", BacklogMode = mode };
         var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings);
         var initial = Enumerable.Range(0, 4).Select(index => Message($"initial-{index}")).ToArray();
@@ -38,7 +37,7 @@ public sealed class TranslationBacklogTests
 
             await Task.Delay(Timeout.Infinite, token);
             return request.Text;
-        }), cache);
+        }));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.Completed += (_, args) => completed.Writer.TryWrite(args);
         scheduler.Error += error => completed.Writer.TryComplete(new InvalidOperationException(error));

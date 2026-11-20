@@ -142,8 +142,8 @@ public sealed class DanmuTranslationLayoutTests
 
             Assert.Same(item, Assert.Single(view.Model.Items));
             Assert.Same(row, FindRow(view, message.Id));
-            Assert.Same(placeholder, Assert.Single(body.GetVisualDescendants().OfType<ShimmerTextBlock>()));
-            Assert.False(placeholder.IsEffectivelyVisible);
+            Assert.Empty(body.GetVisualDescendants().OfType<ShimmerTextBlock>());
+            Assert.Null(placeholder.GetVisualRoot());
             Assert.False(placeholder.IsShimmering);
             if (mode == TranslationDisplayMode.Bilingual)
             {
@@ -339,7 +339,7 @@ public sealed class DanmuTranslationLayoutTests
             pinyin.Release.TrySetResult();
             await view.Model.WaitForPresentationAsync().WaitAsync(TimeSpan.FromSeconds(10));
             Pump(window);
-            Assert.False(pending.IsEffectivelyVisible);
+            Assert.Null(pending.GetVisualRoot());
             AssertInline(body);
             Assert.Same(item, Assert.Single(view.Model.Items));
             Assert.Same(row, FindRow(view, message.Id));

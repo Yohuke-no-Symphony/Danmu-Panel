@@ -15,12 +15,11 @@ public sealed class TranslationCacheReuseTests
     public async Task ConfigurationChangesReuseCachedTranslationUntilManuallyCleared()
     {
         var requests = new List<TranslationRequest>();
-        await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient((request, _) =>
         {
             requests.Add(request);
             return Task.FromResult(request.Model);
-        }), cache);
+        }));
         var settings = new TranslationSettings { Model = "old-model", TargetLanguage = "en" };
         var original = TranslationRequestFactory.Create(settings, "主播 hello")!;
         Assert.Equal("old-model", await service.TranslateAsync(original));
@@ -34,7 +33,7 @@ public sealed class TranslationCacheReuseTests
 
         Assert.Equal("old-model", await service.TranslateAsync(changed));
         Assert.Single(requests);
-        await cache.ClearAsync();
+        service.ClearCache();
         Assert.Equal("new-model", await service.TranslateAsync(changed));
         Assert.Equal(2, requests.Count);
         Assert.Equal("new-key", requests[1].ApiKey);
@@ -55,7 +54,6 @@ public sealed class TranslationCacheReuseTests
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var oldResponse = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
-        await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient(async (_, token) =>
         {
             if (Interlocked.Increment(ref calls) == 1)
@@ -64,7 +62,7 @@ public sealed class TranslationCacheReuseTests
                 return await oldResponse.Task.WaitAsync(token);
             }
             return "new translation";
-        }), cache);
+        }));
         var request = TranslationRequestFactory.Create(new TranslationSettings(), "hello")!;
         var previous = service.TranslateAsync(request);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(3));
@@ -84,7 +82,7 @@ public sealed class TranslationCacheReuseTests
             oldResponse.TrySetResult("old translation");
         }
         Assert.Equal("old translation", await previous);
-        Assert.Equal("new translation", await cache.GetAsync(request.CacheKey));
+        Assert.Equal("new translation", await service.TranslateAsync(changed));
         Assert.Equal(2, calls);
     }
 
@@ -109,7 +107,6 @@ public sealed class TranslationCacheReuseTests
         var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var requests = new List<TranslationRequest>();
-        await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient(async (request, token) =>
         {
             requests.Add(request);
@@ -127,7 +124,7 @@ public sealed class TranslationCacheReuseTests
                 }
             }
             return "新译文";
-        }), cache);
+        }));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.Completed += (_, _) => completed.TrySetResult();
         await scheduler.StartAsync(settings);

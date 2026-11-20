@@ -19,10 +19,7 @@ internal sealed class FeedCollection<T> : ObservableCollection<T>
         ArgumentOutOfRangeException.ThrowIfGreaterThan(index, Count);
         CheckReentrancy();
         var added = values.ToArray();
-        for (var offset = 0; offset < added.Length; offset++)
-        {
-            Items.Insert(index + offset, added[offset]);
-        }
+        ((List<T>)Items).InsertRange(index, added);
         OnPropertyChanged(CountChanged);
         OnPropertyChanged(ItemsChanged);
         OnCollectionChanged(new(NotifyCollectionChangedAction.Add, added, index));
@@ -39,11 +36,10 @@ internal sealed class FeedCollection<T> : ObservableCollection<T>
             return;
         }
         CheckReentrancy();
-        var removed = this.Skip(index).Take(count).ToArray();
-        for (var offset = count - 1; offset >= 0; offset--)
-        {
-            Items.RemoveAt(index + offset);
-        }
+        var items = (List<T>)Items;
+        var removed = new T[count];
+        items.CopyTo(index, removed, 0, count);
+        items.RemoveRange(index, count);
         OnPropertyChanged(CountChanged);
         OnPropertyChanged(ItemsChanged);
         OnCollectionChanged(new(NotifyCollectionChangedAction.Remove, removed, index));

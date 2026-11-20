@@ -2,7 +2,7 @@
             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
             xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
             x:Class="Yohuke.DanmuPanel.Views.Components.SkeletonBodySurface"
-            VerticalAlignment="Center" HorizontalAlignment="Stretch" Classes="messageBody">
+            VerticalAlignment="Center" HorizontalAlignment="Stretch" Classes="messageBody skeletonBody">
     <Grid>
         <TextBlock Text="　" Opacity="0" VerticalAlignment="Center"
                    Classes="danmuFeedContent regularFeedContent originalText" components:SkeletonSlot.WidthRatio="0.84" components:SkeletonSlot.Order="3" />

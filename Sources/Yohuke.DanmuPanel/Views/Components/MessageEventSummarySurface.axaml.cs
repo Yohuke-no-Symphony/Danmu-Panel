@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Yohuke.DanmuPanel.Services;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
@@ -9,6 +10,7 @@ internal sealed partial class MessageEventSummarySurface : Border
     private readonly Border frame;
     private readonly MessageIdentitySurface identity;
     private readonly Grid detail;
+    private readonly MessageTemplateHost body;
 
     /// <inheritdoc />
     protected override Type StyleKeyOverride => typeof(Border);
@@ -20,8 +22,14 @@ internal sealed partial class MessageEventSummarySurface : Border
         frame = this.FindControl<Border>("SummaryFrame")!;
         identity = this.FindControl<MessageIdentitySurface>("SummaryIdentity")!;
         detail = this.FindControl<Grid>("SummaryDetail")!;
+        body = this.FindControl<MessageTemplateHost>("SummaryBodyHost")!;
         frame.PropertyChanged += OnFramePropertyChanged;
         UpdateContentMargins();
+    }
+
+    internal void SetServices(IUserAvatarService? avatars, EmoticonBitmapCache? bitmapCache)
+    {
+        body.PreparingChild += child => ((MessageBodyPanel)child).SetServices(avatars, bitmapCache);
     }
 
     private void OnFramePropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs change)

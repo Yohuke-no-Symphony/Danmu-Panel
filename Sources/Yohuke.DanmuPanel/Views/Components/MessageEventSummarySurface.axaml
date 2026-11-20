@@ -18,7 +18,14 @@
                         <TextBlock Grid.Column="1" Classes="eventSummaryValue" Text="{Binding SummaryValue}" FontWeight="SemiBold"
                                    TextWrapping="NoWrap" VerticalAlignment="Center" ToolTip.Tip="{Binding SummaryValue}" />
                     </Grid>
-                    <components:MessageBodyPanel x:Name="SummaryBody" IsVisible="{Binding HasSummaryBody}" />
+                    <components:MessageTemplateHost x:Name="SummaryBodyHost" IsVisible="{Binding HasSummaryBody}"
+                                                    IsContentActive="{Binding HasSummaryBody}">
+                        <components:MessageTemplateHost.StandardTemplate>
+                            <DataTemplate x:DataType="vm:MessageItemViewModel">
+                                <components:MessageBodyPanel x:Name="SummaryBody" />
+                            </DataTemplate>
+                        </components:MessageTemplateHost.StandardTemplate>
+                    </components:MessageTemplateHost>
                 </StackPanel>
             </Grid>
         </components:MessageFeedColumnLayout>

@@ -14,6 +14,7 @@ using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Services;
 using Yohuke.DanmuPanel.Services.Messages;
+using Yohuke.DanmuPanel.Services.Translation;
 using Yohuke.DanmuPanel.Tests.Messages;
 using Yohuke.DanmuPanel.ViewModels;
 using Yohuke.DanmuPanel.Views;
@@ -131,39 +132,22 @@ public sealed class AsyncHistoryLoadingTests
             }
             Pump(window);
             var item = Assert.Single(view.Model.Items);
-            var nameWaiting = Assert.Single(view.GetVisualDescendants().OfType<PinyinLoadingPlaceholder>(),
-                control => control.Classes.Contains("namePinyinPending"));
-            var contentWaiting = Assert.Single(view.GetVisualDescendants().OfType<PinyinLoadingPlaceholder>(),
-                control => control.Classes.Contains("contentPinyinPending"));
-            Assert.Equal(showName, item.IsNamePinyinPending);
-            Assert.Equal(showContent, item.IsContentPinyinPending);
-            Assert.Equal(showName, nameWaiting.IsEffectivelyVisible);
-            Assert.Equal(showContent, contentWaiting.IsEffectivelyVisible);
-            Assert.Empty(nameWaiting.GetVisualDescendants().OfType<TextBlock>());
-            Assert.Empty(contentWaiting.GetVisualDescendants().OfType<TextBlock>());
-            Assert.True(item.ShowOriginal);
-            Assert.Contains(view.GetVisualDescendants().OfType<EmoticonTextBlock>(),
-                control => control.IsEffectivelyVisible && control.ContentText == "重庆银行今天营业");
-            Assert.Contains(view.GetVisualDescendants().OfType<EmoticonTextBlock>(),
-                control => control.IsEffectivelyVisible && control.ContentText == "历史观众");
+            var list = Assert.Single(view.GetVisualDescendants().OfType<MessageFeedListBox>(),
+                control => control.Name == "ScrollingMessages");
+            AssertRow(showName, showContent);
             Assert.DoesNotContain(view.Model.ScrollingRows, row => row is MessageLoadingPlaceholderViewModel);
 
             settings.ShowUserPinyin = false;
             settings.ShowDanmuPinyin = false;
             await view.Model.RefreshAsync();
             Pump(window);
-            Assert.False(item.IsNamePinyinPending);
-            Assert.False(item.IsContentPinyinPending);
-            Assert.False(nameWaiting.IsEffectivelyVisible);
-            Assert.False(contentWaiting.IsEffectivelyVisible);
-            Assert.True(item.ShowOriginal);
+            AssertRow(false, false);
 
             settings.ShowUserPinyin = showName;
             settings.ShowDanmuPinyin = showContent;
             await view.Model.RefreshAsync();
             Pump(window);
-            Assert.Equal(showName, nameWaiting.IsEffectivelyVisible);
-            Assert.Equal(showContent, contentWaiting.IsEffectivelyVisible);
+            AssertRow(showName, showContent);
             pinyin.Release.TrySetResult();
             await view.Model.WaitForPresentationAsync().WaitAsync(TimeSpan.FromSeconds(10));
             Pump(window);
@@ -171,12 +155,29 @@ public sealed class AsyncHistoryLoadingTests
             Assert.Same(item, Assert.Single(view.Model.Items));
             Assert.Equal(showName, item.NameAnnotations.Count > 0);
             Assert.Equal(showContent, item.ContentPinyin.Count > 0);
-            Assert.False(item.IsNamePinyinPending);
-            Assert.False(item.IsContentPinyinPending);
-            Assert.False(nameWaiting.IsEffectivelyVisible);
-            Assert.False(contentWaiting.IsEffectivelyVisible);
-            Assert.True(item.ShowOriginal);
+            AssertRow(false, false);
             Assert.Empty(errors);
+
+            void AssertRow(bool namePending, bool contentPending)
+            {
+                var row = Assert.IsType<MessageFeedListBoxItem>(list.ContainerFromItem(item)).Row;
+                Assert.Same(item, row.DataContext);
+                Assert.True(row.IsEffectivelyVisible);
+                var placeholders = row.GetVisualDescendants().OfType<PinyinLoadingPlaceholder>().ToArray();
+                var nameWaiting = placeholders.Where(control => control.Classes.Contains("namePinyinPending")).ToArray();
+                var contentWaiting = placeholders.Where(control => control.Classes.Contains("contentPinyinPending")).ToArray();
+                Assert.NotEmpty(nameWaiting);
+                Assert.Equal(contentPending ? 1 : 0, contentWaiting.Length);
+                Assert.Equal(namePending, item.IsNamePinyinPending);
+                Assert.Equal(contentPending, item.IsContentPinyinPending);
+                Assert.Equal(namePending ? 1 : 0, nameWaiting.Count(control => control.IsEffectivelyVisible));
+                Assert.Equal(contentPending ? 1 : 0, contentWaiting.Count(control => control.IsEffectivelyVisible));
+                Assert.All(placeholders, control => Assert.Empty(control.GetVisualDescendants().OfType<TextBlock>()));
+                Assert.True(item.ShowOriginal);
+                var texts = row.GetVisualDescendants().OfType<EmoticonTextBlock>().ToArray();
+                Assert.Contains(texts, control => control.IsEffectivelyVisible && control.ContentText == "重庆银行今天营业");
+                Assert.Contains(texts, control => control.IsEffectivelyVisible && control.ContentText == "历史观众");
+            }
         }
         finally
         {
@@ -308,6 +309,98 @@ public sealed class AsyncHistoryLoadingTests
         finally
         {
             pinyin.Release.TrySetResult();
+        }
+    }
+
+    /// <summary>翻译规则在后台超时暂停后，按新规则应用当前窗口或丢弃已切换房间的窗口。</summary>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SlowTranslationRuleDoesNotBlockInputOrPublishAnObsoleteWindow(bool switchRoom)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        var configuration = new PanelConfiguration();
+        var settings = configuration.Settings;
+        settings.Translation.Enabled = true;
+        settings.DanmuRegexFilter.Rules = [new() { Pattern = "^(a+)+$", BlockTranslation = true }];
+        await using var runtime = new PanelRuntime(new(directory.Path), configuration);
+        var room = Room();
+        var other = new RoomTabState { Id = "other", RoomId = "456" };
+        var earlier = new MessageRecord
+        {
+            RoomTabId = room.Id, Kind = MessageKind.Danmu, IsTest = true, Content = "aaa",
+            Translation = "保留译文", TranslationFingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation),
+            Time = DateTimeOffset.FromUnixTimeSeconds(1800000000)
+        };
+        var slow = new MessageRecord
+        {
+            RoomTabId = room.Id, Kind = MessageKind.Danmu, IsTest = true, Content = new string('a', 50000) + "!",
+            Time = earlier.Time.AddSeconds(1)
+        };
+        var otherMessage = new MessageRecord { RoomTabId = other.Id, Kind = MessageKind.Danmu, IsTest = true, Content = "新房间" };
+        await runtime.Messages.AppendTestMessagesAsync([earlier, slow], settings.Reading);
+        await runtime.Messages.AppendTestMessagesAsync([otherMessage], settings.Reading);
+        using var model = new FeedViewModel(runtime, MessageKind.Danmu);
+        var entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var publishedOldRowsAfterSwitch = false;
+        model.Items.CollectionChanged += (_, args) =>
+        {
+            publishedOldRowsAfterSwitch |= model.SelectedRoom?.Id == other.Id && args.NewItems is not null &&
+                args.NewItems.OfType<MessageItemViewModel>().Any(item => item.Record.RoomTabId != other.Id);
+        };
+        var filter = runtime.DanmuFilter;
+        filter.PatternTimedOut += OnRuleTimedOut;
+
+        try
+        {
+            var firstLoad = model.SelectRoomAsync(room);
+            Assert.False(await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+            var inputHandled = false;
+            Task nextLoad = Task.CompletedTask;
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (switchRoom)
+                {
+                    nextLoad = model.SelectRoomAsync(other);
+                }
+                inputHandled = true;
+            }, DispatcherPriority.Input);
+            Assert.True(inputHandled);
+            Assert.Empty(model.Items);
+            Assert.Equal(switchRoom ? other.Id : room.Id, model.SelectedRoom!.Id);
+
+            release.SetResult();
+            await Task.WhenAll(firstLoad, nextLoad).WaitAsync(TimeSpan.FromSeconds(5));
+            await model.WaitForPresentationAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+            if (switchRoom)
+            {
+                Assert.False(publishedOldRowsAfterSwitch);
+                Assert.Equal(otherMessage.Id, Assert.Single(model.Items).Record.Id);
+            }
+            else
+            {
+                Assert.Equal(new[] { earlier.Id, slow.Id }, model.Items.Select(item => item.Record.Id));
+                Assert.Equal("保留译文", model.Items[0].Translation);
+            }
+            Assert.False(model.IsLoadingHistory);
+            Assert.Equal(0, model.ViewportUpdateDepth);
+        }
+        finally
+        {
+            release.TrySetResult();
+            filter.PatternTimedOut -= OnRuleTimedOut;
+        }
+
+        void OnRuleTimedOut(int _)
+        {
+            var onUiThread = Dispatcher.UIThread.CheckAccess();
+            entered.TrySetResult(onUiThread);
+            if (!onUiThread)
+            {
+                release.Task.WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
+            }
         }
     }
 

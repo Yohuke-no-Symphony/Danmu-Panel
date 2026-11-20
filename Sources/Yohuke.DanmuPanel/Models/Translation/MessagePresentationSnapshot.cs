@@ -1,4 +1,5 @@
 using Yohuke.DanmuPanel.Models.Messages;
+using Yohuke.DanmuPanel.Models.Workspace;
 
 namespace Yohuke.DanmuPanel.Models.Translation;
 
@@ -9,7 +10,10 @@ internal sealed record MessagePresentationSnapshot(
     IReadOnlyList<PinyinAnnotation> NameAnnotations,
     string DetailPinyin,
     IReadOnlyList<PinyinAnnotation> ContentPinyin,
-    bool HasTranslatableContent)
+    bool HasTranslatableContent,
+    IReadOnlyList<DanmuEmoticon>? Emoticons,
+    MessageTextRenderPlan? NameRenderPlan,
+    MessageTextRenderPlan? ContentRenderPlan)
 {
     internal bool Matches(MessageRecord record, MessagePresentationOptions options)
     {

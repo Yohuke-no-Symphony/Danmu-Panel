@@ -2,43 +2,63 @@
        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
        xmlns:vm="using:Yohuke.DanmuPanel.ViewModels"
        xmlns:components="using:Yohuke.DanmuPanel.Views.Components"
-       x:Class="Yohuke.DanmuPanel.Views.Components.MessageBodyPanel"
+       x:Class="Yohuke.DanmuPanel.Views.Components.MessageBodyPanel" x:Name="Root"
        x:DataType="vm:MessageItemViewModel" Classes="messageBody"
        HorizontalAlignment="Stretch" VerticalAlignment="Center">
-    <StackPanel x:Name="OriginalRegion" IsVisible="{Binding ShowOriginal}">
-        <components:PinyinLoadingPlaceholder x:Name="ContentPinyinPending" Classes="contentPinyinPending"
-            Length="6" IsVisible="{Binding IsContentPinyinPending}"
-            FontSize="{DynamicResource MessageFontSizePinyin}" Foreground="{DynamicResource MessagePinyinBrush}"
-            FontFamily="{Binding #OriginalText.FontFamily}" FontStyle="{Binding #OriginalText.FontStyle}"
-            FontStretch="{Binding #OriginalText.FontStretch}" TextBlock.LineHeight="{Binding #OriginalText.LineHeight}"
-            LineSpacing="{Binding #OriginalText.LineSpacing}" />
-        <Grid>
+    <Panel.Resources>
+        <DataTemplate x:Key="WrappedOriginal" x:DataType="vm:MessageItemViewModel">
             <components:EmoticonTextBlock x:Name="OriginalText" Classes="danmuFeedContent regularFeedContent originalText"
                 TextWrapping="Wrap" ContentText="{Binding Detail}" Emoticons="{Binding Emoticons}"
                 Reply="{Binding Reply}" ShowReplyAvatar="{Binding ShowUserAvatars}"
                 Annotations="{Binding ContentPinyin}" PinyinLayout="{Binding PinyinLayout}"
                 PinyinForeground="{DynamicResource MessagePinyinBrush}" PinyinFontSize="{DynamicResource MessageFontSizePinyin}" />
+        </DataTemplate>
+        <DataTemplate x:Key="MarqueeOriginal" x:DataType="vm:MessageItemViewModel">
             <components:HoverMarqueeTextBlock x:Name="OriginalMarquee" Classes="compactFeedContent originalText"
                 Text="{Binding Detail}" AutoScroll="{Binding AutoScrollLongMessages}" Emoticons="{Binding Emoticons}"
                 Reply="{Binding Reply}" ShowReplyAvatar="{Binding ShowUserAvatars}"
                 Annotations="{Binding ContentPinyin}" PinyinLayout="{Binding PinyinLayout}"
                 PinyinForeground="{DynamicResource MessagePinyinBrush}" PinyinFontSize="{DynamicResource MessageFontSizePinyin}" />
-        </Grid>
-    </StackPanel>
-    <Grid x:Name="TranslationRegion" Classes="translationLine" IsVisible="{Binding ShowTranslation}">
-        <Grid IsVisible="{Binding HasTranslation}">
+        </DataTemplate>
+        <DataTemplate x:Key="WrappedTranslation" x:DataType="vm:MessageItemViewModel">
             <components:MessageTranslationTextBlock x:Name="TranslatedText"
                 Classes="danmuFeedContent regularFeedContent translatedText" ContentText="{Binding Translation}"
                 Reply="{Binding TranslationReply}" ShowReplyAvatar="{Binding ShowUserAvatars}"
                 TextTrimming="CharacterEllipsis" TextWrapping="Wrap" />
+        </DataTemplate>
+        <DataTemplate x:Key="MarqueeTranslation" x:DataType="vm:MessageItemViewModel">
             <components:HoverMarqueeTextBlock x:Name="TranslationMarquee" Classes="compactFeedContent translatedText"
-                Text="{Binding Translation}" AutoScroll="{Binding AutoScrollLongMessages}"
-                Reply="{Binding TranslationReply}" ShowReplyAvatar="{Binding ShowUserAvatars}"
-                TextBlock.LineHeight="{Binding #TranslatedText.LineHeight}" />
-        </Grid>
-        <components:ShimmerTextBlock x:Name="PendingTranslation" Classes="translationPending"
-            HorizontalAlignment="Left" Text="{Loc Key=Panel.Translating}" IsVisible="{Binding IsTranslating}"
-            TextBlock.LineHeight="{Binding #TranslatedText.LineHeight}"
-            LineSpacing="{Binding #TranslatedText.LineSpacing}" />
+                Text="{Binding Translation}" AutoScroll="{Binding AutoScrollLongMessages}" MatchTranslationLineHeight="True"
+                Reply="{Binding TranslationReply}" ShowReplyAvatar="{Binding ShowUserAvatars}" />
+        </DataTemplate>
+        <DataTemplate x:Key="TranslationPlaceholder" x:DataType="vm:MessageItemViewModel">
+            <components:ShimmerTextBlock x:Name="PendingTranslation" Classes="translationPending"
+                HorizontalAlignment="Left" Text="{Loc Key=Panel.Translating}" MatchTranslationLineHeight="True" />
+        </DataTemplate>
+        <DataTemplate x:Key="ContentPinyinPlaceholder" x:DataType="vm:MessageItemViewModel">
+            <components:PinyinLoadingPlaceholder x:Name="ContentPinyinPending" Classes="contentPinyinPending"
+                Length="6" FontSize="{DynamicResource MessageFontSizePinyin}" Foreground="{DynamicResource MessagePinyinBrush}" />
+        </DataTemplate>
+    </Panel.Resources>
+
+    <StackPanel x:Name="OriginalRegion" IsVisible="{Binding ShowOriginal}">
+        <components:MessageTemplateHost x:Name="ContentPinyinHost" StandardTemplate="{StaticResource ContentPinyinPlaceholder}">
+            <components:MessageTemplateHost.IsContentActive>
+                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                    <Binding Path="ShowOriginal" />
+                    <Binding Path="IsContentPinyinPending" />
+                </MultiBinding>
+            </components:MessageTemplateHost.IsContentActive>
+        </components:MessageTemplateHost>
+        <components:MessageTemplateHost x:Name="OriginalHost" IsContentActive="{Binding ShowOriginal}"
+            UseMarquee="{Binding #Root.UseMarquee}" StandardTemplate="{StaticResource WrappedOriginal}"
+            MarqueeTemplate="{StaticResource MarqueeOriginal}" />
+    </StackPanel>
+    <Grid x:Name="TranslationRegion" Classes="translationLine" IsVisible="{Binding ShowTranslation}">
+        <components:MessageTemplateHost x:Name="TranslationHost" IsContentActive="{Binding HasTranslation}"
+            UseMarquee="{Binding #Root.UseMarquee}" StandardTemplate="{StaticResource WrappedTranslation}"
+            MarqueeTemplate="{StaticResource MarqueeTranslation}" />
+        <components:MessageTemplateHost x:Name="PendingTranslationHost" IsContentActive="{Binding IsTranslating}"
+            StandardTemplate="{StaticResource TranslationPlaceholder}" />
     </Grid>
 </Panel>

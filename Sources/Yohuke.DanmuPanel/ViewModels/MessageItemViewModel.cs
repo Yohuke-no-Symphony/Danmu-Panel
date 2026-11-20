@@ -1,4 +1,3 @@
-using System.Globalization;
 using Avalonia;
 using Avalonia.Media;
 using Yohuke.DanmuPanel.I18n;
@@ -14,12 +13,14 @@ namespace Yohuke.DanmuPanel.ViewModels;
 /// <summary>消息的显示投影，保留原始名称与阅读状态。</summary>
 public sealed class MessageItemViewModel : FeedRowViewModel
 {
-    private const int MAX_MEDAL_NAME_TEXT_ELEMENTS = 3;
     private readonly IPinyinService pinyin;
     private readonly bool deferPresentation;
     private MessagePresentationSnapshot? presentation;
+    private MessageTextRenderPlan? nameRenderPlan;
+    private MessageTextRenderPlan? contentRenderPlan;
     private bool isPresentationPending;
     private MessageDisplaySettings settings;
+    private string name = "";
     private string namePinyin = "";
     private IReadOnlyList<PinyinAnnotation> nameAnnotations = [];
     private string detailPinyin = "";
@@ -36,10 +37,13 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     private bool translationBlocked;
     private int filterStateVersion;
     private bool hasTranslatableContent;
+    private bool canShowNamePinyin;
+    private bool canShowContentPinyin;
     private IBrush borderBrush = Brushes.Transparent;
     private IBrush medalBackgroundBrush = Brushes.Transparent;
     private IReadOnlyList<DanmuEmoticon> emoticons = [];
     private MessageReply? reply;
+    private bool isSpecialAttention;
     private bool isPinged;
     private RedPocketViewModel? redPocket;
     public MessageRecord Record { get; private set; }
@@ -63,9 +67,9 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     internal bool IsPresentationPending => isPresentationPending;
     internal MessageDisplaySettings PresentationSettings => settings;
     internal bool TranslationPending => translationPending;
-    public string Name => Record.Kind == MessageKind.RedPocket && string.IsNullOrWhiteSpace(Record.UserName) && Localization.IsInitialized
-        ? Localization.Get("RedPocket.UnknownSender")
-        : Record.UserName;
+    internal bool TranslationBlocked => translationBlocked;
+    internal int FilterVersion => filterStateVersion;
+    public string Name => name;
     /// <summary>当前消息用户的稳定身份，用于独立于消息行缓存头像。</summary>
     public long UserUid => Record.UserUid;
     /// <summary>正文前内联显示的回复对象，神秘人只显示匿名头像。</summary>
@@ -73,7 +77,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     /// <summary>仅显示译文时随译文呈现的回复对象。</summary>
     public MessageReply? TranslationReply => ShowOriginal ? null : Reply;
     /// <summary>当前普通弹幕是否来自全局特别关注名单中的用户。</summary>
-    public bool IsSpecialAttention => Record.Kind == MessageKind.Danmu && settings.IsSpecialAttention(UserUid);
+    public bool IsSpecialAttention => isSpecialAttention;
     /// <summary>普通弹幕名称的有效身份，依次优先使用特别关注、房管和本直播间舰队身份。</summary>
     public MessageUserNameRole UserNameRole
     {
@@ -106,9 +110,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     public bool ShowFanMedals => settings.ShowFanMedals;
     public string NamePinyin => namePinyin;
     public bool HasNamePinyin => NamePinyin.Length > 0;
-    public bool IsNamePinyinPending => isPresentationPending && settings.ShowUserPinyin &&
-        ContainsChinese(Record.UserName) && !Record.UserName.Any(character =>
-            character is >= '\u3040' and <= '\u30FF' or >= '\uFF66' and <= '\uFF9F');
+    public bool IsNamePinyinPending => isPresentationPending && canShowNamePinyin;
     public IReadOnlyList<PinyinAnnotation> NameAnnotations => nameAnnotations;
     public string Medal => medal;
     public string MedalName => medalName;
@@ -120,13 +122,13 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     public string Time => time;
     public bool ShowPinBadge => Record.Kind == MessageKind.Danmu && Record.IsPinned;
     public bool ShowUnreadDot => !IsEventSummary && Record.Kind is MessageKind.SuperChat or MessageKind.Gift or MessageKind.Guard or MessageKind.RedPocket && !Record.IsRead;
-    public string Detail => detail ??= FormatDetail();
+    public string Detail => detail ??= Localization.Get($"Panel.Guard.{Record.GuardLevel}") +
+        string.Create(settings.Culture, $" ×{Record.Quantity}");
     public string DetailPinyin => detailPinyin;
     public bool HasDetailPinyin => DetailPinyin.Length > 0;
     public IReadOnlyList<PinyinAnnotation> ContentPinyin => contentPinyin;
     public bool HasContentPinyin => contentPinyin.Count > 0;
-    public bool IsContentPinyinPending => isPresentationPending && IsContentPinyinEnabled(Record.Kind, settings) &&
-        ContainsChinese(Record.Kind == MessageKind.Gift ? Record.GiftName : Record.Content);
+    public bool IsContentPinyinPending => isPresentationPending && canShowContentPinyin;
     public PinyinLayoutMode PinyinLayout => settings.PinyinLayout;
     public string Price => price;
     public string Translation => translation;
@@ -143,25 +145,48 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     public IReadOnlyList<DanmuEmoticon> Emoticons
     {
         get => emoticons;
-        set => SetProperty(ref emoticons, value);
+        set
+        {
+            if (!ReferenceEquals(emoticons, value))
+            {
+                var plan = value.Count > 0 || contentPinyin.Count > 0
+                    ? MessageTextRenderPlan.Create(Detail, value, contentPinyin) : null;
+                ApplyEmoticons(value, plan);
+            }
+        }
+    }
+
+    internal void ApplyEmoticons(IReadOnlyList<DanmuEmoticon> value, MessageTextRenderPlan? plan)
+    {
+        contentRenderPlan = plan;
+        SetProperty(ref emoticons, value, nameof(Emoticons));
+    }
+
+    internal MessageTextRenderPlan? GetTextRenderPlan(string content, IReadOnlyList<DanmuEmoticon>? images,
+        IReadOnlyList<PinyinAnnotation>? annotations)
+    {
+        if (nameRenderPlan?.Matches(content, images, annotations) == true)
+        {
+            return nameRenderPlan;
+        }
+        return contentRenderPlan?.Matches(content, images, annotations) == true ? contentRenderPlan : null;
     }
 
     /// <summary>创建单行显示投影。</summary>
     public MessageItemViewModel(MessageRecord record, PanelSettings settings, IPinyinService pinyin,
         bool isEventSummary = false)
-        : this(record, MessageDisplaySettings.Capture(settings), pinyin, isEventSummary: isEventSummary)
+        : this(MessageRowProjection.Create(record, MessageDisplaySettings.Capture(settings), false, isEventSummary), pinyin)
     {
     }
 
-    private MessageItemViewModel(MessageRecord record, MessageDisplaySettings settings, IPinyinService pinyin,
-        bool isTranslationPending = false, bool deferPresentation = false, bool isEventSummary = false)
+    private MessageItemViewModel(MessageRowProjection projection, IPinyinService pinyin, bool deferPresentation = false)
     {
-        Record = record;
-        this.settings = settings;
+        Record = projection.Record;
+        settings = projection.Settings;
         this.pinyin = pinyin;
-        IsEventSummary = isEventSummary && record.Kind != MessageKind.Danmu;
+        IsEventSummary = projection.IsEventSummary;
         this.deferPresentation = deferPresentation;
-        Update(record, settings, true, isTranslationPending);
+        Update(projection, initialize: true);
     }
 
     /// <summary>原位更新，保留列表容器及阅读位置。</summary>
@@ -173,22 +198,30 @@ public sealed class MessageItemViewModel : FeedRowViewModel
     internal static MessageItemViewModel Create(MessageRecord record, MessageDisplaySettings settings, IPinyinService pinyin,
         bool isTranslationPending = false)
     {
-        return new(record, settings, pinyin, isTranslationPending);
+        return new(MessageRowProjection.Create(record, settings, isTranslationPending), pinyin);
     }
 
     internal static MessageItemViewModel CreateDeferred(MessageRecord record, MessageDisplaySettings settings, IPinyinService pinyin,
         bool isTranslationPending, bool isEventSummary = false)
     {
-        return new(record, settings, pinyin, isTranslationPending, deferPresentation: true, isEventSummary: isEventSummary);
+        return CreateDeferred(MessageRowProjection.Create(record, settings, isTranslationPending, isEventSummary), pinyin);
+    }
+
+    internal static MessageItemViewModel CreateDeferred(MessageRowProjection projection, IPinyinService pinyin)
+    {
+        return new(projection, pinyin, deferPresentation: true);
     }
 
     internal bool ApplyPresentation(MessagePresentationSnapshot value)
     {
-        if (!value.Matches(Record, settings.PresentationOptions))
+        if (!value.Matches(Record, settings.PresentationOptions) ||
+            !ReferenceEquals(value.Emoticons, emoticons) && (emoticons.Count > 0 || value.Emoticons is { Count: > 0 }))
         {
             return false;
         }
         presentation = value;
+        nameRenderPlan = value.NameRenderPlan;
+        contentRenderPlan = value.ContentRenderPlan;
         var wasTranslating = IsTranslating;
         var showedTranslation = ShowTranslation;
         var hadName = HasNamePinyin;
@@ -221,6 +254,15 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         NotifyChange(showedTranslation, ShowTranslation, nameof(ShowTranslation));
     }
 
+    internal void UpdateSpecialAttention(bool followed)
+    {
+        var previousRole = UserNameRole;
+        if (SetProperty(ref isSpecialAttention, Record.Kind == MessageKind.Danmu && followed, nameof(IsSpecialAttention)))
+        {
+            NotifyChange(previousRole, UserNameRole, nameof(UserNameRole));
+        }
+    }
+
     internal void FailPresentation()
     {
         var nameWasPending = IsNamePinyinPending;
@@ -232,17 +274,30 @@ public sealed class MessageItemViewModel : FeedRowViewModel
 
     internal void Apply(MessageRecord record, MessageDisplaySettings currentSettings, bool isTranslationPending = false)
     {
-        Update(record, currentSettings, false, isTranslationPending);
-    }
-
-    private void Update(MessageRecord record, MessageDisplaySettings currentSettings, bool initialize, bool isTranslationPending)
-    {
-        if (!initialize && ReferenceEquals(Record, record) && ReferenceEquals(settings, currentSettings) &&
-            filterStateVersion == currentSettings.DanmuFilter.StateVersion &&
-            translationPending == isTranslationPending)
+        if (ReferenceEquals(Record, record) && ReferenceEquals(settings, currentSettings) &&
+            filterStateVersion == currentSettings.DanmuFilter.StateVersion && translationPending == isTranslationPending)
         {
             return;
         }
+
+        Apply(MessageRowProjection.Create(record, currentSettings, isTranslationPending, IsEventSummary));
+    }
+
+    internal void Apply(MessageRowProjection projection)
+    {
+        if (ReferenceEquals(Record, projection.Record) && ReferenceEquals(settings, projection.Settings) &&
+            filterStateVersion == projection.FilterVersion && translationPending == projection.TranslationPending &&
+            translationBlocked == projection.TranslationBlocked && isSpecialAttention == projection.IsSpecialAttention)
+        {
+            return;
+        }
+
+        Update(projection, initialize: false);
+    }
+
+    private void Update(MessageRowProjection projection, bool initialize)
+    {
+        var record = projection.Record;
         var previous = Record;
         var previousSettings = settings;
         var hadNamePinyin = HasNamePinyin;
@@ -265,20 +320,14 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         var previousUserNameRole = UserNameRole;
         var previousBorderThickness = BorderThickness;
         Record = record;
-        settings = currentSettings;
-        translationPending = isTranslationPending;
-        filterStateVersion = settings.DanmuFilter.StateVersion;
-        translationBlocked = settings.IsTranslationBlocked(record);
-
-        if (initialize || previous.Kind != record.Kind || previous.ReplyUid != record.ReplyUid ||
-            previous.ReplyUserName != record.ReplyUserName || previous.ReplyUserNameColor != record.ReplyUserNameColor ||
-            previous.ReplyIsMystery != record.ReplyIsMystery)
-        {
-            SetProperty(ref reply, record.Kind == MessageKind.Danmu &&
-                !string.IsNullOrWhiteSpace(record.ReplyUserName)
-                ? new(record.ReplyIsMystery ? 0 : record.ReplyUid, record.ReplyUserName, record.ReplyUserNameColor)
-                : null, nameof(Reply));
-        }
+        settings = projection.Settings;
+        translationPending = projection.TranslationPending;
+        filterStateVersion = projection.FilterVersion;
+        translationBlocked = projection.TranslationBlocked;
+        canShowNamePinyin = projection.CanShowNamePinyin;
+        canShowContentPinyin = projection.CanShowContentPinyin;
+        isSpecialAttention = projection.IsSpecialAttention;
+        SetProperty(ref reply, projection.Reply, nameof(Reply));
 
         if (!deferPresentation && (initialize || previous.Kind != record.Kind || previous.Content != record.Content ||
             !previous.Emoticons.SequenceEqual(record.Emoticons)))
@@ -287,7 +336,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
                 TranslationTextExtractor.Extract(record.Content, record.Emoticons.Select(emoticon => emoticon.Text)).Length > 0;
         }
 
-        NotifyChange(previous.UserName, record.UserName, nameof(Name));
+        var nameChanged = SetProperty(ref name, projection.Name, nameof(Name));
         NotifyChange(previous.UserUid, record.UserUid, nameof(UserUid));
         NotifyChange(wasSpecialAttention, IsSpecialAttention, nameof(IsSpecialAttention));
         NotifyChange(previousUserNameRole, UserNameRole, nameof(UserNameRole));
@@ -302,7 +351,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         NotifyChange(previousSettings.AutoScrollLongMessages, settings.AutoScrollLongMessages, nameof(AutoScrollLongMessages));
         NotifyChange(previousSettings.PinyinLayout, settings.PinyinLayout, nameof(PinyinLayout));
 
-        if (!deferPresentation && (initialize || previous.UserName != record.UserName || previousSettings.ShowUserPinyin != settings.ShowUserPinyin))
+        if (!deferPresentation && (initialize || nameChanged || previousSettings.ShowUserPinyin != settings.ShowUserPinyin))
         {
             SetProperty(ref namePinyin, GetAnnotation(Name, settings.ShowUserPinyin), nameof(NamePinyin));
             SetProperty(ref nameAnnotations, HasNamePinyin ? pinyin.GetAnnotations(Name) : [], nameof(NameAnnotations));
@@ -317,13 +366,15 @@ public sealed class MessageItemViewModel : FeedRowViewModel
             record.Kind == MessageKind.Gift && (previous.GiftName != record.GiftName ||
                 previous.Quantity != record.Quantity || previous.TotalPrice != record.TotalPrice ||
                 previousSettings.CultureName != settings.CultureName) ||
-            IsContentPinyinEnabled(previous.Kind, previousSettings) != IsContentPinyinEnabled(record.Kind, settings)))
+            previousSettings.IsContentPinyinEnabled(previous.Kind) != settings.IsContentPinyinEnabled(record.Kind)))
         {
-            SetProperty(ref contentPinyin, IsContentPinyinEnabled(record.Kind, settings)
-                ? GetContentAnnotations(record) : [], nameof(ContentPinyin));
+            SetProperty(ref contentPinyin, settings.IsContentPinyinEnabled(record.Kind)
+                ? GetContentAnnotations(projection) : [], nameof(ContentPinyin));
         }
         if (deferPresentation && presentation?.Matches(record, settings.PresentationOptions) != true)
         {
+            nameRenderPlan = null;
+            contentRenderPlan = null;
             SetProperty(ref namePinyin, "", nameof(NamePinyin));
             SetProperty(ref nameAnnotations, Array.Empty<PinyinAnnotation>(), nameof(NameAnnotations));
             SetProperty(ref detailPinyin, "", nameof(DetailPinyin));
@@ -331,13 +382,8 @@ public sealed class MessageItemViewModel : FeedRowViewModel
             hasTranslatableContent = false;
             isPresentationPending = true;
         }
-        if (initialize || previous.MedalName != record.MedalName || previous.MedalLevel != record.MedalLevel)
-        {
-            SetProperty(ref medal, record.MedalLevel > 0 ? $"{record.MedalName} {record.MedalLevel}" : "", nameof(Medal));
-            var name = new StringInfo(record.MedalName);
-            SetProperty(ref medalName, name.LengthInTextElements <= MAX_MEDAL_NAME_TEXT_ELEMENTS
-                ? record.MedalName : name.SubstringByTextElements(0, MAX_MEDAL_NAME_TEXT_ELEMENTS), nameof(MedalName));
-        }
+        SetProperty(ref medal, projection.Medal, nameof(Medal));
+        SetProperty(ref medalName, projection.MedalName, nameof(MedalName));
         var cultureChanged = previousSettings.CultureName != settings.CultureName;
         if (record.Kind == MessageKind.RedPocket && !IsEventSummary)
         {
@@ -347,41 +393,14 @@ public sealed class MessageItemViewModel : FeedRowViewModel
             {
                 redPocket.Update(record.RedPocket);
                 OnPropertyChanged(nameof(RedPocket));
-                OnPropertyChanged(nameof(Name));
             }
         }
-        if (initialize || previous.Time != record.Time || cultureChanged)
-        {
-            SetProperty(ref time, record.Time.ToLocalTime().ToString("HH:mm:ss"), nameof(Time));
-        }
-        if (initialize || previous.Kind != record.Kind || previous.Content != record.Content ||
-            previous.GiftName != record.GiftName || previous.Quantity != record.Quantity ||
-            previous.TotalPrice != record.TotalPrice || previous.GuardLevel != record.GuardLevel ||
-            previousSettings.LanguageId != settings.LanguageId || cultureChanged)
-        {
-            SetProperty(ref detail, record.Kind != MessageKind.Guard || Localization.IsInitialized
-                ? FormatDetail() : null, nameof(Detail));
-        }
-        if (initialize || previous.Kind != record.Kind || previous.TotalPrice != record.TotalPrice || cultureChanged)
-        {
-            SetProperty(ref price, record.Kind == MessageKind.SuperChat ? $"￥{record.TotalPrice:0.##}" : "", nameof(Price));
-        }
-        if (IsEventSummary && Localization.IsInitialized &&
-            (initialize || previous.UserName != record.UserName || previous.Kind != record.Kind ||
-                previous.GiftName != record.GiftName ||
-                previous.Quantity != record.Quantity || previous.TotalPrice != record.TotalPrice ||
-                previous.HasKnownPrice != record.HasKnownPrice ||
-                previous.RedPocket != record.RedPocket ||
-                previous.GuardLevel != record.GuardLevel || previousSettings.LanguageId != settings.LanguageId || cultureChanged))
-        {
-            UpdateEventSummary();
-            if (record.Kind == MessageKind.RedPocket && string.IsNullOrWhiteSpace(record.UserName))
-            {
-                OnPropertyChanged(nameof(Name));
-            }
-        }
-        SetProperty(ref translation, !translationBlocked && record.TranslationFingerprint == settings.TranslationFingerprint
-            ? record.Translation ?? "" : "", nameof(Translation));
+        SetProperty(ref time, projection.Time, nameof(Time));
+        SetProperty(ref detail, projection.Detail, nameof(Detail));
+        SetProperty(ref price, projection.Price, nameof(Price));
+        SetProperty(ref summaryLabel, projection.SummaryLabel, nameof(SummaryLabel));
+        SetProperty(ref summaryValue, projection.SummaryValue, nameof(SummaryValue));
+        SetProperty(ref translation, projection.Translation, nameof(Translation));
         SetProperty(ref borderBrush, GetBorderBrush(), nameof(BorderBrush));
         NotifyChange(previousBorderThickness, BorderThickness, nameof(BorderThickness));
         SetProperty(ref medalBackgroundBrush, record.MedalGuardLevel switch
@@ -412,60 +431,13 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         }
     }
 
-    private static bool ContainsChinese(string text)
+    private IReadOnlyList<PinyinAnnotation> GetContentAnnotations(MessageRowProjection projection)
     {
-        return text.Any(character => character is >= '\u4E00' and <= '\u9FFF');
-    }
-
-    private static bool IsContentPinyinEnabled(MessageKind kind, MessageDisplaySettings displaySettings)
-    {
-        return kind switch
+        if (projection.Record.Kind == MessageKind.Gift)
         {
-            MessageKind.Danmu => displaySettings.ShowDanmuPinyin,
-            MessageKind.SuperChat => displaySettings.ShowSuperChatPinyin,
-            MessageKind.Gift => displaySettings.ShowGiftPinyin,
-            _ => false
-        };
-    }
-
-    private IReadOnlyList<PinyinAnnotation> GetContentAnnotations(MessageRecord record)
-    {
-        if (record.Kind == MessageKind.Gift)
-        {
-            return HasDetailPinyin ? pinyin.GetAnnotations(FormatDetail()) : [];
+            return HasDetailPinyin ? pinyin.GetAnnotations(projection.Detail!) : [];
         }
-        return pinyin.GetAnnotations(record.Content);
-    }
-
-    private string FormatDetail()
-    {
-        return Record.Kind switch
-        {
-            MessageKind.Gift => $"{Record.GiftName} ×{Record.Quantity} · ￥{Record.TotalPrice:0.##}",
-            MessageKind.Guard => Localization.Get($"Panel.Guard.{Record.GuardLevel}") + $" ×{Record.Quantity}",
-            _ => Record.Content
-        };
-    }
-
-    private void UpdateEventSummary()
-    {
-        var redPocketData = Record.RedPocket;
-        SetProperty(ref summaryLabel, Record.Kind switch
-        {
-            MessageKind.SuperChat => Localization.Get("Workbench.Panel.SuperChat"),
-            MessageKind.Gift => Localization.Format("Panel.EventSummary.Gift", Record.GiftName, Record.Quantity),
-            MessageKind.Guard => Localization.Format("Panel.EventSummary.Guard",
-                Localization.Get($"Panel.Guard.{Record.GuardLevel}"), Record.Quantity),
-            MessageKind.RedPocket => Localization.Format("Panel.EventSummary.RedPocket",
-                Localization.Get(redPocketData?.HasResult == true ? "RedPocket.Drawn" : "RedPocket.Waiting")),
-            _ => ""
-        }, nameof(SummaryLabel));
-        SetProperty(ref summaryValue, Record.Kind switch
-        {
-            MessageKind.RedPocket => redPocketData is null ? "" : RedPocketViewModel.FormatValue(redPocketData, includeGiftLabel: false),
-            MessageKind.Guard when !Record.HasKnownPrice && Record.TotalPrice == 0 => Localization.Get("Panel.EventSummary.UnknownValue"),
-            _ => Localization.Format("Panel.EventSummary.Value", Record.TotalPrice)
-        }, nameof(SummaryValue));
+        return pinyin.GetAnnotations(projection.Record.Content);
     }
 
     private IBrush GetBorderBrush()

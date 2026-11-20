@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Threading.Channels;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.Translation;
+using Yohuke.DanmuPanel.Models.Workspace;
 
 namespace Yohuke.DanmuPanel.Services.Translation;
 
@@ -34,7 +35,7 @@ internal sealed class MessagePresentationService : IAsyncDisposable
     }
 
     internal async Task<MessagePresentationSnapshot> PrepareAsync(MessageRecord record, MessagePresentationOptions options,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IReadOnlyList<DanmuEmoticon>? emoticons = null)
     {
         using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lifetime.Token);
         var operationToken = linkedCancellation.Token;
@@ -49,7 +50,7 @@ internal sealed class MessagePresentationService : IAsyncDisposable
             }
             try
             {
-                completion.TrySetResult(Prepare(record, options, pinyin, operationToken));
+                completion.TrySetResult(Prepare(record, options, pinyin, emoticons, operationToken));
             }
             catch (OperationCanceledException) when (operationToken.IsCancellationRequested)
             {
@@ -88,7 +89,7 @@ internal sealed class MessagePresentationService : IAsyncDisposable
     }
 
     private static MessagePresentationSnapshot Prepare(MessageRecord record, MessagePresentationOptions options,
-        IPinyinService pinyin, CancellationToken cancellationToken)
+        IPinyinService pinyin, IReadOnlyList<DanmuEmoticon>? emoticons, CancellationToken cancellationToken)
     {
         var name = options.ShowUserPinyin ? pinyin.GetPinyin(record.UserName) : "";
         if (name == record.UserName || string.IsNullOrWhiteSpace(name))
@@ -117,6 +118,10 @@ internal sealed class MessagePresentationService : IAsyncDisposable
         var annotations = contentEnabled ? pinyin.GetAnnotations(content) : [];
         var translatable = record.Kind is MessageKind.Danmu or MessageKind.SuperChat &&
             TranslationTextExtractor.Extract(record.Content, record.Emoticons.Select(value => value.Text)).Length > 0;
-        return new(record, options, name, nameAnnotations, gift, annotations, translatable);
+        var nameRenderPlan = nameAnnotations.Count > 0 ? MessageTextRenderPlan.Create(record.UserName, null, nameAnnotations) : null;
+        var contentRenderPlan = annotations.Count > 0 || emoticons is { Count: > 0 }
+            ? MessageTextRenderPlan.Create(content, emoticons, annotations) : null;
+        return new(record, options, name, nameAnnotations, gift, annotations, translatable, emoticons,
+            nameRenderPlan, contentRenderPlan);
     }
 }

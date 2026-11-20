@@ -231,7 +231,8 @@ public sealed class MessageFeedCompactTests
             settings.Translation.DisplayMode = TranslationDisplayMode.TranslationOnly;
             await view.Model.RefreshAsync();
             await WaitUntilAsync(() => viewers[0].Offset.X == 0, window);
-            Assert.False(marquees[0].IsEffectivelyVisible);
+            Assert.Null(marquees[0].GetVisualRoot());
+            Assert.Same(marquees[1], Assert.Single(VisibleBodyContents(FindRow(view, message.Id))));
             Assert.True(viewers[1].Offset.X > 0);
 
             settings.Translation.DisplayMode = TranslationDisplayMode.Bilingual;
@@ -239,12 +240,16 @@ public sealed class MessageFeedCompactTests
             settings.CompactSuperChatWrap = true;
             await view.Model.RefreshAsync();
             await WaitUntilAsync(() => viewers.All(viewer => viewer.Offset.X == 0), window);
-            Assert.All(marquees, marquee => Assert.False(marquee.IsEffectivelyVisible));
+            Assert.All(marquees, marquee => Assert.Null(marquee.GetVisualRoot()));
             Assert.All(VisibleBodyContents(FindRow(view, message.Id)), content => Assert.IsAssignableFrom<TextBlock>(content));
 
             settings.CompactDanmuWrap = false;
             settings.CompactSuperChatWrap = false;
             await view.Model.RefreshAsync();
+            Pump(window);
+            marquees = VisibleBodyContents(FindRow(view, message.Id)).Cast<HoverMarqueeTextBlock>().ToArray();
+            Assert.Equal(2, marquees.Length);
+            viewers = marquees.Select(marquee => Assert.Single(marquee.GetVisualDescendants().OfType<ScrollViewer>())).ToArray();
             await WaitUntilAsync(() => viewers.All(viewer => viewer.Offset.X > 0), window);
 
             settings.AutoScrollLongMessages = false;

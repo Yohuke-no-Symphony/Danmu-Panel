@@ -138,6 +138,90 @@ public sealed class FeedWindowTests
         Assert.True(oldest.HasNewer);
     }
 
+    /// <summary>从实时弹幕窗口翻到较早历史时，冷读仅物化最后保留范围中的正文。</summary>
+    [Fact]
+    public async Task PagingFromLiveAnchorsReadsOnlyTheFinalWindowPayloads()
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var store = new SqliteMessageStore(directory.DatabasePath);
+        var time = DateTimeOffset.FromUnixTimeSeconds(1800000000);
+        var records = Enumerable.Range(0, 12).Select(_ => Message(time)).ToArray();
+        await store.AppendBatchAsync(records, new());
+        var latest = (await store.LoadWindowAsync("tab", MessageKind.Danmu, new(4))).Scrolling;
+        Assert.Equal(records.Skip(8).Select(record => record.Id), Ids(latest));
+        var before = store.PayloadRowsRead;
+
+        var navigation = new MessageFeedWindowNavigation(new(4), Pinned: null, ScrollingCapacity: 5,
+            ScrollingFallbackLimit: 4, PageSize: 4, ScrollingDirection: MessageFeedPageDirection.Before,
+            LiveScrollingAnchors: (latest.Entries[0].Record.Id, latest.Entries[^1].Record.Id, false));
+        var result = await store.LoadNavigatedWindowAsync("tab", MessageKind.Danmu, navigation);
+
+        var page = result.Window.Scrolling;
+        Assert.Equal(records.Skip(4).Take(5).Select(record => record.Id), Ids(page));
+        Assert.True(page.HasOlder);
+        Assert.True(page.HasNewer);
+        Assert.Equal(5, store.PayloadRowsRead - before);
+    }
+
+    /// <summary>同毫秒的最近窗口会裁剪锚点时，完整保留旧窗口并只读取其正文。</summary>
+    [Fact]
+    public async Task LatestSnapshotKeepsTheFullReadingWindowWhenAShrinkWouldEvictItsAnchor()
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var store = new SqliteMessageStore(directory.DatabasePath);
+        var time = DateTimeOffset.FromUnixTimeSeconds(1800000000);
+        var records = Enumerable.Range(0, 16).Select(_ => Message(time)).ToArray();
+        await store.AppendBatchAsync(records[..10], new());
+        var oldWindow = (await store.LoadWindowAsync("tab", MessageKind.Danmu, new(10))).Scrolling;
+        await store.AppendBatchAsync(records[10..], new());
+        var payloadBefore = store.PayloadRowsRead;
+        var navigation = new MessageFeedWindowNavigation(new(4), Pinned: null, ScrollingCapacity: 7,
+            ScrollingFallbackLimit: 4, PageSize: 3, ReadingAnchor: (records[8].Id, records[0].Id, records[9].Id, 10));
+
+        var result = await store.LoadNavigatedWindowAsync("tab", MessageKind.Danmu, navigation);
+
+        Assert.True(result.ReadingWindowPreserved);
+        Assert.Equal(Ids(oldWindow), Ids(result.Window.Scrolling));
+        Assert.Equal(10, store.PayloadRowsRead - payloadBefore);
+        Assert.Equal(MessageFeedPageDirection.Range, result.ScrollingRequest.Direction);
+        Assert.Equal(10, result.ScrollingRequest.Limit);
+        Assert.True(result.Window.Scrolling.HasNewer);
+
+        var fits = await store.LoadNavigatedWindowAsync("tab", MessageKind.Danmu, navigation with { Scrolling = new(8) });
+
+        Assert.False(fits.ReadingWindowPreserved);
+        Assert.Equal(records[8..].Select(record => record.Id), Ids(fits.Window.Scrolling));
+        Assert.False(fits.Window.Scrolling.HasNewer);
+    }
+
+    /// <summary>锚点从当前普通弹幕区移除后直接返回最新窗口。</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HiddenOrDeletedReadingAnchorDoesNotFreezeTheLatestSnapshot(bool deleted)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var store = new SqliteMessageStore(directory.DatabasePath);
+        var time = DateTimeOffset.FromUnixTimeSeconds(1800000000);
+        var records = Enumerable.Range(0, 10).Select(_ => Message(time)).ToArray();
+        records[2] = records[2] with { Content = "隐藏的锚点", IsTest = deleted };
+        await store.AppendBatchAsync(records, new());
+        if (deleted)
+        {
+            await store.ClearTestMessagesAsync("tab");
+        }
+        var filter = new DanmuRegexFilter(new() { Rules = [new() { Pattern = "^隐藏的锚点$", BlockDisplay = true }] });
+        var navigation = new MessageFeedWindowNavigation(new(3), Pinned: null, ScrollingCapacity: 10,
+            ScrollingFallbackLimit: 3, PageSize: 3, ReadingAnchor: (records[2].Id, records[0].Id, records[4].Id, 5));
+
+        var result = await store.LoadNavigatedWindowAsync("tab", MessageKind.Danmu, navigation,
+            danmuRegexFilter: deleted ? null : filter);
+
+        Assert.False(result.ReadingWindowPreserved);
+        Assert.Equal(MessageFeedPageDirection.Latest, result.ScrollingRequest.Direction);
+        Assert.Equal(records[7..].Select(record => record.Id), Ids(result.Window.Scrolling));
+    }
+
     /// <summary>付费窗口的已读筛选与可见的完整未读计数保持独立，直接定位不会穿越房间。</summary>
     [Fact]
     public async Task GiftPagesRespectVisibilityReadStateAndRoom()

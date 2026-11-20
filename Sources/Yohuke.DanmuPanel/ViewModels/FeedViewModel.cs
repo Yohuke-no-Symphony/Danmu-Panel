@@ -14,7 +14,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     private const int HISTORY_PAGE_SIZE = 100;
     private const int BUFFERED_HISTORY_PAGES = 3;
     private const int LOADING_HINT_DELAY_MILLISECONDS = 150;
-    private static readonly TimeSpan LIVE_REFRESH_INTERVAL = TimeSpan.FromMilliseconds(60);
+    private static readonly TimeSpan LIVE_REFRESH_INTERVAL = TimeSpan.FromSeconds(1.0 / 60);
     private static readonly TimeSpan SNAPSHOT_REFRESH_INTERVAL = TimeSpan.FromMilliseconds(150);
     private readonly PanelRuntime runtime;
     private readonly MessageKind kind;
@@ -38,6 +38,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     private bool isLoadingHistory;
     private bool hasLoadedRoom;
     private Task? historyLoadTask;
+    private CancellationTokenSource? historyPageRequest;
     private bool disposed;
     private bool hasPinnedItems;
     private bool hasScrollingItems;
@@ -70,6 +71,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     public RoomTabState? SelectedRoom => room;
     public bool HasSelectedRoom => room is not null;
     public bool IsReadingHistory { get; set; }
+    public bool HasOlderHistory => scrollingPage?.HasOlder == true;
     public bool HasNewerHistory => scrollingPage?.HasNewer == true;
     public bool HasOlderPinnedMessages => pinnedPage?.HasOlder == true;
     public bool HasNewerPinnedMessages => pinnedPage?.HasNewer == true;
@@ -86,6 +88,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     public event Action? ViewportUpdateCompleted;
     internal int ViewportUpdateDepth { get; private set; }
     internal int WindowRevision => revision;
+    internal Func<MessageItemViewModel?>? ReadVisibleAnchor { get; set; }
 
     public bool IsCompactDisplay => isCompactDisplay;
     public bool IsCompactMessageWrap => isCompactMessageWrap;
@@ -118,8 +121,9 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>切换阅读房间，取消旧房间的图片回写。</summary>
-    public async Task SelectRoomAsync(RoomTabState? selected)
+    public async Task SelectRoomAsync(RoomTabState? selected, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (disposed)
         {
             return;
@@ -129,7 +133,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(HasSelectedRoom));
         ResetWindow();
         UnreadCount = 0;
-        await RefreshAsync();
+        await RefreshCoreAsync(requestCancellation: cancellationToken);
     }
 
     private void ResetWindow()
@@ -148,6 +152,8 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         SetPages(null, null);
         retentionCount = runtime.Configuration.Settings.MessageRetentionCount;
         translationRequested.Clear();
+        presentationQueue.Clear();
+        presentationQueue = new();
         ClearLiveQueue();
         lifetime.Cancel();
         lifetime.Dispose();
@@ -178,6 +184,10 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         if (disposed)
         {
             return;
+        }
+        if (room?.Id == target.Id)
+        {
+            CancelHistoryPage();
         }
         await runtime.ClearFeedAsync(target, kind);
         if (!disposed && room?.Id == target.Id)
@@ -210,20 +220,24 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         {
             return;
         }
-        using var request = requestCancellation.CanBeCanceled
+        var isPage = direction is MessageFeedPageDirection.Before or MessageFeedPageDirection.After;
+        using var request = isPage || requestCancellation.CanBeCanceled
             ? CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, requestCancellation) : null;
         var cancellationToken = request?.Token ?? lifetime.Token;
-        var loading = direction is MessageFeedPageDirection.Before or MessageFeedPageDirection.After
-            or MessageFeedPageDirection.Around || !hasLoadedRoom ? ++loadingRevision : 0;
-        if (loading != 0)
+        if (isPage)
         {
-            IsLoadingHistory = true;
+            historyPageRequest = request;
         }
+        var loading = isPage || direction == MessageFeedPageDirection.Around || !hasLoadedRoom ? ++loadingRevision : 0;
         var entered = false;
         var viewportUpdateStarted = false;
         IDisposable? loadingHint = null;
         try
         {
+            if (loading != 0)
+            {
+                IsLoadingHistory = true;
+            }
             await refreshGate.WaitAsync(cancellationToken);
             entered = true;
             if (disposed || version != revision || cancellationToken.IsCancellationRequested)
@@ -236,65 +250,80 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
                 BeginViewportUpdate();
                 loadingHint = DispatcherTimer.RunOnce(() =>
                 {
-                    if (!disposed && version == revision && loading == loadingRevision && !pagePinned)
+                    if (WindowIsCurrent(version, cancellationToken) && loading == loadingRevision && !pagePinned)
                     {
                         AddLoadingRows(direction == MessageFeedPageDirection.After);
                     }
                 }, TimeSpan.FromMilliseconds(LOADING_HINT_DELAY_MILLISECONDS), DispatcherPriority.Background);
             }
-            var (snapshot, historyRequest, pinnedRequest) =
-                await ReadWindowAsync(current, direction, pagePinned, targetId, cancellationToken);
-            loadingHint?.Dispose();
-            loadingHint = null;
-            if (disposed || version != revision || cancellationToken.IsCancellationRequested)
+            while (WindowIsCurrent(version, cancellationToken))
             {
-                return;
-            }
-            if (direction == MessageFeedPageDirection.Around && snapshot.Scrolling.Entries.Count == 0)
-            {
-                return;
-            }
-            var settings = runtime.Configuration.Settings;
-            var display = MessageDisplaySettings.Capture(settings, displaySettings, runtime.DanmuFilter);
-            if (!IsUnchanged(snapshot, display))
-            {
-                if (!viewportUpdateStarted)
+                if (SortOrder != runtime.Configuration.Settings.MessageSorting.GetOrder(kind, ReadFilter))
                 {
-                    viewportUpdateStarted = true;
-                    BeginViewportUpdate();
+                    RequestSnapshotRefresh();
+                    return;
                 }
-                await ApplyWindowAsync(snapshot, display, version, cancellationToken);
-            }
-            if (disposed || version != revision || cancellationToken.IsCancellationRequested)
-            {
+                var context = CaptureProjectionContext();
+                var watchAnchor = kind == MessageKind.Danmu && hasLoadedRoom && !keepHistoryWindow && direction is null;
+                var anchor = watchAnchor ? GetReadingAnchor() : null;
+                var result = await ReadWindowAsync(current, direction, pagePinned, targetId, anchor, cancellationToken);
+                var snapshot = result.Window;
+                if (!WindowIsCurrent(version, cancellationToken))
+                {
+                    return;
+                }
+                if (!ProjectionOptionsAreCurrent(context))
+                {
+                    continue;
+                }
+                loadingHint?.Dispose();
+                loadingHint = null;
+                if (direction == MessageFeedPageDirection.Around && snapshot.Scrolling.Entries.Count == 0)
+                {
+                    return;
+                }
+
+                var plan = await PlanWindowAsync(snapshot, context, cancellationToken);
+                if (!WindowIsCurrent(version, cancellationToken))
+                {
+                    return;
+                }
+                if (!ProjectionOptionsAreCurrent(context, checkDisplay: true))
+                {
+                    continue;
+                }
+                if (plan.HasChanges)
+                {
+                    if (!viewportUpdateStarted)
+                    {
+                        viewportUpdateStarted = true;
+                        BeginViewportUpdate();
+                    }
+                    if (!await ApplyWindowAsync(plan, context, version, cancellationToken, ReadingPositionIsCurrent))
+                    {
+                        continue;
+                    }
+                }
+                else if (!ReadingPositionIsCurrent())
+                {
+                    continue;
+                }
+                displaySettings = context.Display;
+                displayFilterVersion = context.FilterVersion;
+                retentionCount = context.RetentionCount;
+                PublishWindow(result, direction, pagePinned);
                 return;
-            }
-            if (direction == MessageFeedPageDirection.Latest)
-            {
-                keepHistoryWindow = false;
-                keepPinnedWindow = false;
-                showNewest = true;
-            }
-            else if (direction is MessageFeedPageDirection.Before or MessageFeedPageDirection.After or MessageFeedPageDirection.Around)
-            {
-                if (pagePinned)
+
+                bool ReadingPositionIsCurrent()
                 {
-                    keepPinnedWindow = true;
+                    if (!watchAnchor)
+                    {
+                        return true;
+                    }
+                    var currentAnchor = GetReadingAnchor();
+                    return ReferenceEquals(currentAnchor, anchor) || !result.ReadingWindowPreserved &&
+                        (currentAnchor is null || snapshot.Scrolling.Entries.Any(entry => entry.Record.Id == currentAnchor.Record.Id));
                 }
-                else
-                {
-                    keepHistoryWindow = true;
-                }
-            }
-            retainedHistory = RetainedRange(snapshot.Scrolling, historyRequest);
-            retainedPins = RetainedRange(snapshot.Pinned, pinnedRequest);
-            SetPages(snapshot.Scrolling, snapshot.Pinned);
-            UnreadCount = snapshot.UnreadCount;
-            NotifyRegions();
-            if (!hasLoadedRoom)
-            {
-                hasLoadedRoom = true;
-                InitialLoadCompleted?.Invoke();
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -302,6 +331,10 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            if (isPage && ReferenceEquals(historyPageRequest, request))
+            {
+                historyPageRequest = null;
+            }
             loadingHint?.Dispose();
             try
             {
@@ -328,6 +361,42 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
                     }
                 }
             }
+        }
+    }
+
+    private void PublishWindow(MessageFeedWindowResult result, MessageFeedPageDirection? direction, bool pagePinned)
+    {
+        var snapshot = result.Window;
+        if (direction == MessageFeedPageDirection.Latest)
+        {
+            keepHistoryWindow = false;
+            keepPinnedWindow = false;
+            showNewest = true;
+        }
+        else if (direction is MessageFeedPageDirection.Before or MessageFeedPageDirection.After or MessageFeedPageDirection.Around)
+        {
+            if (pagePinned)
+            {
+                keepPinnedWindow = true;
+            }
+            else
+            {
+                keepHistoryWindow = true;
+            }
+        }
+        else if (result.ReadingWindowPreserved)
+        {
+            keepHistoryWindow = true;
+        }
+        retainedHistory = RetainedRange(snapshot.Scrolling, result.ScrollingRequest);
+        retainedPins = RetainedRange(snapshot.Pinned, result.PinnedRequest);
+        SetPages(snapshot.Scrolling, snapshot.Pinned);
+        UnreadCount = snapshot.UnreadCount;
+        NotifyRegions();
+        if (!hasLoadedRoom)
+        {
+            hasLoadedRoom = true;
+            InitialLoadCompleted?.Invoke();
         }
     }
 
@@ -368,6 +437,8 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
             return;
         }
         Volatile.Write(ref disposed, true);
+        ReadVisibleAnchor = null;
+        IsVisibleForPresentation = null;
         IsLoadingHistory = false;
         RemoveLoadingRows();
         revision++;
@@ -380,6 +451,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
             runtime.DanmuTranslationCommitted -= OnDanmuTranslationCommitted;
         }
         ClearLiveQueue();
+        presentationQueue.Clear();
         runtime.SpecialAttentionChanged -= OnSpecialAttentionChanged;
         refreshTimer.Stop();
         refreshTimer.Tick -= OnRefreshTimer;
@@ -394,6 +466,15 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         {
             return;
         }
+        if (roomId.Length == 0)
+        {
+            Interlocked.Increment(ref projectionOptionsRevision);
+        }
+        RequestSnapshotRefresh();
+    }
+
+    private void RequestSnapshotRefresh()
+    {
         Interlocked.Exchange(ref refreshRequested, 1);
         ScheduleRefresh();
     }
@@ -426,6 +507,10 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
 
     private async void OnRefreshTimer(object? sender, EventArgs args)
     {
+        if (refreshTimer.Interval == LIVE_REFRESH_INTERVAL && IsLiveBatchGrowing())
+        {
+            return;
+        }
         refreshTimer.Stop();
         var requiresSnapshot = Interlocked.Exchange(ref refreshRequested, 0) != 0;
         try
@@ -448,16 +533,35 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
 
     private async Task LoadEmoticonsAsync(MessageItemViewModel item, CancellationToken cancellationToken)
     {
+        var record = item.Record;
+        if (record.Emoticons.Count == 0)
+        {
+            return;
+        }
         try
         {
-            var emoticons = await Task.WhenAll(item.Record.Emoticons.Select(async value => new DanmuEmoticon
+            var emoticons = await Task.Run(() => Task.WhenAll(record.Emoticons.Select(async value => new DanmuEmoticon
             {
                 Text = value.Text,
                 ImagePath = await runtime.Emoticons.GetEmoticonAsync(value.Url, cancellationToken)
-            }));
-            if (!disposed && !cancellationToken.IsCancellationRequested && Items.Contains(item))
+            })), cancellationToken);
+            var images = emoticons.Where(value => value.ImagePath.Length > 0).ToArray();
+            while (IsCurrent())
             {
-                item.Emoticons = emoticons.Where(value => value.ImagePath.Length > 0).ToArray();
+                var content = item.Detail;
+                var annotations = item.ContentPinyin;
+                var plan = images.Length > 0 || annotations.Count > 0
+                    ? await Task.Run(() => MessageTextRenderPlan.Create(content, images, annotations), cancellationToken)
+                    : null;
+                if (!IsCurrent())
+                {
+                    return;
+                }
+                if (content == item.Detail && ReferenceEquals(annotations, item.ContentPinyin))
+                {
+                    item.ApplyEmoticons(images, plan);
+                    return;
+                }
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -466,6 +570,12 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         catch (Exception exception)
         {
             Failed?.Invoke(exception);
+        }
+
+        bool IsCurrent()
+        {
+            return !disposed && !cancellationToken.IsCancellationRequested && ContainsActiveItem(item) &&
+                item.Record.Generation == record.Generation && item.Record.Emoticons.SequenceEqual(record.Emoticons);
         }
     }
 }

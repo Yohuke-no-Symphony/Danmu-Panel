@@ -193,16 +193,18 @@ public sealed class MessageFeedTextLayoutStabilityTests(ITestOutputHelper output
             Assert.Equal(2, placeholders.Length);
             Assert.All(placeholders, placeholder => Assert.True(placeholder.IsEffectivelyVisible));
             var nameRegion = Assert.IsType<StackPanel>(placeholders.Single(control => control.Classes.Contains("namePinyinPending")).Parent);
-            var contentRegion = Assert.IsType<StackPanel>(placeholders.Single(control => control.Classes.Contains("contentPinyinPending")).Parent);
+            var contentPlaceholder = placeholders.Single(control => control.Classes.Contains("contentPinyinPending"));
+            var contentRegion = Assert.Single(row.GetVisualDescendants().OfType<StackPanel>(), control => control.Name == "OriginalRegion");
             var pendingNameHeight = nameRegion.Bounds.Height;
             var pendingContentHeight = contentRegion.Bounds.Height;
 
-            Assert.True(item.ApplyPresentation(new(record, settings.PresentationOptions,
-                pinyin.GetPinyin(record.UserName), pinyin.GetAnnotations(record.UserName), "",
-                pinyin.GetAnnotations(record.Content), true)));
+            var presentation = await runtime.Presentations.PrepareAsync(record, settings.PresentationOptions,
+                CancellationToken.None, item.Emoticons);
+            Assert.True(item.ApplyPresentation(presentation));
             Pump(window);
 
-            Assert.All(placeholders, placeholder => Assert.False(placeholder.IsVisible));
+            Assert.False(placeholders.Single(control => control.Classes.Contains("namePinyinPending")).IsVisible);
+            Assert.Null(contentPlaceholder.GetVisualRoot());
             Assert.True(Assert.IsType<EmoticonTextBlock>(VisibleText(row, "originalText")).IsSingleTextLine);
             output.WriteLine($"name={pendingNameHeight}->{nameRegion.Bounds.Height}, content={pendingContentHeight}->{contentRegion.Bounds.Height}");
             Assert.InRange(Math.Abs(nameRegion.Bounds.Height - pendingNameHeight), 0, 0.5);
@@ -267,7 +269,8 @@ public sealed class MessageFeedTextLayoutStabilityTests(ITestOutputHelper output
             }, settings);
             Pump(window);
 
-            Assert.False(placeholder.IsVisible);
+            Assert.Null(placeholder.GetVisualRoot());
+            Assert.False(placeholder.IsShimmering);
             Assert.True(EmoticonTextBlock.HasSingleTextLine(VisibleText(row, "translatedText")));
             output.WriteLine($"body={pendingBodyHeight}->{body.Bounds.Height}, translation={pendingTranslationHeight}->{translationRegion.Bounds.Height}");
             Assert.InRange(Math.Abs(translationRegion.Bounds.Height - pendingTranslationHeight), 0, 0.5);

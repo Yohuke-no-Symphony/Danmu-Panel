@@ -98,13 +98,12 @@ public sealed class PinyinLoadingPlaceholderTests
                 Assert.InRange(control.Bounds.Height, 1, 20);
                 Assert.InRange(control.Bounds.Width, 1, 80);
             });
-            var original = Assert.Single(view.GetVisualDescendants().OfType<EmoticonTextBlock>(),
-                control => control.Classes.Contains("regularFeedContent") && control.Classes.Contains("originalText") &&
-                    !control.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any());
+            var originalBranch = Assert.Single(view.GetVisualDescendants().OfType<Control>(),
+                control => control.Classes.Contains("originalText"));
+            var original = compact
+                ? Assert.Single(Assert.IsType<HoverMarqueeTextBlock>(originalBranch).GetVisualDescendants().OfType<EmoticonTextBlock>())
+                : Assert.IsType<EmoticonTextBlock>(originalBranch);
             Assert.Equal("你好，拼音正在后台准备", original.ContentText);
-            Assert.Equal(compact, view.GetVisualDescendants().OfType<HoverMarqueeTextBlock>()
-                .Single(control => control.Classes.Contains("originalText") &&
-                    !control.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any()).IsEffectivelyVisible);
             var previewDirectory = Path.Combine(Path.GetTempPath(), "danmaku-panel-previews");
             Directory.CreateDirectory(previewDirectory);
             using (var preview = window.CaptureRenderedFrame())
@@ -117,11 +116,9 @@ public sealed class PinyinLoadingPlaceholderTests
             await view.Model.WaitForPresentationAsync().WaitAsync(TimeSpan.FromSeconds(10));
             Pump(window);
 
-            Assert.All(waiting, control =>
-            {
-                Assert.False(control.IsVisible);
-                Assert.False(control.IsShimmering);
-            });
+            Assert.All(waiting, control => Assert.False(control.IsShimmering));
+            Assert.False(waiting.Single(control => control.Classes.Contains("namePinyinPending")).IsVisible);
+            Assert.Null(waiting.Single(control => control.Classes.Contains("contentPinyinPending")).GetVisualRoot());
             Assert.NotEmpty(Assert.Single(view.Model.Items).ContentPinyin);
             Assert.Empty(errors);
         }

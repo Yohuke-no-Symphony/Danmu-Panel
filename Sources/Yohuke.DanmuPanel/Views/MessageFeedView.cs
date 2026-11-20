@@ -19,8 +19,8 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
     private readonly Action<Exception> reportError;
     private readonly MessageKind messageKind;
     private readonly Func<MessageRecord, Task>? navigateToMessage;
-    private readonly ListBox list;
-    private readonly ListBox pinnedList;
+    private readonly MessageFeedListBox list;
+    private readonly MessageFeedListBox pinnedList;
     private readonly MessageColumnResizeController columnResize;
     private readonly MessageFeedTemplates templates = new();
     private DanmuFeedScrollController? scroll;
@@ -69,6 +69,10 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
         Model.Failed += reportError;
         list = CreateList(Model.ScrollingRows, kind, "ScrollingMessages");
         pinnedList = CreateList(Model.PinnedItems, kind, "PinnedMessages");
+        if (kind == MessageKind.Danmu)
+        {
+            Model.IsVisibleForPresentation = item => list.IsMessageVisible(item) || pinnedList.IsMessageVisible(item);
+        }
         pinnedList.MaxHeight = 0;
         list.TemplateApplied += (_, _) => AttachScroll(list, kind);
         list.AttachedToVisualTree += (_, _) =>
@@ -83,6 +87,7 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
             Model.InitialLoadCompleted -= OnInitialLoadCompleted;
             Model.ViewportUpdateStarted -= OnViewportUpdateStarted;
             Model.ViewportUpdateCompleted -= OnViewportUpdateCompleted;
+            Model.ReadVisibleAnchor = null;
             scroll?.Dispose();
             scroll = null;
         };
@@ -105,6 +110,7 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
         {
             if (args.PropertyName is nameof(FeedViewModel.SelectedRoom) or nameof(FeedViewModel.ReadFilter) or nameof(FeedViewModel.SortOrder))
             {
+                scroll?.CancelOlderPageInput();
                 if (args.PropertyName == nameof(FeedViewModel.SelectedRoom) || pingedItem is not null)
                 {
                     CancelPing();
@@ -338,6 +344,15 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
         }
     }
 
+    private void OnFollowingLatestChanged(bool followingLatest)
+    {
+        if (messageKind == MessageKind.Danmu && followingLatest && !Model.HasNewerHistory && Header.LoadMoreCommand.IsRunning)
+        {
+            Model.CancelHistoryPage();
+        }
+        UpdateReadingState(followingLatest);
+    }
+
     private void OnViewportUpdateStarted()
     {
         scroll?.BeginViewportUpdate();
@@ -346,6 +361,16 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
     private void OnViewportUpdateCompleted()
     {
         scroll?.EndViewportUpdate();
+    }
+
+    private void OnOlderPageRequested()
+    {
+        var command = Header.LoadMoreCommand;
+        if (Model.HasOlderHistory && !Model.IsLoadingHistory && !Header.BackToLatestCommand.IsRunning &&
+            command.CanExecute(null))
+        {
+            command.Execute(null);
+        }
     }
 
     private async Task ClearAsync(MessageKind kind)
@@ -359,11 +384,15 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
             Localization.Format("Panel.ClearFeedConfirm", room.Name, Localization.Get("Workbench.Panel." + kind)));
         if (await dialog.ShowDialog<bool>(owner))
         {
+            if (Model.SelectedRoom?.Id == room.Id)
+            {
+                scroll?.CancelOlderPageInput();
+            }
             await Model.ClearAsync(room);
         }
     }
 
-    private ListBox CreateList(IEnumerable<FeedRowViewModel> items, MessageKind kind, string name)
+    private MessageFeedListBox CreateList(IEnumerable<FeedRowViewModel> items, MessageKind kind, string name)
     {
         var result = new MessageFeedListBox(() => CreateRow(kind), kind)
         {
@@ -374,6 +403,8 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
         if (kind == MessageKind.Danmu)
         {
             result.Classes.Add("danmuFeedList");
+            result.MessageBecameVisible += Model.PrioritizePresentation;
+            result.MessageBecameHidden += Model.DeprioritizePresentation;
         }
         result.ContextMenu = (LocalizedContextMenu)GetTemplate(kind == MessageKind.Danmu ? "DanmuPanelMenu" : "CardPanelMenu").Build(Header)!;
         return result;
@@ -384,8 +415,14 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
         if (list.GetVisualRoot() is not null && scroll is null &&
             list.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault() is { } viewer)
         {
-            scroll = new(viewer, list, followNewMessages: kind == MessageKind.Danmu, startAtTop: kind != MessageKind.Danmu);
-            scroll.FollowingLatestChanged += UpdateReadingState;
+            var isDanmu = kind == MessageKind.Danmu;
+            scroll = new(viewer, list, followNewMessages: isDanmu, startAtTop: !isDanmu,
+                requestOlderPage: isDanmu ? OnOlderPageRequested : null);
+            if (isDanmu)
+            {
+                Model.ReadVisibleAnchor = scroll.GetVisibleReadingAnchor;
+            }
+            scroll.FollowingLatestChanged += OnFollowingLatestChanged;
             scroll.Attach(Model.ScrollingRows);
             UpdateReadingState(scroll.IsFollowingLatest);
             for (var index = 0; index < Model.ViewportUpdateDepth; index++)
@@ -556,6 +593,7 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
 
     private async Task ScrollToLatestAsync()
     {
+        scroll?.CancelOlderPageInput();
         var version = Model.WindowRevision;
         await Model.ShowLatestAsync();
         if (version != Model.WindowRevision)

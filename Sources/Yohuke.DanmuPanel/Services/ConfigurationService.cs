@@ -44,6 +44,7 @@ public sealed class ConfigurationService
         MessageColumnSettingsValidator.Validate(configuration.Settings.MessageColumns);
         MessageRetentionSettingsValidator.Validate(configuration.Settings.MessageRetentionCount);
         MessageSortSettingsValidator.Validate(configuration.Settings.MessageSorting);
+        TranslationCacheSettingsValidator.Validate(configuration.Settings.Translation);
         var snapshots = new Dictionary<string, string>
         {
             ["settings.json"] = JsonSerializer.Serialize(configuration.Settings, JSON_OPTIONS),
@@ -111,6 +112,7 @@ public sealed class ConfigurationService
                 MessageColumnSettingsValidator.Validate(settings.MessageColumns);
                 MessageRetentionSettingsValidator.Validate(settings.MessageRetentionCount);
                 MessageSortSettingsValidator.Validate(settings.MessageSorting);
+                TranslationCacheSettingsValidator.Validate(settings.Translation);
             }
             return true;
         }

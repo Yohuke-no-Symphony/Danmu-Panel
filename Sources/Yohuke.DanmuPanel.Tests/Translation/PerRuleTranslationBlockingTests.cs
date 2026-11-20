@@ -45,12 +45,11 @@ public sealed class PerRuleTranslationBlockingTests
         var hiddenCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var completedCount = 0;
         var skippedCount = 0;
-        await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient((request, _) =>
         {
             requests.Enqueue(request.Text);
             return Task.FromResult("translated " + request.Text);
-        }), cache);
+        }));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.Error += errors.Enqueue;
         scheduler.Completed += (_, args) =>

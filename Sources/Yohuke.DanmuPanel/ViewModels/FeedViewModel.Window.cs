@@ -29,7 +29,13 @@ public sealed partial class FeedViewModel
 
     internal Task ShowLatestAsync()
     {
+        CancelHistoryPage();
         return RefreshCoreAsync(MessageFeedPageDirection.Latest);
+    }
+
+    internal void CancelHistoryPage()
+    {
+        historyPageRequest?.Cancel();
     }
 
     internal void ResumeLiveDanmuAtLatest()
@@ -54,42 +60,56 @@ public sealed partial class FeedViewModel
         return historyLoadTask;
     }
 
-    private async Task<(MessageFeedWindow Window, MessageFeedPageRequest History, MessageFeedPageRequest? Pins)> ReadWindowAsync(
+    private MessageItemViewModel? GetReadingAnchor()
+    {
+        return IsReadingHistory ? ReadVisibleAnchor?.Invoke() : null;
+    }
+
+    private Task<MessageFeedWindowResult> ReadWindowAsync(
         RoomTabState current, MessageFeedPageDirection? direction,
-        bool pagePinned, string? targetId, CancellationToken cancellationToken)
+        bool pagePinned, string? targetId, MessageItemViewModel? anchor, CancellationToken cancellationToken)
     {
         var settings = runtime.Configuration.Settings;
-        var resized = retentionCount != settings.MessageRetentionCount;
-        retentionCount = settings.MessageRetentionCount;
-        var capacity = retentionCount + BUFFERED_HISTORY_PAGES * HISTORY_PAGE_SIZE;
+        var requestedRetentionCount = settings.MessageRetentionCount;
+        var resized = retentionCount != requestedRetentionCount;
+        var capacity = requestedRetentionCount + BUFFERED_HISTORY_PAGES * HISTORY_PAGE_SIZE;
+        var preserveReadingRange = kind == MessageKind.Danmu && IsReadingHistory && keepHistoryWindow && direction is null;
+        if (preserveReadingRange)
+        {
+            capacity = Math.Max(capacity, ScrollingItems.Count);
+        }
         var previous = scrollingPage;
         var previousPinned = pinnedPage;
         var resetToLatest = direction == MessageFeedPageDirection.Latest;
         var pauseScrolling = kind == MessageKind.Danmu ? keepHistoryWindow :
-            IsReadingHistory && (previous?.Entries.Count >= retentionCount || previous?.HasNewer == true);
-        var preserveScrolling = !resized && !resetToLatest &&
+            IsReadingHistory && (previous?.Entries.Count >= requestedRetentionCount || previous?.HasNewer == true);
+        var preserveScrolling = preserveReadingRange || !resized && !resetToLatest &&
             (pauseScrolling || keepHistoryWindow && previous?.HasNewer == true || pagePinned);
         var initialLimit = keepHistoryWindow && !resized && !resetToLatest
-            ? Math.Clamp(previous?.Entries.Count ?? retentionCount, retentionCount, capacity) : retentionCount;
+            ? Math.Clamp(previous?.Entries.Count ?? requestedRetentionCount, requestedRetentionCount, capacity)
+            : requestedRetentionCount;
         var start = kind != MessageKind.Danmu && ReadFilter == MessageReadFilter.Unread &&
             SortOrder == MessageSortOrder.OldestFirst && !showNewest && !resetToLatest
             ? MessageFeedPageDirection.Oldest : MessageFeedPageDirection.Latest;
         var adjacent = direction is MessageFeedPageDirection.Before or MessageFeedPageDirection.After;
         var history = retainedHistory;
-        if ((preserveScrolling || adjacent && !pagePinned) && history is null && kind == MessageKind.Danmu && ScrollingItems.Count > 0)
+        var scrollingDirection = adjacent && !pagePinned ? direction : null;
+        if (resized && scrollingDirection is not null && !keepHistoryWindow && !IsReadingHistory)
         {
-            var bounds = await runtime.Messages.GetTimelineBoundsAsync(current.Id, ScrollingItems[0].Record.Id,
-                ScrollingItems[^1].Record.Id, cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-            if (bounds is { } range)
+            if ((start, scrollingDirection) is (MessageFeedPageDirection.Latest, MessageFeedPageDirection.Before)
+                or (MessageFeedPageDirection.Oldest, MessageFeedPageDirection.After))
             {
-                history = new(capacity, MessageFeedPageDirection.Range, range.First, range.Last);
-                previous = (await runtime.Messages.LoadWindowAsync(current.Id, kind, history,
-                    hideEmoticonDanmu: settings.HideEmoticonDanmu, danmuRegexFilter: runtime.DanmuFilter,
-                    cancellationToken: cancellationToken)).Scrolling;
-                cancellationToken.ThrowIfCancellationRequested();
+                initialLimit += HISTORY_PAGE_SIZE;
             }
+            scrollingDirection = null;
         }
+        (string FirstId, string LastId, bool Preserve)? liveAnchors = null;
+        if (direction != MessageFeedPageDirection.Around && (preserveScrolling || scrollingDirection is not null) &&
+            history is null && kind == MessageKind.Danmu && ScrollingItems.Count > 0)
+        {
+            liveAnchors = (ScrollingItems[0].Record.Id, ScrollingItems[^1].Record.Id, preserveScrolling);
+        }
+
         var scrolling = preserveScrolling && history is { } currentHistory
             ? currentHistory with { Limit = capacity }
             : new MessageFeedPageRequest(initialLimit, start);
@@ -101,69 +121,37 @@ public sealed partial class FeedViewModel
                 : new(HISTORY_PAGE_SIZE, MessageFeedPageDirection.Oldest);
         }
 
+        MessageFeedPageRequest? emptyPinnedFallback = null;
         if (adjacent && pagePinned && previousPinned is { Entries.Count: > 0 })
         {
             pinned = Adjacent(retainedPins!, direction!.Value);
-        }
-        else if (adjacent && !pagePinned && history is not null && previous is { Entries.Count: > 0 })
-        {
-            scrolling = Adjacent(history, direction!.Value);
+            emptyPinnedFallback = retainedPins! with { Limit = HISTORY_PAGE_SIZE };
         }
         else if (direction == MessageFeedPageDirection.Around)
         {
-            scrolling = new(retentionCount, direction.Value, TargetId: targetId);
-        }
-        var filter = runtime.DanmuFilter;
-        var snapshot = await LoadAsync(scrolling, pinned);
-        cancellationToken.ThrowIfCancellationRequested();
-        if (adjacent && pagePinned && previousPinned is { Entries.Count: > 0 })
-        {
-            if (snapshot.Pinned.Entries.Count == 0)
-            {
-                pinned = retainedPins! with { Limit = HISTORY_PAGE_SIZE };
-                snapshot = await LoadAsync(scrolling, pinned);
-            }
-        }
-        else if (adjacent && !pagePinned && history is not null && previous is { Entries.Count: > 0 })
-        {
-            var before = direction == MessageFeedPageDirection.Before;
-            var combined = before ? snapshot.Scrolling.Entries.Concat(previous.Entries) :
-                previous.Entries.Concat(snapshot.Scrolling.Entries);
-            var bounded = (before ? combined.Take(capacity) : combined.TakeLast(capacity)).ToArray();
-            scrolling = Range(bounded, capacity);
-            snapshot = await LoadAsync(scrolling, pinned);
-        }
-        else if (direction is null && kind != MessageKind.Danmu && !resized && !preserveScrolling &&
-            IsReadingHistory && !pauseScrolling && history is { } oldRange && previous?.Entries.Count >= retentionCount)
-        {
-            scrolling = oldRange with { Limit = capacity };
-            snapshot = await LoadAsync(scrolling, pinned);
+            scrolling = new(requestedRetentionCount, direction.Value, TargetId: targetId);
         }
 
-        var adjacentHistory = AdjacentToEmptyRange(snapshot.Scrolling, scrolling, retentionCount);
-        var adjacentPins = AdjacentToEmptyRange(snapshot.Pinned, pinned, HISTORY_PAGE_SIZE);
-        if (adjacentHistory is not null || adjacentPins is not null)
-        {
-            scrolling = adjacentHistory ?? scrolling;
-            pinned = adjacentPins ?? pinned;
-            snapshot = await LoadAsync(scrolling, pinned);
-        }
-        return (snapshot, scrolling, pinned);
-
-        Task<MessageFeedWindow> LoadAsync(MessageFeedPageRequest page, MessageFeedPageRequest? priority)
-        {
-            return runtime.Messages.LoadWindowAsync(current.Id, kind, page, priority, ReadFilter,
-                settings.HideEmoticonDanmu, filter, cancellationToken);
-        }
+        var navigation = new MessageFeedWindowNavigation(scrolling, pinned, capacity, requestedRetentionCount, HISTORY_PAGE_SIZE,
+            scrollingDirection, history, previous?.Entries, emptyPinnedFallback, liveAnchors,
+            ReadingAnchor: anchor is not null && ScrollingItems.Count > 0
+                ? (anchor.Record.Id, ScrollingItems[0].Record.Id, ScrollingItems[^1].Record.Id, ScrollingItems.Count) : null);
+        return runtime.Messages.LoadNavigatedWindowAsync(current.Id, kind, navigation, ReadFilter,
+            settings.HideEmoticonDanmu, runtime.DanmuFilter, cancellationToken);
     }
 
     private void SetPages(MessageFeedPage? ordinary, MessageFeedPage? pinned)
     {
+        var hadOlder = HasOlderHistory;
         var hadNewer = HasNewerHistory;
         var hadOlderPinned = HasOlderPinnedMessages;
         var hadNewerPinned = HasNewerPinnedMessages;
         scrollingPage = ordinary;
         pinnedPage = pinned;
+        if (hadOlder != HasOlderHistory)
+        {
+            OnPropertyChanged(nameof(HasOlderHistory));
+        }
         if (hadNewer != HasNewerHistory)
         {
             OnPropertyChanged(nameof(HasNewerHistory));
@@ -190,19 +178,6 @@ public sealed partial class FeedViewModel
             return null;
         }
         return request is { Direction: MessageFeedPageDirection.Range } ? request : Range(page.Entries, page.Entries.Count);
-    }
-
-    private static MessageFeedPageRequest? AdjacentToEmptyRange(MessageFeedPage page, MessageFeedPageRequest? request, int limit)
-    {
-        if (page.Entries.Count > 0 || request is not { Direction: MessageFeedPageDirection.Range })
-        {
-            return null;
-        }
-        if (page.HasOlder)
-        {
-            return new(limit, MessageFeedPageDirection.Before, request.Boundary);
-        }
-        return page.HasNewer ? new(limit, MessageFeedPageDirection.After, request.Through) : null;
     }
 
     private static MessageFeedPageRequest Adjacent(MessageFeedPageRequest current, MessageFeedPageDirection direction)

@@ -73,6 +73,28 @@
                     </settings:SettingsRow>
                 </StackPanel>
             </settings:SettingsCard>
+            <settings:SettingsCard Title="{Loc Key=Settings.TranslationCache}">
+                <StackPanel Spacing="14">
+                    <settings:SettingsRow Label="{Loc Key=Settings.TranslationCacheCapacity}"
+                                          ToolTip.Tip="{Loc Key=Settings.TranslationCacheCapacityHelp}">
+                        <NumericUpDown x:Name="TranslationCacheCapacityInput"
+                                       Value="{Binding CacheCapacity, Mode=TwoWay}"
+                                       Minimum="0"
+                                       Maximum="{Binding MaximumCacheCapacity}"
+                                       Increment="1"
+                                       FormatString="0" />
+                    </settings:SettingsRow>
+                    <settings:SettingsRow Label="{Loc Key=Settings.TranslationCacheTtl}"
+                                          ToolTip.Tip="{Loc Key=Settings.TranslationCacheTtlHelp}">
+                        <NumericUpDown x:Name="TranslationCacheTtlInput"
+                                       Value="{Binding CacheTtlMinutes, Mode=TwoWay}"
+                                       Minimum="{Binding MinimumCacheTtlMinutes}"
+                                       Maximum="{Binding MaximumCacheTtlMinutes}"
+                                       Increment="1"
+                                       FormatString="0" />
+                    </settings:SettingsRow>
+                </StackPanel>
+            </settings:SettingsCard>
             <settings:SettingsCard Title="{Loc Key=Settings.ExtraPrompt}">
                 <TextBox Text="{Binding ExtraPrompt, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100"/>
             </settings:SettingsCard>

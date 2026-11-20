@@ -7,6 +7,8 @@ public sealed class AppDirectoryService
     public string EmoticonCacheDirectory { get; }
     public string AvatarCacheDirectory { get; }
     public string TranslationCacheDatabasePath { get; }
+    public string TranslationCacheSnapshotPath { get; }
+    internal IReadOnlyList<string> LegacyTranslationCachePaths { get; }
 
     /// <summary>初始化应用数据和图片缓存位置。</summary>
     public AppDirectoryService(string configDirectory)
@@ -15,5 +17,13 @@ public sealed class AppDirectoryService
         EmoticonCacheDirectory = Path.Combine(configDirectory, "Cache", "Emoticons");
         AvatarCacheDirectory = Path.Combine(configDirectory, "Cache", "Avatars");
         TranslationCacheDatabasePath = Path.Combine(configDirectory, "translation-cache.db");
+        TranslationCacheSnapshotPath = Path.Combine(configDirectory, "translation-cache.json");
+        LegacyTranslationCachePaths =
+        [
+            TranslationCacheDatabasePath,
+            TranslationCacheDatabasePath + "-wal",
+            TranslationCacheDatabasePath + "-shm",
+            TranslationCacheDatabasePath + "-journal"
+        ];
     }
 }

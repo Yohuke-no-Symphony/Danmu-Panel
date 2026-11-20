@@ -28,9 +28,12 @@ public sealed class HoverMarqueeTextBlock : UserControl
     private readonly ScrollViewer scrollViewer;
     private readonly EmoticonTextBlock textBlock;
     private readonly List<Visual> visibilityAncestors = [];
+    private TextBlock? translationLineMetrics;
     private bool initialized;
     private bool isAttached;
     private bool isInViewport;
+    private bool isDataContextUpdating;
+    private bool isScrollResetPending;
     private Point? hoverPoint;
     private readonly DispatcherTimer timer = new()
     {
@@ -75,6 +78,9 @@ public sealed class HoverMarqueeTextBlock : UserControl
     /// <summary>是否在可见且内容超宽时自动循环滚动。</summary>
     public static readonly StyledProperty<bool> AutoScrollProperty =
         AvaloniaProperty.Register<HoverMarqueeTextBlock, bool>(nameof(AutoScroll));
+
+    public static readonly StyledProperty<bool> MatchTranslationLineHeightProperty =
+        ShimmerTextBlock.MatchTranslationLineHeightProperty.AddOwner<HoverMarqueeTextBlock>();
 
     /// <summary>保留原文位置的正文注音片段。</summary>
     public static readonly StyledProperty<IReadOnlyList<PinyinAnnotation>?> AnnotationsProperty =
@@ -177,7 +183,7 @@ public sealed class HoverMarqueeTextBlock : UserControl
         textBlock.EmoticonHoverChanged += UpdateScrolling;
         textBlock.AnnotationLayoutChanged += () =>
         {
-            if (initialized)
+            if (initialized && !isDataContextUpdating)
             {
                 UpdateScrolling();
             }
@@ -254,6 +260,13 @@ public sealed class HoverMarqueeTextBlock : UserControl
         set => SetValue(AutoScrollProperty, value);
     }
 
+    /// <summary>使单行译文自然行高与译文占位一致。</summary>
+    public bool MatchTranslationLineHeight
+    {
+        get => GetValue(MatchTranslationLineHeightProperty);
+        set => SetValue(MatchTranslationLineHeightProperty, value);
+    }
+
     /// <summary>保留原文位置的正文注音片段。</summary>
     public IReadOnlyList<PinyinAnnotation>? Annotations
     {
@@ -309,6 +322,21 @@ public sealed class HoverMarqueeTextBlock : UserControl
             return;
         }
 
+        if (change.Property == MatchTranslationLineHeightProperty && !MatchTranslationLineHeight)
+        {
+            translationLineMetrics = null;
+            textBlock.ClearValue(TextBlock.LineHeightProperty);
+        }
+        if (MatchTranslationLineHeight && (change.Property == MatchTranslationLineHeightProperty ||
+            change.Property == TextBlock.FontFamilyProperty || change.Property == FontSizeProperty ||
+            change.Property == TextBlock.FontStyleProperty || change.Property == FontWeightProperty ||
+            change.Property == TextBlock.FontStretchProperty || change.Property == ReplyProperty))
+        {
+            translationLineMetrics ??= new() { Text = "\u200B" };
+            textBlock.LineHeight = Reply is null
+                ? MessageTranslationTextBlock.MeasureNaturalLineHeight(translationLineMetrics, this)
+                : double.NaN;
+        }
         if (change.Property == TextProperty || change.Property == EmoticonsProperty ||
             change.Property == ReplyProperty || change.Property == ShowReplyAvatarProperty ||
             change.Property == AutoScrollProperty || change.Property == DataContextProperty ||
@@ -316,13 +344,44 @@ public sealed class HoverMarqueeTextBlock : UserControl
         {
             hoverPoint = null;
             textBlock.ClearEmoticonHover();
-            StopScrolling();
-            UpdateScrolling();
+            if (isDataContextUpdating)
+            {
+                isScrollResetPending = true;
+            }
+            else
+            {
+                ResetScrolling();
+            }
         }
         else if (change.Property == IsVisibleProperty)
         {
             UpdateScrolling();
         }
+    }
+
+    /// <inheritdoc />
+    protected override void OnDataContextBeginUpdate()
+    {
+        isDataContextUpdating = true;
+        base.OnDataContextBeginUpdate();
+    }
+
+    /// <inheritdoc />
+    protected override void OnDataContextEndUpdate()
+    {
+        base.OnDataContextEndUpdate();
+        isDataContextUpdating = false;
+        if (isScrollResetPending)
+        {
+            isScrollResetPending = false;
+            ResetScrolling();
+        }
+    }
+
+    private void ResetScrolling()
+    {
+        StopScrolling();
+        UpdateScrolling();
     }
 
     private void Control_OnPointerEntered(object? sender, PointerEventArgs e)

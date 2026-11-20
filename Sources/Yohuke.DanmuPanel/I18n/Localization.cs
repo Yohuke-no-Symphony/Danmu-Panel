@@ -45,6 +45,11 @@ public static class Localization
         return value.Catalog.Get(value.CurrentLanguageID, key);
     }
 
+    internal static LocalizationSnapshot? CaptureCurrentSnapshot()
+    {
+        return Volatile.Read(ref snapshot);
+    }
+
     internal static (string LanguageID, IReadOnlyDictionary<string, string> Strings) CaptureSnapshot(
         IEnumerable<string> keys)
     {

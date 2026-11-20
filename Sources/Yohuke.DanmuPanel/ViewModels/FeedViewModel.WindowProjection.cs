@@ -4,117 +4,160 @@ namespace Yohuke.DanmuPanel.ViewModels;
 
 public sealed partial class FeedViewModel
 {
+    private readonly Dictionary<string, MessageItemViewModel> activeItems = new(StringComparer.Ordinal);
     private int displayFilterVersion;
+    private int projectionOptionsRevision;
 
-    private bool IsUnchanged(MessageFeedWindow window, MessageDisplaySettings display)
+    private FeedProjectionContext CaptureProjectionContext()
     {
-        if (!ReferenceEquals(display, displaySettings) || displayFilterVersion != display.DanmuFilter.StateVersion ||
-            PinnedItems.Count != window.Pinned.Entries.Count || ScrollingItems.Count != window.Scrolling.Entries.Count ||
-            Items.Count != PinnedItems.Count + ScrollingItems.Count || ScrollingRows.Count != ScrollingItems.Count)
-        {
-            return false;
-        }
-
-        for (var index = 0; index < PinnedItems.Count; index++)
-        {
-            if (!IsUnchanged(PinnedItems[index], window.Pinned.Entries[index].Record, window, display))
-            {
-                return false;
-            }
-        }
-        for (var index = 0; index < ScrollingItems.Count; index++)
-        {
-            var record = window.Scrolling.Entries[DisplayIndex(index, ScrollingItems.Count)].Record;
-            if (!ReferenceEquals(ScrollingRows[index], ScrollingItems[index]) ||
-                !IsUnchanged(ScrollingItems[index], record, window, display))
-            {
-                return false;
-            }
-        }
-        return true;
+        var settings = runtime.Configuration.Settings;
+        var display = MessageDisplaySettings.Capture(settings, displaySettings, runtime.DanmuFilter);
+        return new(display, display.DanmuFilter.StateVersion, SortOrder, settings.MessageRetentionCount,
+            settings.HideEmoticonDanmu, Volatile.Read(ref projectionOptionsRevision));
     }
 
-    private static bool IsUnchanged(MessageItemViewModel item, MessageRecord record, MessageFeedWindow window,
-        MessageDisplaySettings display)
+    private bool ProjectionOptionsAreCurrent(FeedProjectionContext context, bool checkDisplay = false)
     {
-        return ReferenceEquals(item.Record, record) &&
-            item.TranslationPending == (HasCurrentPendingTranslation(record, display, window) &&
-                !display.IsTranslationBlocked(record));
+        var settings = runtime.Configuration.Settings;
+        var filter = runtime.DanmuFilter;
+        return context.OptionsRevision == Volatile.Read(ref projectionOptionsRevision) &&
+            ReferenceEquals(context.Display.DanmuFilter, filter) && context.FilterVersion == filter.StateVersion &&
+            context.SortOrder == settings.MessageSorting.GetOrder(kind, ReadFilter) &&
+            context.RetentionCount == settings.MessageRetentionCount && context.HideEmoticonDanmu == settings.HideEmoticonDanmu &&
+            (!checkDisplay || ReferenceEquals(context.Display, MessageDisplaySettings.Capture(settings, context.Display, filter)));
     }
 
-    private static bool HasCurrentPendingTranslation(MessageRecord record, MessageDisplaySettings display,
-        MessageFeedWindow window)
+    private bool WindowIsCurrent(int version, CancellationToken cancellationToken)
     {
-        return record.TranslationFingerprint == display.TranslationFingerprint &&
-            window.PendingTranslationIds.Contains(record.Id);
+        return !disposed && version == revision && !cancellationToken.IsCancellationRequested;
     }
 
-    private async Task ApplyWindowAsync(MessageFeedWindow window, MessageDisplaySettings display, int version,
+    private Task<FeedWindowProjection> PlanWindowAsync(MessageFeedWindow window, FeedProjectionContext context,
         CancellationToken cancellationToken)
     {
-        displaySettings = display;
-        displayFilterVersion = display.DanmuFilter.StateVersion;
-        var existing = Items.ToDictionary(item => item.Record.Id);
-        var newItems = new List<MessageItemViewModel>();
-        var candidates = new List<MessageRecord>();
-        var expectedPinned = new MessageItemViewModel[window.Pinned.Entries.Count];
-        var expectedScrolling = new MessageItemViewModel[window.Scrolling.Entries.Count];
-        var budget = new FeedUiWorkBudget();
-        await BuildItemsAsync(window.Pinned.Entries, expectedPinned, sortScrolling: false);
-        await BuildItemsAsync(window.Scrolling.Entries, expectedScrolling, sortScrolling: true);
-        await FeedCollectionSynchronizer.SynchronizeAsync(Items, [.. expectedPinned, .. expectedScrolling], cancellationToken);
-        await FeedCollectionSynchronizer.SynchronizeAsync(PinnedItems, expectedPinned, cancellationToken);
-        await FeedCollectionSynchronizer.SynchronizeAsync(ScrollingItems, expectedScrolling, cancellationToken);
-        await SynchronizeScrollingRowsAsync(cancellationToken);
-        ResetActiveDanmuItems();
-        foreach (var item in newItems)
-        {
-            _ = LoadEmoticonsAsync(item, cancellationToken);
-        }
-        cancellationToken.ThrowIfCancellationRequested();
-        var roomToken = lifetime.Token;
-        SchedulePresentation(version, roomToken);
-        var requested = candidates.Where(record => translationRequested.Add(record.Id + display.TranslationFingerprint)).ToArray();
-        TrackBackground(RegisterTranslationsAsync(requested, display.TranslationFingerprint, version, roomToken));
+        var existing = Items.Select(item => new FeedItemState(item, item.Record, item.PresentationSettings,
+            item.FilterVersion, item.TranslationPending, item.TranslationBlocked)).ToArray();
+        var currentPinned = PinnedItems.ToArray();
+        var currentScrolling = ScrollingItems.ToArray();
+        var currentRows = ScrollingRows.ToArray();
+        return Task.Run(() => PlanWindow(window, context, kind, existing, currentPinned, currentScrolling, currentRows,
+            cancellationToken), cancellationToken);
+    }
 
-        async Task BuildItemsAsync(IReadOnlyList<MessageFeedEntry> entries, MessageItemViewModel[] destination, bool sortScrolling)
+    private static FeedWindowProjection PlanWindow(MessageFeedWindow window, FeedProjectionContext context, MessageKind kind,
+        FeedItemState[] existing, MessageItemViewModel[] currentPinned, MessageItemViewModel[] currentScrolling,
+        FeedRowViewModel[] currentRows, CancellationToken cancellationToken)
+    {
+        var existingById = existing.ToDictionary(item => item.Record.Id, StringComparer.Ordinal);
+        var display = context.Display;
+        var updates = new List<FeedRowUpdate>();
+        var candidates = new List<MessageRecord>();
+        var pinned = Project(window.Pinned.Entries, reverse: false);
+        var scrolling = Project(window.Scrolling.Entries, reverse: context.SortOrder == MessageSortOrder.NewestFirst);
+        return new(updates,
+            FeedCollectionSynchronizer.Plan<object>(existing.Select(state => state.Item).ToArray(), [.. pinned, .. scrolling], cancellationToken),
+            FeedCollectionSynchronizer.Plan(currentPinned, pinned, cancellationToken),
+            FeedCollectionSynchronizer.Plan(currentScrolling, scrolling, cancellationToken),
+            FeedCollectionSynchronizer.Plan(currentRows, scrolling, cancellationToken, static row => row is MessageLoadingPlaceholderViewModel),
+            candidates);
+
+        object[] Project(IReadOnlyList<MessageFeedEntry> entries, bool reverse)
         {
+            var result = new object[entries.Count];
             for (var index = 0; index < entries.Count; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var record = entries[sortScrolling ? DisplayIndex(index, entries.Count) : index].Record;
-                var blocked = display.IsTranslationBlocked(record);
-                var pending = !blocked && HasCurrentPendingTranslation(record, display, window);
+                var record = entries[reverse ? entries.Count - index - 1 : index].Record;
+                var pending = record.TranslationFingerprint == display.TranslationFingerprint &&
+                    window.PendingTranslationIds.Contains(record.Id);
+                var hasExisting = existingById.TryGetValue(record.Id, out var previous);
+                var blocked = previous.TranslationBlocked;
+                if (hasExisting && ReferenceEquals(previous.Record, record) && ReferenceEquals(previous.Display, display) &&
+                    previous.FilterVersion == context.FilterVersion && previous.TranslationPending == (pending && !blocked))
+                {
+                    result[index] = previous.Item;
+                }
+                else
+                {
+                    var projection = MessageRowProjection.Create(record, display, pending,
+                        isEventSummary: kind == MessageKind.Danmu && record.Kind != MessageKind.Danmu);
+                    blocked = projection.TranslationBlocked;
+                    result[index] = hasExisting ? previous.Item : projection;
+                    updates.Add(new(hasExisting ? previous.Item : null, projection));
+                }
                 if (!blocked && display.TranslationEnabled && record.Kind is MessageKind.Danmu or MessageKind.SuperChat &&
                     record.TranslationFingerprint != display.TranslationFingerprint)
                 {
                     candidates.Add(record);
                 }
-
-                if (existing.TryGetValue(record.Id, out var item))
-                {
-                    var changed = !ReferenceEquals(item.Record, record) ||
-                        !ReferenceEquals(item.PresentationSettings, display) || item.TranslationPending != pending;
-                    item.Apply(record, display, pending);
-                    if (changed)
-                    {
-                        await budget.YieldIfNeededAsync(cancellationToken);
-                    }
-                }
-                else
-                {
-                    item = MessageItemViewModel.CreateDeferred(record, display, runtime.Pinyin, pending,
-                        kind == MessageKind.Danmu && record.Kind != MessageKind.Danmu);
-                    newItems.Add(item);
-                    await budget.YieldIfNeededAsync(cancellationToken);
-                }
-                destination[index] = item;
             }
+            return result;
         }
     }
 
-    private int DisplayIndex(int index, int count)
+    private async Task<bool> ApplyWindowAsync(FeedWindowProjection plan, FeedProjectionContext context, int version,
+        CancellationToken cancellationToken, Func<bool> readingPositionIsCurrent)
     {
-        return SortOrder == MessageSortOrder.NewestFirst ? count - index - 1 : index;
+        var added = new Dictionary<MessageRowProjection, MessageItemViewModel>(ReferenceEqualityComparer.Instance);
+        var budget = new FeedUiWorkBudget();
+        foreach (var update in plan.Updates)
+        {
+            if (!WindowIsCurrent(version, cancellationToken) || !ProjectionOptionsAreCurrent(context))
+            {
+                return false;
+            }
+            if (update.ExistingItem is { } item)
+            {
+                item.Apply(update.Projection);
+            }
+            else
+            {
+                added.Add(update.Projection, MessageItemViewModel.CreateDeferred(update.Projection, runtime.Pinyin));
+            }
+            await budget.YieldIfNeededAsync(cancellationToken);
+        }
+
+        if (!WindowIsCurrent(version, cancellationToken) || !ProjectionOptionsAreCurrent(context, checkDisplay: true) ||
+            !readingPositionIsCurrent())
+        {
+            return false;
+        }
+
+        displaySettings = context.Display;
+        displayFilterVersion = context.FilterVersion;
+        FeedCollectionSynchronizer.ApplyEdits(Items, plan.Items, ResolveItem);
+        FeedCollectionSynchronizer.ApplyEdits(PinnedItems, plan.Pinned, ResolveItem);
+        FeedCollectionSynchronizer.ApplyEdits(ScrollingItems, plan.Scrolling, ResolveItem);
+        FeedCollectionSynchronizer.ApplyEdits(ScrollingRows, plan.Rows, token => ResolveItem(token));
+        if (plan.Items.Count > 0)
+        {
+            activeItems.Clear();
+            foreach (var item in Items)
+            {
+                activeItems.Add(item.Record.Id, item);
+            }
+            presentationQueue.RemoveInactive(ContainsActiveItem);
+        }
+
+        var roomToken = lifetime.Token;
+        foreach (var item in added.Values)
+        {
+            _ = LoadEmoticonsAsync(item, roomToken);
+        }
+        SchedulePresentation(version, roomToken);
+        var fingerprint = context.Display.TranslationFingerprint;
+        var requested = plan.TranslationCandidates.Where(record => translationRequested.Add(record.Id + fingerprint)).ToArray();
+        TrackBackground(RegisterTranslationsAsync(requested, fingerprint, version, roomToken));
+        return true;
+
+        MessageItemViewModel ResolveItem(object token)
+        {
+            return token is MessageItemViewModel item ? item : added[(MessageRowProjection)token];
+        }
+    }
+
+    private bool ContainsActiveItem(MessageItemViewModel item)
+    {
+        return activeItems.TryGetValue(item.Record.Id, out var active) && ReferenceEquals(active, item);
     }
 }

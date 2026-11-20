@@ -1046,7 +1046,12 @@
     <Style Selector="components|ShimmerTextBlock.translationPending">
         <Setter Property="Foreground" Value="{DynamicResource MessageTranslationBrush}" />
         <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeBody}" />
+        <Setter Property="LineSpacing" Value="1" />
         <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="components|PinyinLoadingPlaceholder.contentPinyinPending">
+        <Setter Property="LineSpacing" Value="1" />
     </Style>
 
     <Style Selector="components|HoverMarqueeTextBlock.originalText">
@@ -1090,9 +1095,12 @@
 
 
     <Style Selector="components|HoverMarqueeTextBlock.compactFeedContent">
-        <Setter Property="IsVisible" Value="False" />
         <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeCompact}" />
         <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="StackPanel.skeletonBody components|HoverMarqueeTextBlock.compactFeedContent">
+        <Setter Property="IsVisible" Value="False" />
     </Style>
 
     <Style Selector="components|MessageBodyPanel">
@@ -1177,34 +1185,28 @@
 
     <Style Selector="Grid.compactDanmu components|ShimmerTextBlock.translationPending">
         <Setter Property="FontSize" Value="{DynamicResource MessageFontSizeCompact}" />
+        <Setter Property="LineSpacing" Value="0" />
     </Style>
 
-    <Style Selector="Grid.compactDanmu TextBlock.regularFeedContent">
+    <Style Selector="Grid.compactDanmu components|PinyinLoadingPlaceholder.contentPinyinPending">
+        <Setter Property="LineSpacing" Value="0" />
+    </Style>
+
+    <Style Selector="Grid.compactDanmu StackPanel.skeletonBody TextBlock.regularFeedContent">
         <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="Grid.compactDanmu StackPanel.skeletonBody components|HoverMarqueeTextBlock.compactFeedContent">
+        <Setter Property="IsVisible" Value="True" />
     </Style>
 
     <Style Selector="Grid.compactDanmu components|MessageBodyPanel">
         <Setter Property="VerticalSpacing" Value="1" />
+        <Setter Property="UseMarquee" Value="True" />
     </Style>
 
-    <Style Selector="Grid.compactDanmu components|HoverMarqueeTextBlock.compactFeedContent">
-        <Setter Property="IsVisible" Value="True" />
-    </Style>
-
-    <Style Selector="Grid.compactDanmu.compactDanmuWrap Button.danmuFeedButton TextBlock.regularFeedContent">
-        <Setter Property="IsVisible" Value="True" />
-    </Style>
-
-    <Style Selector="Grid.compactDanmu.compactDanmuWrap Button.danmuFeedButton components|HoverMarqueeTextBlock.compactFeedContent">
-        <Setter Property="IsVisible" Value="False" />
-    </Style>
-
-    <Style Selector="Grid.compactDanmu.compactSuperChatWrap Button.scFeedButton TextBlock.regularFeedContent">
-        <Setter Property="IsVisible" Value="True" />
-    </Style>
-
-    <Style Selector="Grid.compactDanmu.compactSuperChatWrap Button.scFeedButton components|HoverMarqueeTextBlock.compactFeedContent">
-        <Setter Property="IsVisible" Value="False" />
+    <Style Selector="Grid.compactDanmu.compactDanmuWrap Button.danmuFeedButton components|MessageBodyPanel, Grid.compactDanmu.compactSuperChatWrap Button.scFeedButton components|MessageBodyPanel">
+        <Setter Property="UseMarquee" Value="False" />
     </Style>
 
     <Style Selector="Button.scFeedButton.guardPurchase">

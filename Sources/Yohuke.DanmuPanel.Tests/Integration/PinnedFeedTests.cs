@@ -341,9 +341,10 @@ public sealed class PinnedFeedTests
             var viewer = FindScroll(normalList);
             var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),
                 presenter => ReferenceEquals(presenter.TemplatedParent, viewer));
-            presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(), new(0, -viewer.Offset.Y)));
+            var readingOffset = viewer.Viewport.Height;
+            presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(), new(0, readingOffset - viewer.Offset.Y)));
             Pump(window);
-            Assert.Equal(0, FindScroll(normalList).Offset.Y);
+            Assert.InRange(Math.Abs(viewer.Offset.Y - readingOffset), 0, 1);
             Assert.True(view.Model.IsReadingHistory);
 
             await runtime.Messages.AppendAsync(Message(MessageKind.Danmu, 1000), new());

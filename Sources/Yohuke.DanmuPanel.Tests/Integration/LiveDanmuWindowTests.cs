@@ -25,6 +25,7 @@ public sealed class LiveDanmuWindowTests
         }
         await feed.SelectRoomAsync(new() { Id = "room" });
         await feed.WaitForPresentationAsync();
+        Assert.True(feed.HasOlderHistory);
         feed.IsReadingHistory = true;
         var original = feed.ScrollingItems.ToArray();
         var changes = new List<NotifyCollectionChangedEventArgs>();
@@ -44,6 +45,7 @@ public sealed class LiveDanmuWindowTests
         Assert.Equal(3, feed.ScrollingItems.Count);
 
         await feed.LoadMoreAsync();
+        Assert.False(feed.HasOlderHistory);
         Assert.Equal(8, feed.ScrollingItems.Count);
         Assert.Equal("danmu-0", feed.ScrollingItems[0].Record.Id);
         Assert.Same(original[1], feed.ScrollingItems[5]);
@@ -67,6 +69,7 @@ public sealed class LiveDanmuWindowTests
             await runtime.Messages.AppendAsync(Message(index), settings.Reading);
         }
         await feed.SelectRoomAsync(new() { Id = "room" });
+        Assert.False(feed.HasOlderHistory);
         var original = feed.ScrollingItems.ToArray();
         var evaluations = runtime.Messages.FeedVisibilityEvaluations;
 
@@ -83,6 +86,7 @@ public sealed class LiveDanmuWindowTests
         }
         await WaitForLastMessageAsync(feed, "danmu-5");
 
+        Assert.True(feed.HasOlderHistory);
         Assert.Equal(evaluations, runtime.Messages.FeedVisibilityEvaluations);
         Assert.Equal(["danmu-1", "danmu-2", "danmu-5"], feed.ScrollingItems.Select(item => item.Record.Id));
         Assert.Same(original[1], feed.ScrollingItems[0]);

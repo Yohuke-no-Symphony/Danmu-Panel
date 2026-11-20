@@ -1,97 +1,102 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 
 namespace Yohuke.DanmuPanel.ViewModels;
 
 internal static class FeedCollectionSynchronizer
 {
-    internal static async Task SynchronizeAsync<T>(ObservableCollection<T> target, IReadOnlyList<T> expected,
-        CancellationToken cancellationToken, Predicate<T>? isPlaceholder = null) where T : class
+    internal static IReadOnlyList<FeedCollectionEdit<T>> Plan<T>(IReadOnlyList<T> current, IReadOnlyList<T> expected,
+        CancellationToken cancellationToken, Predicate<T>? isPlaceholder = null, bool useRanges = true) where T : class
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (target.SequenceEqual(expected, ReferenceEqualityComparer.Instance))
+        if (current.SequenceEqual(expected, ReferenceEqualityComparer.Instance))
         {
-            return;
+            return [];
         }
+
+        var working = current.ToList();
+        var edits = new List<FeedCollectionEdit<T>>();
         var positions = new Dictionary<T, int>(expected.Count, ReferenceEqualityComparer.Instance);
         for (var index = 0; index < expected.Count; index++)
         {
             positions.Add(expected[index], index);
         }
-        var uiBudget = new FeedUiWorkBudget();
-        for (var index = target.Count - 1; index >= 0; index--)
+
+        for (var index = working.Count - 1; index >= 0; index--)
         {
-            if (positions.ContainsKey(target[index]) || isPlaceholder?.Invoke(target[index]) == true)
+            cancellationToken.ThrowIfCancellationRequested();
+            if (positions.ContainsKey(working[index]) || isPlaceholder?.Invoke(working[index]) == true)
             {
                 continue;
             }
             var first = index;
-            while (first > 0 && !positions.ContainsKey(target[first - 1]) &&
-                isPlaceholder?.Invoke(target[first - 1]) != true)
+            while (first > 0 && !positions.ContainsKey(working[first - 1]) &&
+                isPlaceholder?.Invoke(working[first - 1]) != true)
             {
                 first--;
             }
-            if (target is FeedCollection<T> rangeTarget)
+            if (useRanges)
             {
-                rangeTarget.RemoveRange(first, index - first + 1);
-                await uiBudget.YieldIfNeededAsync(cancellationToken);
+                edits.Add(new(NotifyCollectionChangedAction.Remove, first, index - first + 1));
             }
             else
             {
-                for (var removedIndex = index; removedIndex >= first; removedIndex--)
+                for (var removed = index; removed >= first; removed--)
                 {
-                    target.RemoveAt(removedIndex);
-                    await uiBudget.YieldIfNeededAsync(cancellationToken);
+                    edits.Add(new(NotifyCollectionChangedAction.Remove, removed));
                 }
             }
+            working.RemoveRange(first, index - first + 1);
             index = first;
         }
+
         if (isPlaceholder is not null)
         {
-            var retained = target.ToHashSet(ReferenceEqualityComparer.Instance);
+            var retained = working.ToHashSet(ReferenceEqualityComparer.Instance);
             using var missing = expected.Where(item => !retained.Contains(item)).GetEnumerator();
-            foreach (var placeholder in target.Where(item => !positions.ContainsKey(item)).ToArray())
+            foreach (var placeholder in working.Where(item => !positions.ContainsKey(item)).ToArray())
             {
-                var index = IndexOfReference(target, placeholder);
+                var index = IndexOfReference(working, placeholder);
                 if (missing.MoveNext())
                 {
-                    target[index] = missing.Current;
+                    working[index] = missing.Current;
+                    edits.Add(new(NotifyCollectionChangedAction.Replace, index, Values: [missing.Current]));
                 }
                 else
                 {
-                    target.RemoveAt(index);
+                    working.RemoveAt(index);
+                    edits.Add(new(NotifyCollectionChangedAction.Remove, index));
                 }
-                await uiBudget.YieldIfNeededAsync(cancellationToken);
             }
         }
-        var stable = FindStableItems(target, positions);
-        if (stable.Count == target.Count)
+
+        var stable = FindStableItems(working, positions);
+        if (stable.Count == working.Count)
         {
             for (var index = 0; index < expected.Count; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (index < target.Count && ReferenceEquals(target[index], expected[index]))
+                if (index < working.Count && ReferenceEquals(working[index], expected[index]))
                 {
                     continue;
                 }
-                if (target is FeedCollection<T> rangeTarget)
+                var nextRetained = index + 1;
+                if (useRanges)
                 {
-                    var nextRetained = index + 1;
                     while (nextRetained < expected.Count &&
-                        (index >= target.Count || !ReferenceEquals(target[index], expected[nextRetained])))
+                        (index >= working.Count || !ReferenceEquals(working[index], expected[nextRetained])))
                     {
                         nextRetained++;
                     }
-                    rangeTarget.InsertRange(index, expected.Skip(index).Take(nextRetained - index).ToArray());
-                    index = nextRetained - 1;
                 }
-                else
-                {
-                    target.Insert(index, expected[index]);
-                }
-                await uiBudget.YieldIfNeededAsync(cancellationToken);
+                var added = expected.Skip(index).Take(nextRetained - index).ToArray();
+                working.InsertRange(index, added);
+                edits.Add(new(NotifyCollectionChangedAction.Add, index, added.Length, added));
+                index = nextRetained - 1;
             }
-            return;
+            return edits;
         }
+
         T? next = null;
         for (var index = expected.Count - 1; index >= 0; index--)
         {
@@ -99,12 +104,12 @@ internal static class FeedCollectionSynchronizer
             var item = expected[index];
             if (!stable.Contains(item))
             {
-                var previousIndex = IndexOfReference(target, item);
-                var nextIndex = next is null ? target.Count : IndexOfReference(target, next);
+                var previousIndex = IndexOfReference(working, item);
+                var nextIndex = next is null ? working.Count : IndexOfReference(working, next);
                 if (previousIndex < 0)
                 {
-                    target.Insert(nextIndex, item);
-                    await uiBudget.YieldIfNeededAsync(cancellationToken);
+                    working.Insert(nextIndex, item);
+                    edits.Add(new(NotifyCollectionChangedAction.Add, nextIndex, Values: [item]));
                 }
                 else
                 {
@@ -114,12 +119,74 @@ internal static class FeedCollectionSynchronizer
                     }
                     if (previousIndex != nextIndex)
                     {
-                        target.Move(previousIndex, nextIndex);
-                        await uiBudget.YieldIfNeededAsync(cancellationToken);
+                        working.RemoveAt(previousIndex);
+                        working.Insert(nextIndex, item);
+                        edits.Add(new(NotifyCollectionChangedAction.Move, nextIndex, OldIndex: previousIndex));
                     }
                 }
             }
             next = item;
+        }
+        return edits;
+    }
+
+    internal static async Task SynchronizeAsync<T>(ObservableCollection<T> target, IReadOnlyList<T> expected,
+        CancellationToken cancellationToken, Predicate<T>? isPlaceholder = null) where T : class
+    {
+        var current = target.ToArray();
+        var useRanges = target is FeedCollection<T>;
+        var edits = await Task.Run(() => Plan(current, expected, cancellationToken, isPlaceholder, useRanges), cancellationToken);
+        var budget = new FeedUiWorkBudget();
+        foreach (var edit in edits)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ApplyEdit(target, edit, static value => value);
+            await budget.YieldIfNeededAsync(cancellationToken);
+        }
+    }
+
+    internal static void ApplyEdits<T, TSource>(ObservableCollection<T> target, IReadOnlyList<FeedCollectionEdit<TSource>> edits,
+        Func<TSource, T> resolve) where T : class where TSource : class
+    {
+        foreach (var edit in edits)
+        {
+            ApplyEdit(target, edit, resolve);
+        }
+    }
+
+    private static void ApplyEdit<T, TSource>(ObservableCollection<T> target, FeedCollectionEdit<TSource> edit,
+        Func<TSource, T> resolve) where T : class where TSource : class
+    {
+        switch (edit.Action)
+        {
+            case NotifyCollectionChangedAction.Remove:
+                if (target is FeedCollection<T> removalTarget)
+                {
+                    removalTarget.RemoveRange(edit.Index, edit.Count);
+                }
+                else
+                {
+                    target.RemoveAt(edit.Index);
+                }
+                break;
+            case NotifyCollectionChangedAction.Add:
+                if (target is FeedCollection<T> insertionTarget)
+                {
+                    insertionTarget.InsertRange(edit.Index, edit.Values!.Select(resolve).ToArray());
+                }
+                else
+                {
+                    target.Insert(edit.Index, resolve(edit.Values![0]));
+                }
+                break;
+            case NotifyCollectionChangedAction.Replace:
+                target[edit.Index] = resolve(edit.Values![0]);
+                break;
+            case NotifyCollectionChangedAction.Move:
+                target.Move(edit.OldIndex, edit.Index);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(edit));
         }
     }
 
@@ -151,8 +218,8 @@ internal static class FeedCollectionSynchronizer
                     upper = middle;
                 }
             }
-            previous[index] = lower == 0 ? -1 : tails[lower - 1];
             tails[lower] = index;
+            previous[index] = lower == 0 ? -1 : tails[lower - 1];
             if (lower == length)
             {
                 length++;

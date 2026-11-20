@@ -29,12 +29,17 @@ internal sealed class MessageTranslationTextBlock : EmoticonTextBlock
 
     private void UpdateLineHeight()
     {
-        textMetrics.FontFamily = FontFamily;
-        textMetrics.FontSize = FontSize;
-        textMetrics.FontStyle = FontStyle;
-        textMetrics.FontWeight = FontWeight;
-        textMetrics.FontStretch = FontStretch;
-        textMetrics.Measure(Size.Infinity);
-        SetCurrentValue(LineHeightProperty, Reply is null ? textMetrics.TextLayout.Height : double.NaN);
+        SetCurrentValue(LineHeightProperty, Reply is null ? MeasureNaturalLineHeight(textMetrics, this) : double.NaN);
+    }
+
+    internal static double MeasureNaturalLineHeight(TextBlock metrics, AvaloniaObject owner)
+    {
+        metrics.FontFamily = owner.GetValue(FontFamilyProperty);
+        metrics.FontSize = owner.GetValue(FontSizeProperty);
+        metrics.FontStyle = owner.GetValue(FontStyleProperty);
+        metrics.FontWeight = owner.GetValue(FontWeightProperty);
+        metrics.FontStretch = owner.GetValue(FontStretchProperty);
+        metrics.Measure(Size.Infinity);
+        return metrics.TextLayout.Height;
     }
 }

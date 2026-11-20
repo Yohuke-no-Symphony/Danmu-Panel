@@ -468,6 +468,13 @@
     "Settings.Theme": "Base theme",
     "Settings.Title": "Settings",
     "Settings.Translation": "Translation",
+    "Settings.TranslationCache": "Translation cache",
+    "Settings.TranslationCacheCapacity": "Cache capacity (entries)",
+    "Settings.TranslationCacheCapacityHelp": "Maximum number of translations to keep. Set to 0 to disable result caching.",
+    "Settings.TranslationCacheTtl": "Cache lifetime (minutes)",
+    "Settings.TranslationCacheTtlHelp": "The lifetime starts when a translation is cached. Once it expires, the next matching message is translated again.",
+    "Settings.InvalidTranslationCacheCapacity": "Enter a whole number between 0 and {0} for the cache capacity.",
+    "Settings.InvalidTranslationCacheTtl": "Enter a whole number between {0} and {1} for the cache lifetime in minutes.",
     "Settings.TranslationDescription": "Translation service, language and glossary",
     "Settings.TranslationEnabled": "Enable automatic translation",
     "Settings.TranslationOnly": "Translation only",
@@ -595,6 +602,7 @@
     "Workbench.Log.AllLevels": "All levels",
     "Workbench.Panel.Log": "Log",
     "Panel.Log.Translation": "Translation",
+    "Panel.Log.TranslationCacheSnapshotFailed": "Could not read or write the translation cache snapshot.",
     "Panel.Log.Reception": "Reception · {0} (room {1})",
     "Panel.Log.Operation": "Application operation"
   }

@@ -14,6 +14,7 @@ using Yohuke.DanmuPanel.Models.Workspace;
 using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Services;
+using Yohuke.DanmuPanel.ViewModels;
 
 namespace Yohuke.DanmuPanel.Views.Components;
 
@@ -27,8 +28,10 @@ public class EmoticonTextBlock : TextBlock
     private readonly Dictionary<string, EmoticonBitmapLease> images = new(StringComparer.Ordinal);
     private EmoticonBitmapCache? localBitmapCache;
     private EmoticonBitmapCache? bitmapCache;
+    private readonly Dictionary<string, List<EmoticonInlineSlot>> imageSlots = new(StringComparer.Ordinal);
     private readonly Dictionary<Image, DanmuEmoticon> emoticonImages = [];
     private EmoticonImagePreview? imagePreview;
+    private string? hoveredEmoticonPath;
     private readonly List<PinyinRubySyllable> rubySyllables = [];
     private readonly Queue<InlineUIContainer> rubyInlineCache = [];
     private readonly List<TextBlock> indivisibleTextElements = [];
@@ -37,11 +40,14 @@ public class EmoticonTextBlock : TextBlock
     private List<Visual>? visibilityAncestors;
     private PinyinSeparateLinePresenter? separateLine;
     private MessageReplyBadge? replyBadge;
+    private MessageTextRenderPlan? cachedPlan;
+    private MessageTextVisualState? renderedState;
     private bool isAttached;
     private bool isContentDeferred;
     private bool isVisibilityTracking;
     private bool isDataContextUpdating;
     private bool isContentUpdatePending;
+    private bool isImageRefreshPending;
     private CancellationTokenSource? imageRequest;
     private int contentRevision;
 
@@ -82,7 +88,7 @@ public class EmoticonTextBlock : TextBlock
             {
                 bitmapCache.ImageChanged += OnImageChanged;
             }
-            RebuildContent();
+            RefreshImages();
         }
     }
 
@@ -265,10 +271,13 @@ public class EmoticonTextBlock : TextBlock
 
         if (change.Property == ContentTextProperty || change.Property == EmoticonsProperty ||
             change.Property == ReplyProperty || change.Property == ShowReplyAvatarProperty ||
-            change.Property == AnnotationsProperty || change.Property == PinyinLayoutProperty ||
-            change.Property == EmoticonHeightProperty)
+            change.Property == AnnotationsProperty || change.Property == PinyinLayoutProperty)
         {
             RebuildContent();
+        }
+        else if (change.Property == EmoticonHeightProperty)
+        {
+            RefreshImages();
         }
         else if (change.Property == FontFamilyProperty || change.Property == FontSizeProperty ||
                  change.Property == FontWeightProperty || change.Property == FontStyleProperty ||
@@ -350,6 +359,7 @@ public class EmoticonTextBlock : TextBlock
                     imagePreview.TargetChanged += () => EmoticonHoverChanged?.Invoke();
                 }
                 imagePreview.UpdateTarget(image, emoticon, tooltipHost ?? this);
+                hoveredEmoticonPath = emoticon.ImagePath;
                 return;
             }
         }
@@ -358,6 +368,7 @@ public class EmoticonTextBlock : TextBlock
 
     internal void ClearEmoticonHover()
     {
+        hoveredEmoticonPath = null;
         imagePreview?.Clear();
     }
 
@@ -403,6 +414,10 @@ public class EmoticonTextBlock : TextBlock
         {
             RebuildContent();
         }
+        if (isImageRefreshPending)
+        {
+            RefreshImages();
+        }
     }
 
     internal void UpdateHighlight(Point point)
@@ -428,7 +443,7 @@ public class EmoticonTextBlock : TextBlock
             {
                 var span = renderedSpans.FirstOrDefault(value => textIndex >= value.TextStart &&
                                                                 textIndex < value.TextStart + value.TextLength);
-                if (span is { IsEmoticon: false })
+                if (span is { TextLength: > 0, IsEmoticon: false })
                 {
                     var rawIndex = span.SourceStart + textIndex - span.TextStart;
                     var annotation = Annotations!.FirstOrDefault(value => value.HasPinyin &&
@@ -495,90 +510,132 @@ public class EmoticonTextBlock : TextBlock
             isContentUpdatePending = true;
             return;
         }
+
         isContentUpdatePending = false;
-        ReleaseContent();
         var content = ContentText ?? "";
-        var hasRichContent = HasReply || Annotations?.Any(annotation => annotation.HasPinyin) == true ||
-                             Emoticons?.Any(emoticon => !string.IsNullOrEmpty(emoticon.Text) &&
-                                 !string.IsNullOrWhiteSpace(emoticon.ImagePath)) == true;
-        UpdateVisibilityTracking(isAttached && hasRichContent);
+        var hasEmoticons = Emoticons is { Count: > 0 };
+        var hasPinyin = Annotations is { Count: > 0 } annotations && annotations.Any(annotation => annotation.HasPinyin);
+        var reply = HasReply ? Reply : null;
         isContentDeferred = !isAttached || !IsEffectivelyVisible;
         if (isContentDeferred)
         {
-            Inlines = null;
-            Text = content;
-            AnnotationLayoutChanged?.Invoke();
+            UpdateVisibilityTracking(isAttached && (hasEmoticons || hasPinyin || reply is not null));
+            if (cachedPlan?.Matches(content, Emoticons, Annotations) == false)
+            {
+                cachedPlan = null;
+            }
+            ShowPlainText(content);
             return;
         }
-        var candidates = Emoticons?.Where(emoticon => !string.IsNullOrEmpty(emoticon.Text) &&
-                                                     !string.IsNullOrWhiteSpace(emoticon.ImagePath))
-            .OrderByDescending(emoticon => emoticon.Text.Length).ToArray() ?? [];
 
-        if (candidates.Length > 0)
+        var plan = hasEmoticons || hasPinyin ? ResolvePlan(content) : null;
+        if (plan is { HasAnnotations: false, ImagePaths.Count: 0 })
         {
-            var cache = BitmapCache ?? (localBitmapCache ??= new(0, 0));
-            var height = (int)Math.Ceiling(EmoticonHeight * (TopLevel.GetTopLevel(this)?.RenderScaling ?? 1));
-            var missing = new List<string>();
-            foreach (var path in candidates.Where(candidate => content.Contains(candidate.Text, StringComparison.Ordinal))
-                         .Select(candidate => candidate.ImagePath).Distinct(StringComparer.Ordinal))
+            plan = null;
+        }
+
+        UpdateVisibilityTracking(plan is not null || reply is not null);
+        if (plan is null && reply is null)
+        {
+            if (!hasEmoticons && !hasPinyin)
             {
-                var lease = cache.TryAcquire(path, height);
-                if (lease is not null)
-                {
-                    images.Add(path, lease);
-                }
-                else
-                {
-                    missing.Add(path);
-                }
+                cachedPlan = null;
             }
-            if (missing.Count > 0)
+            ShowPlainText(content);
+            return;
+        }
+
+        var state = new MessageTextVisualState(content, plan, reply, reply is not null && ShowReplyAvatar,
+            plan?.HasAnnotations == true && PinyinLayout == PinyinLayoutMode.SeparateLine);
+        if (renderedState == state)
+        {
+            return;
+        }
+
+        ReleaseContent();
+        renderedState = state;
+        if (plan is not { ImagePaths.Count: > 0 })
+        {
+            RenderContent(state);
+            return;
+        }
+
+        var cache = BitmapCache ?? (localBitmapCache ??= new(0, 0));
+        var height = GetDecodeHeight();
+        var missing = new List<string>();
+        foreach (var path in plan.ImagePaths)
+        {
+            if (cache.TryAcquire(path, height) is { } lease)
             {
-                imageRequest = new();
-                PendingImageLoad = LoadImagesAsync(cache, missing, height, candidates, contentRevision, imageRequest.Token);
+                images.Add(path, lease);
+            }
+            else
+            {
+                missing.Add(path);
             }
         }
-        RenderContent(content, candidates);
+
+        var revision = contentRevision;
+        RenderContent(state);
+        if (revision == contentRevision)
+        {
+            StartImageLoad(cache, missing, height);
+        }
     }
 
-    private void RenderContent(string content, IReadOnlyList<DanmuEmoticon> candidates)
+    private MessageTextRenderPlan ResolvePlan(string content)
     {
-        var hasAnnotations = Annotations is { Count: > 0 } &&
-                             Annotations.Any(annotation => annotation.HasPinyin) &&
-                             string.Concat(Annotations.Select(annotation => annotation.Text)) == content;
-        if (candidates.Count == 0 && !hasAnnotations && !HasReply)
+        if (cachedPlan is { } plan && plan.Matches(content, Emoticons, Annotations))
         {
-            Inlines = null;
-            Text = content;
-            AnnotationLayoutChanged?.Invoke();
+            return plan;
+        }
+
+        cachedPlan = (DataContext as MessageItemViewModel)?.GetTextRenderPlan(content, Emoticons, Annotations) ??
+            MessageTextRenderPlan.Create(content, Emoticons, Annotations);
+        return cachedPlan;
+    }
+
+    private void ShowPlainText(string content)
+    {
+        if (Inlines is null && string.Equals(Text, content, StringComparison.Ordinal))
+        {
             return;
         }
 
-        Text = null;
-        Inlines = new();
-        var segments = ParseSegments(content, candidates);
-        hasAnnotations = hasAnnotations && segments.Any(segment => segment.Emoticon is null &&
-            GetAnnotations(segment).Any(annotation => annotation.HasPinyin));
-        if (hasAnnotations && PinyinLayout == PinyinLayoutMode.SeparateLine)
+        if (renderedState is not null)
         {
-            separateLine = new(CreateOriginalInlines(segments), CreatePronunciationInlines(segments));
-            Inlines.Add(new InlineUIContainer(separateLine));
+            ReleaseContent();
         }
-        else if (hasAnnotations)
+        Inlines = null;
+        Text = content;
+        AnnotationLayoutChanged?.Invoke();
+    }
+
+    private void RenderContent(MessageTextVisualState state)
+    {
+        Text = null;
+        if (state.SeparateLine)
         {
-            AddReplyInline(Inlines);
-            foreach (var segment in segments)
+            separateLine = new(CreateOriginalInlines(state), CreatePronunciationInlines(state.Plan!.Runs));
+            Inlines = new() { new InlineUIContainer(separateLine) };
+            UpdateRenderedSpans();
+        }
+        else if (state.Plan is { HasAnnotations: true } plan)
+        {
+            var inlines = new InlineCollection();
+            AddReplyInline(inlines, state);
+            foreach (var run in plan.Runs)
             {
-                if (segment.Emoticon is not null)
+                if (run.Emoticon is { } emoticon)
                 {
-                    Inlines.Add(CreateEmoticonInline(segment, true));
+                    AddEmoticonInline(inlines, emoticon, alignToTextBaseline: true);
                     continue;
                 }
-                foreach (var annotation in GetAnnotations(segment))
+                foreach (var annotation in run.Annotations)
                 {
                     if (!annotation.HasPinyin)
                     {
-                        Inlines.Add(CreateUnannotatedInline(annotation.Text));
+                        inlines.Add(CreateUnannotatedInline(annotation.Text));
                         continue;
                     }
                     var inline = rubyInlineCache.TryDequeue(out var cached)
@@ -586,51 +643,106 @@ public class EmoticonTextBlock : TextBlock
                     var syllable = (PinyinRubySyllable)inline.Child;
                     syllable.UpdateAnnotation(annotation);
                     rubySyllables.Add(syllable);
-                    Inlines.Add(inline);
+                    inlines.Add(inline);
                 }
             }
+            Inlines = inlines;
         }
         else
         {
-            Inlines = CreateOriginalInlines(segments);
+            Inlines = CreateOriginalInlines(state);
         }
+
         UpdateTypography();
         AnnotationLayoutChanged?.Invoke();
     }
 
-    private async Task LoadImagesAsync(EmoticonBitmapCache cache, IReadOnlyList<string> paths, int height,
-        IReadOnlyList<DanmuEmoticon> candidates, int revision, CancellationToken cancellationToken)
+    private void RefreshImages()
+    {
+        if (isDataContextUpdating)
+        {
+            isImageRefreshPending = true;
+            return;
+        }
+
+        isImageRefreshPending = false;
+        if (renderedState?.Plan is not { ImagePaths.Count: > 0 } plan || !isAttached || !IsEffectivelyVisible)
+        {
+            return;
+        }
+
+        CancelImageLoad();
+        var cache = BitmapCache ?? (localBitmapCache ??= new(0, 0));
+        var height = GetDecodeHeight();
+        var paths = plan.ImagePaths;
+        var leases = new EmoticonBitmapLease?[paths.Count];
+        var missing = new List<string>();
+        var revision = contentRevision;
+        try
+        {
+            for (var index = 0; index < paths.Count; index++)
+            {
+                var path = paths[index];
+                leases[index] = cache.TryAcquire(path, height);
+                if (leases[index] is null)
+                {
+                    missing.Add(path);
+                }
+            }
+
+            ApplyImageLeases(paths, leases, updateSize: true);
+        }
+        finally
+        {
+            DisposeLeases(leases);
+        }
+        if (revision == contentRevision)
+        {
+            StartImageLoad(cache, missing, height);
+        }
+    }
+
+    private int GetDecodeHeight()
+    {
+        return (int)Math.Ceiling(EmoticonHeight * (TopLevel.GetTopLevel(this)?.RenderScaling ?? 1));
+    }
+
+    private void StartImageLoad(EmoticonBitmapCache cache, IReadOnlyList<string> paths, int height)
+    {
+        if (paths.Count == 0)
+        {
+            return;
+        }
+
+        imageRequest ??= new();
+        var load = LoadImagesAsync(cache, paths, height, contentRevision, imageRequest.Token);
+        PendingImageLoad = PendingImageLoad.IsCompletedSuccessfully ? load : Task.WhenAll(PendingImageLoad, load);
+    }
+
+    private async Task LoadImagesAsync(EmoticonBitmapCache cache, IReadOnlyList<string> paths, int height, int revision,
+        CancellationToken cancellationToken)
     {
         var tasks = paths.Select(path => cache.AcquireAsync(path, height, cancellationToken)).ToArray();
-        var accepted = false;
+        EmoticonBitmapLease?[]? leases = null;
         try
         {
             await Task.Yield();
-            var leases = await Task.WhenAll(tasks);
-            if (cancellationToken.IsCancellationRequested || revision != contentRevision || !isAttached || !IsEffectivelyVisible)
+            leases = await Task.WhenAll(tasks);
+            if (!cancellationToken.IsCancellationRequested && revision == contentRevision && isAttached && IsEffectivelyVisible)
             {
-                return;
+                ApplyImageLeases(paths, leases);
             }
-            for (var index = 0; index < leases.Length; index++)
-            {
-                if (leases[index] is { } lease)
-                {
-                    images.Add(paths[index], lease);
-                }
-            }
-            accepted = true;
-            UpdateContent(() =>
-            {
-                ReleaseInlines();
-                RenderContent(ContentText ?? "", candidates);
-            });
         }
         catch (OperationCanceledException)
         {
         }
         finally
         {
-            if (!accepted)
+            if (leases is not null)
+            {
+                DisposeLeases(leases);
+            }
+            else
             {
                 foreach (var task in tasks)
                 {
@@ -645,61 +757,100 @@ public class EmoticonTextBlock : TextBlock
 
     private void OnImageChanged(string path, int height)
     {
-        var currentHeight = (int)Math.Ceiling(EmoticonHeight * (TopLevel.GetTopLevel(this)?.RenderScaling ?? 1));
-        if (isAttached && IsEffectivelyVisible && height == currentHeight && images.ContainsKey(path))
+        if (!isAttached || !IsEffectivelyVisible || height != GetDecodeHeight() || !images.ContainsKey(path))
         {
-            UpdateContent(RebuildContent);
+            return;
         }
-    }
 
-    private void UpdateContent(Action update)
-    {
-        RaiseEvent(new RoutedEventArgs(AsyncContentUpdatingEvent));
+        var cache = BitmapCache ?? localBitmapCache!;
+        if (cache.TryAcquire(path, height) is not { } lease)
+        {
+            StartImageLoad(cache, [path], height);
+            return;
+        }
+
+        EmoticonBitmapLease?[] leases = [lease];
         try
         {
-            update();
+            ApplyImageLeases([path], leases);
         }
         finally
         {
-            RaiseEvent(new RoutedEventArgs(AsyncContentUpdatedEvent));
+            DisposeLeases(leases);
         }
     }
 
-    private static IReadOnlyList<EmoticonTextSegment> ParseSegments(string content, IReadOnlyList<DanmuEmoticon> candidates)
+    private void ApplyImageLeases(IReadOnlyList<string> paths, EmoticonBitmapLease?[] leases, bool updateSize = false)
     {
-        var result = new List<EmoticonTextSegment>();
-        var position = 0;
-
-        while (position < content.Length)
+        var changed = false;
+        var revision = contentRevision;
+        try
         {
-            DanmuEmoticon? match = null;
-            var matchIndex = int.MaxValue;
-
-            foreach (var candidate in candidates)
+            for (var index = 0; index < paths.Count; index++)
             {
-                var index = content.IndexOf(candidate.Text, position, StringComparison.Ordinal);
-
-                if (index >= 0 && index < matchIndex)
+                var path = paths[index];
+                var replacement = leases[index];
+                images.TryGetValue(path, out var previous);
+                var bitmap = replacement?.Image;
+                if (ReferenceEquals(previous?.Image, bitmap) && (!updateSize || bitmap is null))
                 {
-                    match = candidate;
-                    matchIndex = index;
+                    continue;
                 }
+
+                if (!changed)
+                {
+                    changed = true;
+                    RaiseEvent(new RoutedEventArgs(AsyncContentUpdatingEvent));
+                }
+                if (previous is not null && string.Equals(path, hoveredEmoticonPath, StringComparison.Ordinal))
+                {
+                    ClearEmoticonHover();
+                }
+                if (contentRevision != revision)
+                {
+                    return;
+                }
+
+                UpdateEmoticonInlines(path, bitmap);
+                if (contentRevision != revision)
+                {
+                    return;
+                }
+                if (replacement is null)
+                {
+                    images.Remove(path);
+                }
+                else
+                {
+                    images[path] = replacement;
+                    leases[index] = null;
+                }
+                previous?.Dispose();
             }
 
-            if (match is null)
+            if (changed)
             {
-                result.Add(new(position, content[position..], null));
-                break;
+                UpdateRenderedSpans();
+                separateLine?.OriginalText.InvalidateMeasure();
+                InvalidateTextLayout();
+                AnnotationLayoutChanged?.Invoke();
             }
-
-            if (matchIndex > position)
-            {
-                result.Add(new(position, content[position..matchIndex], null));
-            }
-            result.Add(new(matchIndex, match.Text, match));
-            position = matchIndex + match.Text.Length;
         }
-        return result;
+        finally
+        {
+            if (changed)
+            {
+                RaiseEvent(new RoutedEventArgs(AsyncContentUpdatedEvent));
+            }
+        }
+    }
+
+    private static void DisposeLeases(IEnumerable<EmoticonBitmapLease?> leases)
+    {
+        foreach (var lease in leases)
+        {
+            lease?.Dispose();
+        }
     }
 
     private Inline CreateUnannotatedInline(string text)
@@ -715,85 +866,133 @@ public class EmoticonTextBlock : TextBlock
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Baseline };
     }
 
-    private InlineCollection CreateOriginalInlines(IReadOnlyList<EmoticonTextSegment> segments)
+    private InlineCollection CreateOriginalInlines(MessageTextVisualState state)
     {
-        var result = new InlineCollection();
-        var textIndex = AddReplyInline(result);
-        foreach (var segment in segments)
+        var inlines = new InlineCollection();
+        AddReplyInline(inlines, state);
+        if (state.Plan is not { } plan)
         {
-            var inline = segment.Emoticon is null ? new Run(segment.Text) : CreateEmoticonInline(segment);
-            result.Add(inline);
-            var textLength = inline is InlineUIContainer ? 1 : segment.Text.Length;
-            renderedSpans.Add(new(segment.SourceStart, textIndex, textLength, segment.Emoticon is not null));
-            textIndex += textLength;
-        }
-        return result;
-    }
-
-    private int AddReplyInline(InlineCollection inlines)
-    {
-        if (!HasReply)
-        {
-            return 0;
-        }
-        replyBadge = new(Reply!, AvatarService, ShowReplyAvatar);
-        inlines.Add(new InlineUIContainer(replyBadge) { BaselineAlignment = BaselineAlignment.Baseline });
-        inlines.Add(new Run(" "));
-        return 2;
-    }
-
-    private Inline CreateEmoticonInline(EmoticonTextSegment segment, bool alignToTextBaseline = false)
-    {
-        var bitmap = GetImage(segment.Emoticon!.ImagePath);
-        if (bitmap is null)
-        {
-            return new Run(segment.Text);
-        }
-        var image = new Image
-        {
-            Source = bitmap,
-            Height = EmoticonHeight,
-            Width = EmoticonHeight * bitmap.PixelSize.Width / bitmap.PixelSize.Height,
-            Stretch = Stretch.Uniform
-        };
-        AutomationProperties.SetName(image, segment.Text);
-        emoticonImages.Add(image, segment.Emoticon);
-        return new InlineUIContainer(image)
-        {
-            BaselineAlignment = alignToTextBaseline ? BaselineAlignment.Baseline : BaselineAlignment.Center
-        };
-    }
-
-    private IEnumerable<PinyinAnnotation> GetAnnotations(EmoticonTextSegment segment)
-    {
-        var end = segment.SourceStart + segment.Text.Length;
-        foreach (var annotation in Annotations!)
-        {
-            var start = Math.Max(segment.SourceStart, annotation.SourceStart);
-            var length = Math.Min(end, annotation.SourceStart + annotation.SourceLength) - start;
-            if (length > 0)
+            if (state.Content.Length > 0)
             {
-                yield return start == annotation.SourceStart && length == annotation.SourceLength
-                    ? annotation : new(start, annotation.Text.Substring(start - annotation.SourceStart, length), "");
+                inlines.Add(new Run(state.Content));
+            }
+            return inlines;
+        }
+
+        foreach (var run in plan.Runs)
+        {
+            if (run.Emoticon is { } emoticon)
+            {
+                AddEmoticonInline(inlines, emoticon);
+            }
+            else
+            {
+                inlines.Add(new Run(run.Text));
             }
         }
+        return inlines;
     }
 
-    private InlineCollection CreatePronunciationInlines(IReadOnlyList<EmoticonTextSegment> segments)
+    private void AddReplyInline(InlineCollection inlines, MessageTextVisualState state)
+    {
+        if (state.Reply is not { } reply)
+        {
+            return;
+        }
+
+        replyBadge = new(reply, AvatarService, state.ShowReplyAvatar);
+        inlines.Add(new InlineUIContainer(replyBadge) { BaselineAlignment = BaselineAlignment.Baseline });
+        inlines.Add(new Run(" "));
+    }
+
+    private void AddEmoticonInline(InlineCollection inlines, DanmuEmoticon emoticon, bool alignToTextBaseline = false)
+    {
+        if (!imageSlots.TryGetValue(emoticon.ImagePath, out var slots))
+        {
+            slots = [];
+            imageSlots.Add(emoticon.ImagePath, slots);
+        }
+        var slot = new EmoticonInlineSlot(inlines, inlines.Count, emoticon, alignToTextBaseline);
+        slots.Add(slot);
+        inlines.Add(CreateEmoticonInline(slot, GetImage(emoticon.ImagePath)));
+    }
+
+    private Inline CreateEmoticonInline(EmoticonInlineSlot slot, Bitmap? bitmap)
+    {
+        if (bitmap is null)
+        {
+            return new Run(slot.Emoticon.Text);
+        }
+
+        var image = new Image { Stretch = Stretch.Uniform };
+        SetEmoticonBitmap(image, bitmap);
+        AutomationProperties.SetName(image, slot.Emoticon.Text);
+        emoticonImages.Add(image, slot.Emoticon);
+        return new InlineUIContainer(image)
+        {
+            BaselineAlignment = slot.AlignToTextBaseline ? BaselineAlignment.Baseline : BaselineAlignment.Center
+        };
+    }
+
+    private void UpdateEmoticonInlines(string path, Bitmap? bitmap)
+    {
+        foreach (var slot in imageSlots[path])
+        {
+            if (slot.Inlines[slot.Index] is InlineUIContainer { Child: Image image })
+            {
+                if (bitmap is not null)
+                {
+                    SetEmoticonBitmap(image, bitmap);
+                    continue;
+                }
+
+                emoticonImages.Remove(image);
+            }
+            slot.Inlines[slot.Index] = CreateEmoticonInline(slot, bitmap);
+        }
+    }
+
+    private void SetEmoticonBitmap(Image image, Bitmap bitmap)
+    {
+        image.Width = EmoticonHeight * bitmap.PixelSize.Width / bitmap.PixelSize.Height;
+        image.Height = EmoticonHeight;
+        image.Source = bitmap;
+    }
+
+    private void UpdateRenderedSpans()
+    {
+        if (separateLine?.OriginalText.Inlines is not { } inlines || renderedState?.Plan is not { } plan)
+        {
+            return;
+        }
+
+        renderedSpans.Clear();
+        var prefixLength = replyBadge is null ? 0 : 2;
+        var textIndex = prefixLength;
+        for (var index = 0; index < plan.Runs.Count; index++)
+        {
+            var run = plan.Runs[index];
+            var length = inlines[index + prefixLength] is InlineUIContainer ? 1 : run.Text.Length;
+            renderedSpans.Add(new(run.SourceStart, textIndex, length, run.Emoticon is not null));
+            textIndex += length;
+        }
+    }
+
+    private InlineCollection CreatePronunciationInlines(IReadOnlyList<MessageTextRun> runs)
     {
         var result = new InlineCollection();
         var previousHadPinyin = false;
         var previousWasWhitespace = true;
-        foreach (var segment in segments)
+        foreach (var run in runs)
         {
-            if (segment.Emoticon is not null)
+            if (run.Emoticon is not null)
             {
                 result.Add(new Run(" "));
                 previousHadPinyin = false;
                 previousWasWhitespace = true;
                 continue;
             }
-            foreach (var annotation in GetAnnotations(segment))
+            foreach (var annotation in run.Annotations)
             {
                 var text = annotation.HasPinyin ? annotation.Pinyin : annotation.Text;
                 if ((annotation.HasPinyin || previousHadPinyin) && !previousWasWhitespace &&
@@ -801,11 +1000,11 @@ public class EmoticonTextBlock : TextBlock
                 {
                     result.Add(new Run(" "));
                 }
-                var run = new Run(text);
-                result.Add(run);
+                var pronunciation = new Run(text);
+                result.Add(pronunciation);
                 if (annotation.HasPinyin)
                 {
-                    pronunciationRuns.Add(annotation.SourceStart, run);
+                    pronunciationRuns.Add(annotation.SourceStart, pronunciation);
                 }
                 previousHadPinyin = annotation.HasPinyin;
                 previousWasWhitespace = char.IsWhiteSpace(text[^1]);
@@ -882,22 +1081,27 @@ public class EmoticonTextBlock : TextBlock
 
     private void ReleaseContent()
     {
+        CancelImageLoad();
+        renderedState = null;
+        isImageRefreshPending = false;
+        ReleaseInlines();
+        DisposeLeases(images.Values);
+        images.Clear();
+    }
+
+    private void CancelImageLoad()
+    {
         contentRevision++;
         imageRequest?.Cancel();
         imageRequest?.Dispose();
         imageRequest = null;
         PendingImageLoad = Task.CompletedTask;
-        ReleaseInlines();
-        foreach (var image in images.Values)
-        {
-            image.Dispose();
-        }
-        images.Clear();
     }
 
     private void ReleaseInlines()
     {
         ClearEmoticonHover();
+        imageSlots.Clear();
         emoticonImages.Clear();
         HighlightedSourceStart = -1;
         rubySyllables.Clear();
@@ -918,6 +1122,5 @@ public class EmoticonTextBlock : TextBlock
             }
         }
         Inlines?.Clear();
-
     }
 }

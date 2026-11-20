@@ -17,6 +17,66 @@ namespace Yohuke.DanmuPanel.Tests.Translation;
 
 public sealed class SettingsViewTests
 {
+    /// <summary>缓存输入显示默认值，保存后同时更新容量和有效期。</summary>
+    [AvaloniaFact]
+    public async Task CacheFieldsApplyAfterSaving()
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var runtime = new PanelRuntime(new(directory.Path), new());
+        var view = new SettingsView(runtime, new TextBlock());
+        var window = OpenTranslationSettings(view);
+        try
+        {
+            var capacity = Find<NumericUpDown>(view, "TranslationCacheCapacityInput");
+            var lifetime = Find<NumericUpDown>(view, "TranslationCacheTtlInput");
+            Assert.Equal(5000m, capacity.Value);
+            Assert.Equal(0m, capacity.Minimum);
+            Assert.Equal(10000m, capacity.Maximum);
+            Assert.Equal(1440m, lifetime.Value);
+            Assert.Equal(1m, lifetime.Minimum);
+            Assert.Equal(43200m, lifetime.Maximum);
+
+            capacity.Value = 0;
+            lifetime.Value = 75;
+
+            Assert.Equal(5000, runtime.Configuration.Settings.Translation.CacheCapacity);
+            Assert.Equal(1440, runtime.Configuration.Settings.Translation.CacheTtlMinutes);
+            Assert.True(await view.SaveAsync());
+            var restored = runtime.ConfigurationStore.Load().Settings.Translation;
+            Assert.Equal(0, restored.CacheCapacity);
+            Assert.Equal(75, restored.CacheTtlMinutes);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>清空容量或输入小数有效期时，现有缓存配置保持有效。</summary>
+    [AvaloniaTheory]
+    [InlineData("TranslationCacheCapacityInput", null)]
+    [InlineData("TranslationCacheTtlInput", 1.5)]
+    public async Task InvalidCacheInputDoesNotSave(string inputName, double? value)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        await using var runtime = new PanelRuntime(new(directory.Path), new());
+        var view = new SettingsView(runtime, new TextBlock());
+        var window = OpenTranslationSettings(view);
+        try
+        {
+            Find<NumericUpDown>(view, inputName).Value = value.HasValue ? (decimal)value.Value : null;
+
+            Assert.False(await view.SaveAsync());
+            Assert.Equal(5000, runtime.Configuration.Settings.Translation.CacheCapacity);
+            Assert.Equal(1440, runtime.Configuration.Settings.Translation.CacheTtlMinutes);
+            Assert.False(File.Exists(Path.Combine(directory.Path, "settings.json")));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>目标语言选择保存代码，并用于新增术语。</summary>
     [AvaloniaFact]
     public async Task TargetLanguageDropdownPersistsCodeAndSetsNewGlossaryLanguage()

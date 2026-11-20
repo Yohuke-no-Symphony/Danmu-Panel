@@ -17,6 +17,7 @@ internal sealed class MessageDisplaySettings
     private readonly Dictionary<string, IBrush> brushes = new(StringComparer.Ordinal);
     private readonly HashSet<long> specialAttentionUids;
     private readonly MessageBorderSettings messageBorders;
+    private readonly LocalizationSnapshot? localization;
 
     internal string TranslationFingerprint { get; }
     internal bool TranslationEnabled { get; }
@@ -30,11 +31,13 @@ internal sealed class MessageDisplaySettings
     internal bool ShowSuperChatPinyin { get; }
     internal PinyinLayoutMode PinyinLayout { get; }
     internal bool AutoScrollLongMessages { get; }
-    internal string LanguageId { get; }
-    internal string CultureName { get; }
+    internal string LanguageId => localization?.CurrentLanguageID ?? "";
+    internal CultureInfo Culture { get; }
+    internal string CultureName => Culture.Name;
     internal MessagePresentationOptions PresentationOptions { get; }
 
-    private MessageDisplaySettings(PanelSettings settings, string fingerprint, string languageId, DanmuRegexFilter danmuFilter)
+    private MessageDisplaySettings(PanelSettings settings, string fingerprint, LocalizationSnapshot? localization,
+        CultureInfo culture, DanmuRegexFilter danmuFilter)
     {
         TranslationFingerprint = fingerprint;
         TranslationEnabled = settings.Translation.Enabled;
@@ -48,8 +51,8 @@ internal sealed class MessageDisplaySettings
         ShowSuperChatPinyin = settings.ShowSuperChatPinyin;
         PinyinLayout = settings.PinyinLayout;
         AutoScrollLongMessages = settings.AutoScrollLongMessages;
-        LanguageId = languageId;
-        CultureName = CultureInfo.CurrentCulture.Name;
+        this.localization = localization;
+        Culture = CultureInfo.ReadOnly(culture);
         PresentationOptions = new(ShowUserPinyin, ShowGiftPinyin, ShowDanmuPinyin, ShowSuperChatPinyin, CultureName);
         colors = new(settings.ColorScheme.Overrides, StringComparer.Ordinal);
         specialAttentionUids = settings.SpecialAttention.Users.Select(user => user.UserUid).ToHashSet();
@@ -66,7 +69,9 @@ internal sealed class MessageDisplaySettings
         DanmuRegexFilter? danmuFilter = null)
     {
         var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation);
-        var languageId = Localization.IsInitialized ? Localization.CurrentLanguageID : "";
+        var localization = Localization.CaptureCurrentSnapshot();
+        var languageId = localization?.CurrentLanguageID ?? "";
+        var culture = CultureInfo.CurrentCulture;
         danmuFilter ??= previous?.DanmuFilter.HasSameSettings(settings.DanmuRegexFilter) == true
             ? previous.DanmuFilter : new(settings.DanmuRegexFilter);
         if (previous is not null && previous.TranslationFingerprint == fingerprint &&
@@ -84,17 +89,38 @@ internal sealed class MessageDisplaySettings
             previous.ShowSuperChatPinyin == settings.ShowSuperChatPinyin &&
             previous.PinyinLayout == settings.PinyinLayout &&
             previous.AutoScrollLongMessages == settings.AutoScrollLongMessages && previous.LanguageId == languageId &&
-            previous.CultureName == CultureInfo.CurrentCulture.Name && previous.HasSameColors(settings) &&
+            previous.CultureName == culture.Name && previous.HasSameColors(settings) &&
             previous.HasSameSpecialAttention(settings))
         {
             return previous;
         }
-        return new(settings, fingerprint, languageId, danmuFilter);
+        return new(settings, fingerprint, localization, culture, danmuFilter);
     }
 
     internal bool IsTranslationBlocked(MessageRecord record)
     {
         return record.Kind == MessageKind.Danmu && DanmuFilter.IsTranslationBlocked(record.Content);
+    }
+
+    internal bool IsContentPinyinEnabled(MessageKind kind)
+    {
+        return kind switch
+        {
+            MessageKind.Danmu => ShowDanmuPinyin,
+            MessageKind.SuperChat => ShowSuperChatPinyin,
+            MessageKind.Gift => ShowGiftPinyin,
+            _ => false
+        };
+    }
+
+    internal string GetText(string key)
+    {
+        return localization?.Catalog.Get(localization.CurrentLanguageID, key) ?? key;
+    }
+
+    internal string FormatText(string key, params object[] arguments)
+    {
+        return string.Format(Culture, GetText(key), arguments);
     }
 
     internal double GetBorderThickness(MessageKind kind)

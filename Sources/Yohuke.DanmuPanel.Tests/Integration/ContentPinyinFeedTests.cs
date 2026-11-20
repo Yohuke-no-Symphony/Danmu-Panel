@@ -116,9 +116,6 @@ public sealed class ContentPinyinFeedTests
             Pump(window);
             var item = Assert.Single(view.Model.Items);
             var original = Original(view);
-            var marquee = view.GetVisualDescendants().OfType<HoverMarqueeTextBlock>()
-                .Single(control => control.Classes.Contains("originalText") &&
-                    !control.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any());
             Assert.Empty(original.Annotations!);
 
             settings.ShowDanmuPinyin = kind == MessageKind.Danmu;
@@ -130,23 +127,18 @@ public sealed class ContentPinyinFeedTests
             Assert.Same(item, Assert.Single(view.Model.Items));
             Assert.Same(original, Original(view));
             Assert.Same(item.ContentPinyin, original.Annotations);
-            Assert.Same(item.ContentPinyin, marquee.Annotations);
             Assert.Equal(layout, original.PinyinLayout);
-            Assert.Equal(layout, marquee.PinyinLayout);
-            Assert.Equal(compact, marquee.IsEffectivelyVisible);
-            Assert.Equal(!compact, original.IsEffectivelyVisible);
-            var activeText = compact
-                ? Assert.Single(marquee.GetVisualDescendants().OfType<EmoticonTextBlock>())
-                : original;
-            Assert.NotEmpty(activeText.GetVisualDescendants().OfType<TextBlock>());
+            Assert.Equal(compact, original.GetVisualAncestors().OfType<HoverMarqueeTextBlock>().Any());
+            Assert.True(original.IsEffectivelyVisible);
+            Assert.NotEmpty(original.GetVisualDescendants().OfType<TextBlock>());
 
             settings.ColorScheme.Overrides["MessagePinyinBrush"] = "#C02070";
             runtime.Colors.Apply(Application.Current!, settings.ColorScheme);
             Pump(window);
-            Assert.Equal(Color.Parse("#C02070"), Assert.IsAssignableFrom<ISolidColorBrush>(activeText.PinyinForeground).Color);
+            Assert.Equal(Color.Parse("#C02070"), Assert.IsAssignableFrom<ISolidColorBrush>(original.PinyinForeground).Color);
             var pronunciation = layout == PinyinLayoutMode.Ruby
-                ? activeText.GetVisualDescendants().OfType<PinyinRubySyllable>().First().PronunciationText
-                : Assert.Single(activeText.GetVisualDescendants().OfType<PinyinSeparateLinePresenter>()).PronunciationText;
+                ? original.GetVisualDescendants().OfType<PinyinRubySyllable>().First().PronunciationText
+                : Assert.Single(original.GetVisualDescendants().OfType<PinyinSeparateLinePresenter>()).PronunciationText;
             Assert.Equal(Color.Parse("#C02070"), Assert.IsAssignableFrom<ISolidColorBrush>(pronunciation.Foreground).Color);
 
             settings.PinyinLayout = layout == PinyinLayoutMode.Ruby
@@ -155,15 +147,15 @@ public sealed class ContentPinyinFeedTests
             await view.Model.WaitForPresentationAsync();
             Pump(window);
             Assert.Same(item, Assert.Single(view.Model.Items));
-            Assert.Equal(settings.PinyinLayout, activeText.PinyinLayout);
+            Assert.Equal(settings.PinyinLayout, original.PinyinLayout);
 
             settings.Translation.DisplayMode = TranslationDisplayMode.TranslationOnly;
             await view.Model.RefreshAsync();
             await view.Model.WaitForPresentationAsync();
             Pump(window);
-            Assert.False(original.IsEffectivelyVisible);
-            Assert.False(marquee.IsEffectivelyVisible);
-            Assert.All(activeText.GetVisualDescendants().OfType<TextBlock>(), text => Assert.False(text.IsEffectivelyVisible));
+            Assert.Null(original.GetVisualRoot());
+            Assert.DoesNotContain(view.GetVisualDescendants().OfType<Control>(),
+                control => control.Classes.Contains("originalText"));
 
             settings.Translation.DisplayMode = TranslationDisplayMode.Bilingual;
             settings.ShowDanmuPinyin = false;
@@ -171,9 +163,10 @@ public sealed class ContentPinyinFeedTests
             await view.Model.RefreshAsync();
             await view.Model.WaitForPresentationAsync();
             Pump(window);
-            Assert.Empty(activeText.Annotations!);
-            Assert.Empty(activeText.GetVisualDescendants().OfType<PinyinRubySyllable>());
-            Assert.Empty(activeText.GetVisualDescendants().OfType<PinyinSeparateLinePresenter>());
+            var restored = Original(view);
+            Assert.Empty(restored.Annotations!);
+            Assert.Empty(restored.GetVisualDescendants().OfType<PinyinRubySyllable>());
+            Assert.Empty(restored.GetVisualDescendants().OfType<PinyinSeparateLinePresenter>());
             Assert.Same(item, Assert.Single(view.Model.Items));
         }
         finally
@@ -407,9 +400,12 @@ public sealed class ContentPinyinFeedTests
 
     private static EmoticonTextBlock Original(MessageFeedView view)
     {
-        return view.GetVisualDescendants().OfType<EmoticonTextBlock>()
-            .Single(control => control.Classes.Contains("originalText") &&
+        var branch = Assert.Single(view.GetVisualDescendants().OfType<Control>(),
+            control => control.Classes.Contains("originalText") &&
                 !control.GetVisualAncestors().OfType<MessageEventSummarySurface>().Any());
+        return branch is HoverMarqueeTextBlock marquee
+            ? Assert.Single(marquee.GetVisualDescendants().OfType<EmoticonTextBlock>())
+            : Assert.IsType<EmoticonTextBlock>(branch);
     }
 
     private static void Pump(Window window)

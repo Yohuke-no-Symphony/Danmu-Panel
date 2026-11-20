@@ -80,7 +80,8 @@ public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
             Assert.Same(focusedContainer, KeyboardNavigation.GetTabOnceActiveElement(list));
             var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),
                 presenter => ReferenceEquals(presenter.TemplatedParent, viewer));
-            presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(), new(0, -viewer.Offset.Y)));
+            const double NEAR_TOP = 8;
+            presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(), new(0, NEAR_TOP - viewer.Offset.Y)));
             Pump(window);
             Assert.DoesNotContain(focusedContainer, list.GetRealizedContainers());
             Assert.True(focusedContainer.IsEffectivelyVisible);
@@ -104,15 +105,12 @@ public sealed class PinnedFeedHistoryLayoutTests(ITestOutputHelper output)
                 Pump(window);
                 Assert.Equal(200, view.Model.ScrollingItems.Count);
             }
-            foreach (var fraction in new[] { 0d, 0.25, 0.5, 0.75 })
+            foreach (var fraction in new[] { 0.05, 0.25, 0.5, 0.75 })
             {
                 presenter.RaiseEvent(new ScrollGestureEventArgs(ScrollGestureEventArgs.GetNextFreeId(),
                     new(0, viewer.ScrollBarMaximum.Y * fraction - viewer.Offset.Y)));
                 Pump(window);
-                if (fraction > 0)
-                {
-                    Assert.True(viewer.Offset.Y > 0);
-                }
+                Assert.True(viewer.Offset.Y > 0);
             }
             if (returnToLatest)
             {

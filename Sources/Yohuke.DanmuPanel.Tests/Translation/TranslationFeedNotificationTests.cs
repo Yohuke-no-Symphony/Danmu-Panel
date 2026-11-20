@@ -52,10 +52,9 @@ public sealed class TranslationFeedNotificationTests
         store.Pending.Add(job);
         var notification = new TaskCompletionSource<(string Room, MessageKind? Kind, bool Completed)>(
             TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient((_, _) => fails
             ? Task.FromException<string>(new TranslationException("translation.failed"))
-            : Task.FromResult("translated")), cache);
+            : Task.FromResult("translated")));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.Completed += (_, args) => notification.TrySetResult((args.RoomTabId, args.Kind, true));
         scheduler.PendingChanged += (room, changedKind) => notification.TrySetResult((room, changedKind, false));

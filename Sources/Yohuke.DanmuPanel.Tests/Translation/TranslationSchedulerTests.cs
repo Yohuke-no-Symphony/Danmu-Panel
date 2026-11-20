@@ -19,8 +19,7 @@ public sealed class TranslationSchedulerTests
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var count = 0;
         var pendingChanges = new ConcurrentQueue<(string RoomId, MessageKind? Kind)>();
-        await using var cache = new SqliteTranslationCache(":memory:");
-        await using var service = new TranslationService(new DelegateTranslationClient((request, _) => Task.FromResult(request.Text)), cache);
+        await using var service = new TranslationService(new DelegateTranslationClient((request, _) => Task.FromResult(request.Text)));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.PendingChanged += (room, kind) => pendingChanges.Enqueue((room, kind));
         scheduler.Completed += (_, _) =>
@@ -56,7 +55,6 @@ public sealed class TranslationSchedulerTests
         var completed = 0;
         var activeCounts = new ConcurrentQueue<int>();
         var starts = new ConcurrentQueue<string>();
-        await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient(async (request, token) =>
         {
             starts.Enqueue(request.Text);
@@ -69,7 +67,7 @@ public sealed class TranslationSchedulerTests
             await release.Task.WaitAsync(token);
             Interlocked.Decrement(ref active);
             return request.Text;
-        }), cache);
+        }));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.Completed += (_, _) =>
         {
@@ -98,7 +96,6 @@ public sealed class TranslationSchedulerTests
         store.Pending.Add(Job("hello", 1, DateTimeOffset.UtcNow));
         var oldStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var completed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient(async (request, token) =>
         {
             if (request.SystemPrompt.Contains("zh-CN", StringComparison.Ordinal))
@@ -107,7 +104,7 @@ public sealed class TranslationSchedulerTests
                 await Task.Delay(Timeout.Infinite, token);
             }
             return "こんにちは";
-        }), cache);
+        }));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.Completed += (_, args) => completed.TrySetResult(args.Translation);
         await scheduler.StartAsync(new() { Enabled = true, Model = "test", TargetLanguage = "zh-CN" });
@@ -118,14 +115,13 @@ public sealed class TranslationSchedulerTests
     }
 
     [Fact]
-    public async Task DisplayAndBacklogChangesDoNotCancelOrRepeatAnInFlightRequest()
+    public async Task DisplayBacklogAndCacheChangesDoNotCancelOrRepeatAnInFlightRequest()
     {
         var store = new MemoryTranslationJobStore();
         store.Pending.Add(Job("hello", 1, DateTimeOffset.UtcNow));
         var client = new ControlledTranslationClient();
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var cache = new SqliteTranslationCache(":memory:");
-        await using var service = new TranslationService(client, cache);
+        await using var service = new TranslationService(client);
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.Completed += (_, _) => completed.TrySetResult();
         await scheduler.StartAsync(new() { Enabled = true, Model = "test" });
@@ -133,8 +129,9 @@ public sealed class TranslationSchedulerTests
         await scheduler.UpdateSettingsAsync(new()
         {
             Enabled = true, Model = "test", DisplayMode = TranslationDisplayMode.TranslationOnly,
-            BacklogMode = TranslationBacklogMode.AllMessages
+            BacklogMode = TranslationBacklogMode.AllMessages, CacheCapacity = 20, CacheTtlMinutes = 5
         });
+        service.ConfigureCache(cacheCapacity: 20, cacheTtlMinutes: 5);
         client.Response.TrySetResult("你好");
         await completed.Task.WaitAsync(TimeSpan.FromSeconds(3));
         Assert.Equal(1, client.Calls);
@@ -150,9 +147,8 @@ public sealed class TranslationSchedulerTests
         var store = new MemoryTranslationJobStore();
         store.Pending.Add(Job("message", 1, DateTimeOffset.UtcNow) with { Text = text });
         var changed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var cache = new SqliteTranslationCache(":memory:");
         await using var service = new TranslationService(new DelegateTranslationClient((_, _) =>
-            throw new TranslationException("translation.failed")), cache);
+            throw new TranslationException("translation.failed")));
         await using var scheduler = new TranslationScheduler(store, service);
         scheduler.PendingChanged += (room, _) => changed.TrySetResult(room);
 

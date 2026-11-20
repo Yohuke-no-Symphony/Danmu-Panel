@@ -18,6 +18,20 @@ public sealed class TranslationRequestFactoryTests
     }
 
     [Fact]
+    public void CachePolicyChangesPreserveTranslationAndRequestIdentities()
+    {
+        var settings = new TranslationSettings { Model = "model" };
+        var request = TranslationRequestFactory.Create(settings, "你好")!;
+        var fingerprint = TranslationRequestFactory.GetRequestFingerprint(settings);
+
+        settings.CacheCapacity = 0;
+        settings.CacheTtlMinutes = 5;
+
+        Assert.Equal(request, TranslationRequestFactory.Create(settings, "你好"));
+        Assert.Equal(fingerprint, TranslationRequestFactory.GetRequestFingerprint(settings));
+    }
+
+    [Fact]
     public void TargetModelPromptAndGlossaryChangesUpdateRequestIdentity()
     {
         var settings = new TranslationSettings { Model = "model" };

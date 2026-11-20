@@ -12,9 +12,10 @@ internal sealed partial class MessageFeedRowTemplates : ResourceDictionary
         AvaloniaXamlLoader.Load(this);
     }
 
-    internal Control Build(MessageKind kind)
+    internal Control Build(MessageKind kind, bool isEventSummary = false)
     {
-        var result = ((IDataTemplate)this[kind.ToString()]!).Build(null)!;
+        var key = isEventSummary ? "DanmuSummary" : kind.ToString();
+        var result = ((IDataTemplate)this[key]!).Build(null)!;
         result.ClearValue(Control.DataContextProperty);
         return result;
     }

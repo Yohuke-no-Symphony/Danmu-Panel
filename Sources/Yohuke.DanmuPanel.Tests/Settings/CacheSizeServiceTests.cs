@@ -5,7 +5,7 @@ using Yohuke.DanmuPanel.Tests.Messages;
 
 namespace Yohuke.DanmuPanel.Tests.Settings;
 
-/// <summary>验证本地缓存统计的边界、递归目录和 SQLite 辅助文件。</summary>
+/// <summary>验证本地缓存统计的边界、递归目录和翻译缓存文件。</summary>
 public sealed class CacheSizeServiceTests
 {
     /// <summary>尚未生成缓存时返回零，统计不会创建应用目录。</summary>
@@ -19,9 +19,9 @@ public sealed class CacheSizeServiceTests
         Assert.False(Directory.Exists(directory.Path));
     }
 
-    /// <summary>头像、表情和翻译数据库计入总量，历史、配置及浏览器资料排除。</summary>
+    /// <summary>头像、表情、翻译快照和旧缓存文件计入总量，历史、配置及浏览器资料排除。</summary>
     [Fact]
-    public async Task CountsOnlyImageCachesAndTranslationDatabaseWithItsSidecars()
+    public async Task CountsImageCachesAndBothTranslationCacheFormats()
     {
         using var directory = new MessageStoreTestDirectory();
         var paths = new AppDirectoryService(directory.Path);
@@ -32,6 +32,7 @@ public sealed class CacheSizeServiceTests
         WriteFile(paths.TranslationCacheDatabasePath + "-wal", 23);
         WriteFile(paths.TranslationCacheDatabasePath + "-shm", 29);
         WriteFile(paths.TranslationCacheDatabasePath + "-journal", 31);
+        WriteFile(paths.TranslationCacheSnapshotPath, 37);
         WriteFile(Path.Combine(directory.Path, "messages.db"), 1000);
         WriteFile(Path.Combine(directory.Path, "messages.db-wal"), 1000);
         WriteFile(Path.Combine(directory.Path, "settings.json"), 1000);
@@ -39,10 +40,10 @@ public sealed class CacheSizeServiceTests
         WriteFile(Path.Combine(directory.Path, "Browser", "Cache", "data"), 1000);
         var service = new CacheSizeService(paths);
 
-        Assert.Equal(143, await service.GetSizeAsync());
+        Assert.Equal(180, await service.GetSizeAsync());
 
         File.Delete(Path.Combine(paths.AvatarCacheDirectory, "avatar.img"));
-        Assert.Equal(132, await service.GetSizeAsync());
+        Assert.Equal(169, await service.GetSizeAsync());
     }
 
     /// <summary>符号链接不引入目录外文件，也不会在循环链接中无限递归。</summary>
@@ -60,6 +61,7 @@ public sealed class CacheSizeServiceTests
         File.CreateSymbolicLink(Path.Combine(paths.AvatarCacheDirectory, "linked.img"), outsideFile);
         Directory.CreateSymbolicLink(paths.EmoticonCacheDirectory, outside);
         File.CreateSymbolicLink(paths.TranslationCacheDatabasePath, outsideFile);
+        File.CreateSymbolicLink(paths.TranslationCacheSnapshotPath, outsideFile);
 
         Assert.Equal(7, await new CacheSizeService(paths).GetSizeAsync());
     }

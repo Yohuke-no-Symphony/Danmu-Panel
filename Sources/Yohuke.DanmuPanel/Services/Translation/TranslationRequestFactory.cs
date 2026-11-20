@@ -86,6 +86,8 @@ public static class TranslationRequestFactory
             ExtraSystemPrompt = settings.ExtraSystemPrompt,
             DisplayMode = settings.DisplayMode,
             BacklogMode = settings.BacklogMode,
+            CacheCapacity = settings.CacheCapacity,
+            CacheTtlMinutes = settings.CacheTtlMinutes,
             CacheFingerprints = new(settings.CacheFingerprints, StringComparer.Ordinal),
             Glossary = settings.Glossary.Select(entry => new GlossaryEntry
             {
