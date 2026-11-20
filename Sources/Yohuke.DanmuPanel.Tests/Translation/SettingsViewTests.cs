@@ -29,18 +29,18 @@ public sealed class SettingsViewTests
         {
             var capacity = Find<NumericUpDown>(view, "TranslationCacheCapacityInput");
             var lifetime = Find<NumericUpDown>(view, "TranslationCacheTtlInput");
-            Assert.Equal(5000m, capacity.Value);
+            Assert.Equal(500m, capacity.Value);
             Assert.Equal(0m, capacity.Minimum);
             Assert.Equal(10000m, capacity.Maximum);
-            Assert.Equal(1440m, lifetime.Value);
+            Assert.Equal(360m, lifetime.Value);
             Assert.Equal(1m, lifetime.Minimum);
             Assert.Equal(43200m, lifetime.Maximum);
 
             capacity.Value = 0;
             lifetime.Value = 75;
 
-            Assert.Equal(5000, runtime.Configuration.Settings.Translation.CacheCapacity);
-            Assert.Equal(1440, runtime.Configuration.Settings.Translation.CacheTtlMinutes);
+            Assert.Equal(500, runtime.Configuration.Settings.Translation.CacheCapacity);
+            Assert.Equal(360, runtime.Configuration.Settings.Translation.CacheTtlMinutes);
             Assert.True(await view.SaveAsync());
             var restored = runtime.ConfigurationStore.Load().Settings.Translation;
             Assert.Equal(0, restored.CacheCapacity);
@@ -67,8 +67,8 @@ public sealed class SettingsViewTests
             Find<NumericUpDown>(view, inputName).Value = value.HasValue ? (decimal)value.Value : null;
 
             Assert.False(await view.SaveAsync());
-            Assert.Equal(5000, runtime.Configuration.Settings.Translation.CacheCapacity);
-            Assert.Equal(1440, runtime.Configuration.Settings.Translation.CacheTtlMinutes);
+            Assert.Equal(500, runtime.Configuration.Settings.Translation.CacheCapacity);
+            Assert.Equal(360, runtime.Configuration.Settings.Translation.CacheTtlMinutes);
             Assert.False(File.Exists(Path.Combine(directory.Path, "settings.json")));
         }
         finally

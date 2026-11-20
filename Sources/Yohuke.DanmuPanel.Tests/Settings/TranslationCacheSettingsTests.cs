@@ -18,8 +18,8 @@ public sealed class TranslationCacheSettingsTests
         var translation = store.Load().Settings.Translation;
 
         Assert.Equal("legacy", translation.Model);
-        Assert.Equal(5000, translation.CacheCapacity);
-        Assert.Equal(1440, translation.CacheTtlMinutes);
+        Assert.Equal(500, translation.CacheCapacity);
+        Assert.Equal(360, translation.CacheTtlMinutes);
     }
 
     /// <summary>损坏的缓存策略恢复备份中的有效值。</summary>

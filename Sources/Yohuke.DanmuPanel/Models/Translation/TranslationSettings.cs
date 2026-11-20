@@ -3,9 +3,9 @@ namespace Yohuke.DanmuPanel.Models.Translation;
 /// <summary>独立于界面语言保存的自动翻译设置。</summary>
 public sealed class TranslationSettings
 {
-    public const int DEFAULT_CACHE_CAPACITY = 5000;
+    public const int DEFAULT_CACHE_CAPACITY = 500;
     public const int MAX_CACHE_CAPACITY = 10000;
-    public const int DEFAULT_CACHE_TTL_MINUTES = 1440;
+    public const int DEFAULT_CACHE_TTL_MINUTES = 360;
     public const int MIN_CACHE_TTL_MINUTES = 1;
     public const int MAX_CACHE_TTL_MINUTES = 43200;
 
