@@ -10,7 +10,6 @@ internal sealed record MessagePresentationSnapshot(
     IReadOnlyList<PinyinAnnotation> NameAnnotations,
     string DetailPinyin,
     IReadOnlyList<PinyinAnnotation> ContentPinyin,
-    bool HasTranslatableContent,
     IReadOnlyList<DanmuEmoticon>? Emoticons,
     MessageTextRenderPlan? NameRenderPlan,
     MessageTextRenderPlan? ContentRenderPlan)

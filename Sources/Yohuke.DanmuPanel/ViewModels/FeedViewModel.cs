@@ -517,10 +517,9 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
             return;
         }
         refreshTimer.Stop();
-        var requiresSnapshot = Interlocked.Exchange(ref refreshRequested, 0) != 0;
         try
         {
-            await FlushChangesAsync(requiresSnapshot);
+            await FlushChangesAsync();
         }
         catch (Exception exception)
         {

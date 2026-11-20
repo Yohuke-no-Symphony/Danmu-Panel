@@ -25,11 +25,11 @@ public sealed class LiveDanmuReadingAnchorTests
     private const int RETENTION = 240;
     private static readonly TimeSpan TEST_TIMEOUT = TimeSpan.FromSeconds(8);
 
-    /// <summary>锚点仍在容量内就正常裁剪，下一批将移出它时固定裁剪前窗口。</summary>
+    /// <summary>容量内的直播批次直接裁剪，锚点将移出时保留原窗口，包括超出容量的快照回退。</summary>
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task LiveTrimmingPreservesTheVisibleHalfRowOrFreezesBeforeRemovingIt(bool overflow)
+    public async Task LiveTrimmingPreservesTheVisibleHalfRowOrFreezesBeforeRemovingIt(bool largeBurst)
     {
         using var directory = new MessageStoreTestDirectory();
         var configuration = new PanelConfiguration();
@@ -59,7 +59,7 @@ public sealed class LiveDanmuReadingAnchorTests
             var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),
                 control => control.TemplatedParent == viewer);
             var height = FirstVisible(list, viewer).Height;
-            var wanted = height * (overflow ? 160.5 : 40.5);
+            var wanted = height * (largeBurst ? 160.5 : 40.5);
             ScrollBy(presenter, wanted - viewer.Offset.Y);
             await SettleAsync(window);
             var visible = FirstVisible(list, viewer);
@@ -74,7 +74,7 @@ public sealed class LiveDanmuReadingAnchorTests
 
             var originals = view.Model.ScrollingItems.ToArray();
             var countBeforeAnchor = Array.IndexOf(originals, visible.Item);
-            Assert.InRange(countBeforeAnchor, overflow ? 129 : 1, overflow ? RETENTION - 1 : 128);
+            Assert.InRange(countBeforeAnchor, largeBurst ? 129 : 1, largeBurst ? RETENTION - 1 : 128);
             var payloadReads = runtime.Messages.PayloadRowsRead;
             await PublishAsync(runtime, RETENTION, countBeforeAnchor);
             var lastFirstBatch = RETENTION + countBeforeAnchor - 1;
@@ -87,20 +87,13 @@ public sealed class LiveDanmuReadingAnchorTests
             Assert.Equal(Enumerable.Range(countBeforeAnchor, RETENTION).Select(MessageId),
                 view.Model.ScrollingItems.Select(item => item.Record.Id));
             AssertAnchor();
-            if (overflow)
-            {
-                Assert.True(runtime.Messages.PayloadRowsRead > payloadReads);
-            }
-            else
-            {
-                Assert.Equal(payloadReads, runtime.Messages.PayloadRowsRead);
-            }
+            Assert.Equal(payloadReads, runtime.Messages.PayloadRowsRead);
 
             var beforeFreeze = view.Model.ScrollingItems.ToArray();
             var windowChanges = 0;
             NotifyCollectionChangedEventHandler onRowsChanged = (_, _) => windowChanges++;
             view.Model.ScrollingRows.CollectionChanged += onRowsChanged;
-            var nextCount = overflow ? 129 : 1;
+            var nextCount = largeBurst ? RETENTION + 1 : 1;
             await PublishAsync(runtime, lastFirstBatch + 1, nextCount);
             await WaitForAsync(view.Model, () => view.Model.HasNewerHistory);
             await SettleAsync(window);

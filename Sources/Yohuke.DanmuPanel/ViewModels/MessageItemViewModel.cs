@@ -222,8 +222,6 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         presentation = value;
         nameRenderPlan = value.NameRenderPlan;
         contentRenderPlan = value.ContentRenderPlan;
-        var wasTranslating = IsTranslating;
-        var showedTranslation = ShowTranslation;
         var hadName = HasNamePinyin;
         var hadDetail = HasDetailPinyin;
         var hadContent = HasContentPinyin;
@@ -233,15 +231,12 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         SetProperty(ref nameAnnotations, value.NameAnnotations, nameof(NameAnnotations));
         SetProperty(ref detailPinyin, value.DetailPinyin, nameof(DetailPinyin));
         SetProperty(ref contentPinyin, value.ContentPinyin, nameof(ContentPinyin));
-        hasTranslatableContent = value.HasTranslatableContent;
         isPresentationPending = false;
         NotifyChange(nameWasPending, IsNamePinyinPending, nameof(IsNamePinyinPending));
         NotifyChange(contentWasPending, IsContentPinyinPending, nameof(IsContentPinyinPending));
         NotifyChange(hadName, HasNamePinyin, nameof(HasNamePinyin));
         NotifyChange(hadDetail, HasDetailPinyin, nameof(HasDetailPinyin));
         NotifyChange(hadContent, HasContentPinyin, nameof(HasContentPinyin));
-        NotifyChange(wasTranslating, IsTranslating, nameof(IsTranslating));
-        NotifyChange(showedTranslation, ShowTranslation, nameof(ShowTranslation));
         return true;
     }
 
@@ -305,6 +300,7 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         var hadContentPinyin = HasContentPinyin;
         var nameWasPending = IsNamePinyinPending;
         var contentWasPending = IsContentPinyinPending;
+        var couldShowContentPinyin = canShowContentPinyin;
         var hadMedal = HasMedal;
         var hadGuardMedal = HasGuardMedal;
         var hadTranslation = HasTranslation;
@@ -324,17 +320,11 @@ public sealed class MessageItemViewModel : FeedRowViewModel
         translationPending = projection.TranslationPending;
         filterStateVersion = projection.FilterVersion;
         translationBlocked = projection.TranslationBlocked;
+        hasTranslatableContent = projection.HasTranslatableContent;
         canShowNamePinyin = projection.CanShowNamePinyin;
         canShowContentPinyin = projection.CanShowContentPinyin;
         isSpecialAttention = projection.IsSpecialAttention;
         SetProperty(ref reply, projection.Reply, nameof(Reply));
-
-        if (!deferPresentation && (initialize || previous.Kind != record.Kind || previous.Content != record.Content ||
-            !previous.Emoticons.SequenceEqual(record.Emoticons)))
-        {
-            hasTranslatableContent = record.Kind is MessageKind.Danmu or MessageKind.SuperChat &&
-                TranslationTextExtractor.Extract(record.Content, record.Emoticons.Select(emoticon => emoticon.Text)).Length > 0;
-        }
 
         var nameChanged = SetProperty(ref name, projection.Name, nameof(Name));
         NotifyChange(previous.UserUid, record.UserUid, nameof(UserUid));
@@ -366,21 +356,23 @@ public sealed class MessageItemViewModel : FeedRowViewModel
             record.Kind == MessageKind.Gift && (previous.GiftName != record.GiftName ||
                 previous.Quantity != record.Quantity || previous.TotalPrice != record.TotalPrice ||
                 previousSettings.CultureName != settings.CultureName) ||
-            previousSettings.IsContentPinyinEnabled(previous.Kind) != settings.IsContentPinyinEnabled(record.Kind)))
+            couldShowContentPinyin != canShowContentPinyin))
         {
-            SetProperty(ref contentPinyin, settings.IsContentPinyinEnabled(record.Kind)
-                ? GetContentAnnotations(projection) : [], nameof(ContentPinyin));
+            SetProperty(ref contentPinyin, canShowContentPinyin ? GetContentAnnotations(projection) : [], nameof(ContentPinyin));
         }
         if (deferPresentation && presentation?.Matches(record, settings.PresentationOptions) != true)
         {
+            presentation = null;
             nameRenderPlan = null;
-            contentRenderPlan = null;
+            if (contentRenderPlan?.Matches(projection.Detail ?? "", emoticons, null) != true)
+            {
+                contentRenderPlan = null;
+            }
             SetProperty(ref namePinyin, "", nameof(NamePinyin));
             SetProperty(ref nameAnnotations, Array.Empty<PinyinAnnotation>(), nameof(NameAnnotations));
             SetProperty(ref detailPinyin, "", nameof(DetailPinyin));
             SetProperty(ref contentPinyin, Array.Empty<PinyinAnnotation>(), nameof(ContentPinyin));
-            hasTranslatableContent = false;
-            isPresentationPending = true;
+            isPresentationPending = canShowNamePinyin || canShowContentPinyin;
         }
         SetProperty(ref medal, projection.Medal, nameof(Medal));
         SetProperty(ref medalName, projection.MedalName, nameof(MedalName));

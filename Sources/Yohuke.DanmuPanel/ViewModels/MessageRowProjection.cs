@@ -1,5 +1,6 @@
 using System.Globalization;
 using Yohuke.DanmuPanel.Models.Messages;
+using Yohuke.DanmuPanel.Services.Translation;
 
 namespace Yohuke.DanmuPanel.ViewModels;
 
@@ -12,6 +13,7 @@ internal sealed class MessageRowProjection
     internal int FilterVersion { get; }
     internal bool TranslationBlocked { get; }
     internal bool TranslationPending { get; }
+    internal bool HasTranslatableContent { get; }
     internal bool IsEventSummary { get; }
     internal string Name { get; }
     internal MessageReply? Reply { get; }
@@ -51,8 +53,12 @@ internal sealed class MessageRowProjection
         IsSpecialAttention = record.Kind == MessageKind.Danmu && display.IsSpecialAttention(record.UserUid);
         CanShowNamePinyin = display.ShowUserPinyin && ContainsChinese(record.UserName) && !record.UserName.Any(character =>
             character is >= '\u3040' and <= '\u30FF' or >= '\uFF66' and <= '\uFF9F');
-        CanShowContentPinyin = display.IsContentPinyinEnabled(record.Kind) &&
-            ContainsChinese(record.Kind == MessageKind.Gift ? record.GiftName : record.Content);
+        CanShowContentPinyin = display.IsContentPinyinEnabled(record.Kind) && (record.Kind switch
+        {
+            MessageKind.Danmu => PinyinService.CanAnnotateDanmu(record),
+            MessageKind.Gift => ContainsChinese(record.GiftName),
+            _ => ContainsChinese(record.Content)
+        });
         Medal = record.MedalLevel > 0 ? string.Create(display.Culture, $"{record.MedalName} {record.MedalLevel}") : "";
         MedalName = TrimMedalName(record.MedalName);
         Time = record.Time.ToLocalTime().ToString("HH:mm:ss", display.Culture);
@@ -67,6 +73,9 @@ internal sealed class MessageRowProjection
         Price = record.Kind == MessageKind.SuperChat ? string.Create(display.Culture, $"￥{record.TotalPrice:0.##}") : "";
         Translation = !TranslationBlocked && record.TranslationFingerprint == display.TranslationFingerprint
             ? record.Translation ?? "" : "";
+        HasTranslatableContent = Translation.Length == 0 && display.TranslationEnabled && !TranslationBlocked &&
+            record.Kind is MessageKind.Danmu or MessageKind.SuperChat &&
+            TranslationTextExtractor.Extract(record.Content, record.Emoticons.Select(emoticon => emoticon.Text)).Length > 0;
         if (IsEventSummary && hasLocalizedText)
         {
             SummaryLabel = FormatSummaryLabel(record, display);

@@ -21,6 +21,7 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
     private readonly Func<MessageRecord, Task>? navigateToMessage;
     private readonly MessageFeedListBox list;
     private readonly MessageFeedListBox pinnedList;
+    private readonly UserAvatarThumbnailCache avatarThumbnails;
     private readonly MessageColumnResizeController columnResize;
     private readonly MessageFeedTemplates templates = new();
     private DanmuFeedScrollController? scroll;
@@ -49,6 +50,8 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
         Func<MessageRecord, Task>? navigateToMessage = null)
     {
         this.runtime = runtime;
+        avatarThumbnails = new(runtime.UserAvatars);
+        SetValue(UserAvatarView.ThumbnailCacheProperty, avatarThumbnails);
         this.reportError = reportError;
         messageKind = kind;
         this.navigateToMessage = navigateToMessage;
@@ -181,6 +184,7 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
         runtime.Changed -= OnRuntimeChanged;
         runtime.MessageColumnsChanged -= OnMessageColumnsChanged;
         EmoticonBitmaps.Clear();
+        avatarThumbnails.Clear();
         base.OnDetachedFromVisualTree(e);
     }
 

@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia;
 using Ellipse = Avalonia.Controls.Shapes.Ellipse;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
@@ -151,6 +152,101 @@ public sealed class UserAvatarViewTests
         finally
         {
             window.Close();
+        }
+    }
+
+    /// <summary>短暂离开视口时，仍挂载的控件继续等待自身的头像，回到视口后复用已加载的图片。</summary>
+    [AvaloniaFact]
+    public async Task ViewportReentryReusesThePendingRequestAndThumbnail()
+    {
+        using var directory = new MessageStoreTestDirectory();
+        var completion = NewCompletion();
+        var service = new ControlledUserAvatarService { Resolve = (_, _) => completion.Task };
+        var avatar = new UserAvatarView(service) { UserUid = 1, Width = 20, Height = 20 };
+        var scroller = new ScrollViewer
+        {
+            Content = new StackPanel { Children = { avatar, new Border { Height = 600 } } }
+        };
+        var window = new Window { Content = scroller, Width = 200, Height = 100 };
+        try
+        {
+            window.Show();
+            await WaitUntilAsync(() => service.RequestedUsers.Count != 0, window);
+            var originalLoad = avatar.PendingLoad;
+            scroller.Offset = new(0, 200);
+            Pump(window);
+            completion.SetResult(WriteImage(directory, "avatar.png"));
+            await originalLoad.WaitAsync(TimeSpan.FromSeconds(5));
+
+            scroller.Offset = default;
+            await WaitUntilAsync(() => avatar.AvatarImage is not null, window);
+
+            Assert.Same(originalLoad, avatar.PendingLoad);
+            Assert.Equal(1L, Assert.Single(service.RequestedUsers));
+            var thumbnail = avatar.AvatarImage;
+            scroller.Offset = new(0, 200);
+            Pump(window);
+            scroller.Offset = default;
+            Pump(window);
+            Assert.Same(thumbnail, avatar.AvatarImage);
+            Assert.Equal(1L, Assert.Single(service.RequestedUsers));
+
+            scroller.Offset = new(0, 200);
+            Pump(window);
+            var updatedPath = WriteImage(directory, "updated.png");
+            service.Resolve = (_, _) => Task.FromResult(updatedPath);
+            service.NotifyChanged(1);
+            Pump(window);
+            Assert.Equal(1L, Assert.Single(service.RequestedUsers));
+
+            scroller.Offset = default;
+            await WaitUntilAsync(() => avatar.CurrentAvatarPath == updatedPath, window);
+            Assert.Equal([1L, 1L], service.RequestedUsers);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>新的子控件能立即显示同 UID 的缩略图，并独立持有该图片。</summary>
+    [AvaloniaFact]
+    public async Task ReplacementControlShowsCachedThumbnailWhileItsRequestIsPending()
+    {
+        using var directory = new MessageStoreTestDirectory();
+        var path = WriteImage(directory, "avatar.png");
+        var service = new ControlledUserAvatarService { Resolve = (_, _) => Task.FromResult(path) };
+        var cache = new UserAvatarThumbnailCache(service);
+        var original = new UserAvatarView(service) { UserUid = 1, Width = 20, Height = 20 };
+        var replacement = new UserAvatarView(service) { UserUid = 1, Width = 20, Height = 20 };
+        var host = new Border { Child = original };
+        host.SetValue(UserAvatarView.ThumbnailCacheProperty, cache);
+        var window = new Window { Content = host, Width = 200, Height = 100 };
+        var completion = NewCompletion();
+        try
+        {
+            window.Show();
+            await WaitUntilAsync(() => original.AvatarImage is not null, window);
+            var expected = Assert.IsType<Bitmap>(original.AvatarImage);
+            var pixelSize = expected.PixelSize;
+            service.Resolve = (_, _) => completion.Task;
+            host.Child = replacement;
+            Pump(window);
+
+            Assert.Null(original.AvatarImage);
+            Assert.Same(expected, replacement.AvatarImage);
+            Assert.False(replacement.PendingLoad.IsCompleted);
+            cache.Clear();
+            Assert.Equal(pixelSize, expected.PixelSize);
+
+            replacement.UserUid = 2;
+            Assert.Null(replacement.AvatarImage);
+        }
+        finally
+        {
+            completion.TrySetResult(path);
+            window.Close();
+            cache.Clear();
         }
     }
 

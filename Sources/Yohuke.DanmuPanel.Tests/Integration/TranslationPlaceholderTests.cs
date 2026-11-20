@@ -7,6 +7,7 @@ using Avalonia.VisualTree;
 using Xunit;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.Messages;
+using Yohuke.DanmuPanel.Models.State;
 using Yohuke.DanmuPanel.Models.Translation;
 using Yohuke.DanmuPanel.Services;
 using Yohuke.DanmuPanel.Services.Translation;
@@ -249,6 +250,61 @@ public sealed class TranslationPlaceholderTests
         await model.SelectRoomAsync(new() { Id = "tab" });
         await model.WaitForPresentationAsync();
         Assert.False(Assert.Single(model.Items).IsTranslating);
+    }
+
+    /// <summary>协议表情与 Unicode 表情混排时无需正文占位，夹带正文的弹幕仍显示等待状态。</summary>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EmoticonOnlyDanmuSkipsBodyPlaceholdersBeforePresentationCompletes(bool compact)
+    {
+        using var directory = new MessageStoreTestDirectory();
+        var settings = new PanelSettings { CompactDanmuDisplay = compact, ShowDanmuPinyin = true };
+        settings.Translation.Enabled = true;
+        var pinyin = new BlockingPinyinService();
+        await using var runtime = new PanelRuntime(new(directory.Path), new PanelConfiguration { Settings = settings }, pinyin);
+        var fingerprint = TranslationRequestFactory.GetConfigurationFingerprint(settings.Translation);
+        var emoticons = new MessageRecord
+        {
+            RoomTabId = "tab", Kind = MessageKind.Danmu, UserName = "viewer", Content = "[笑] 👩‍🎤 [笑]",
+            Emoticons = [new() { Text = "[笑]" }]
+        };
+        var mixed = emoticons with { Id = "mixed", Content = "[笑] 还有要翻译的文字", Time = emoticons.Time.AddSeconds(1) };
+        await runtime.Messages.AppendBatchAsync([emoticons, mixed], settings.Reading, fingerprint);
+        var errors = new List<Exception>();
+        var view = new MessageFeedView(runtime, MessageKind.Danmu, errors.Add);
+        var window = new Window { Width = 640, Height = 400, Content = view };
+        try
+        {
+            window.Show();
+            await view.Model.SelectRoomAsync(new() { Id = "tab" }).WaitAsync(TimeSpan.FromSeconds(5));
+            await pinyin.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Pump(window);
+
+            var emoticonItem = Assert.Single(view.Model.Items, item => item.Record.Id == emoticons.Id);
+            var emoticonRow = FindRow(view, emoticons.Id);
+            Assert.True(emoticonItem.ShowOriginal);
+            Assert.False(emoticonItem.IsPresentationPending);
+            Assert.False(emoticonItem.ShowTranslation);
+            Assert.DoesNotContain(emoticonRow.GetVisualDescendants().OfType<PinyinLoadingPlaceholder>(),
+                placeholder => placeholder.IsEffectivelyVisible);
+            Assert.Empty(emoticonRow.GetVisualDescendants().OfType<ShimmerTextBlock>());
+            var mixedRow = FindRow(view, mixed.Id);
+            Assert.Contains(mixedRow.GetVisualDescendants().OfType<PinyinLoadingPlaceholder>(),
+                placeholder => placeholder.IsEffectivelyVisible);
+            Assert.True(Assert.Single(mixedRow.GetVisualDescendants().OfType<ShimmerTextBlock>()).IsEffectivelyVisible);
+
+            pinyin.Release.TrySetResult();
+            await view.Model.WaitForPresentationAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Empty(emoticonItem.ContentPinyin);
+            Assert.Empty(errors);
+        }
+        finally
+        {
+            pinyin.Release.TrySetResult();
+            view.Model.Dispose();
+            window.Close();
+        }
     }
 
     private static Button FindRow(MessageFeedView view, string id)

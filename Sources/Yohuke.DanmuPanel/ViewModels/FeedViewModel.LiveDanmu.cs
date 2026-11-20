@@ -8,7 +8,6 @@ namespace Yohuke.DanmuPanel.ViewModels;
 
 public sealed partial class FeedViewModel
 {
-    private const int MAX_DIRECT_DANMU_BATCH = 128;
     private static readonly TimeSpan LIVE_BURST_QUIET_INTERVAL = TimeSpan.FromMilliseconds(50);
     private readonly object liveGate = new();
     private readonly Queue<MessageRecord> liveDanmu = new();
@@ -30,7 +29,7 @@ public sealed partial class FeedViewModel
             {
                 firstDanmuAt = lastDanmuAt;
             }
-            if (liveDanmu.Count >= Math.Min(MAX_DIRECT_DANMU_BATCH, Volatile.Read(ref retentionCount)))
+            if (liveDanmu.Count >= Volatile.Read(ref retentionCount))
             {
                 liveDanmu.Dequeue();
                 Interlocked.Exchange(ref refreshRequested, 1);
@@ -91,24 +90,25 @@ public sealed partial class FeedViewModel
         earlyTranslations.Clear();
     }
 
-    private async Task FlushChangesAsync(bool requiresSnapshot)
+    private async Task FlushChangesAsync()
     {
         var current = room;
-        if (disposed || current is null)
-        {
-            return;
-        }
-
+        bool requiresSnapshot;
         MessageRecord[] appended;
         TranslationCompletedEventArgs[] translated;
         lock (liveGate)
         {
-            appended = liveDanmu.ToArray();
-            translated = liveTranslations.ToArray();
+            requiresSnapshot = Interlocked.Exchange(ref refreshRequested, 0) != 0;
+            appended = requiresSnapshot ? [] : liveDanmu.ToArray();
+            translated = requiresSnapshot ? [] : liveTranslations.ToArray();
             liveDanmu.Clear();
             liveTranslations.Clear();
         }
 
+        if (disposed || current is null)
+        {
+            return;
+        }
         if (requiresSnapshot)
         {
             await RefreshAsync();

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.Translation;
 
 namespace Yohuke.DanmuPanel.Services.Translation;
@@ -67,6 +68,12 @@ public sealed class PinyinService : IPinyinService
             annotationCache[text] = result;
             return result;
         }
+    }
+
+    internal static bool CanAnnotateDanmu(MessageRecord record)
+    {
+        return record.Content.Any(IsSupportedChinese) && (record.Emoticons.Count == 0 ||
+            !TranslationTextExtractor.IsEmoticonOnly(record.Content, record.Emoticons.Select(emoticon => emoticon.Text)));
     }
 
     private static bool IsSupportedChinese(char character)

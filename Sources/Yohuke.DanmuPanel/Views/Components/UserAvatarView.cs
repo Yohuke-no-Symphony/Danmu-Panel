@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Markup.Xaml;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
+using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -17,7 +19,8 @@ internal sealed partial class UserAvatarView : UserControl
 {
     private const int DECODE_WIDTH = 96;
     private const double PREVIEW_SIZE = 160;
-    private IUserAvatarService? avatars;
+    private IUserAvatarService? activeAvatarService;
+    private UserAvatarThumbnail? thumbnail;
     private readonly Ellipse circle;
     private readonly LucideIcon placeholder;
     private readonly DispatcherTimer refreshTimer = new() { Interval = TimeSpan.FromMinutes(5) };
@@ -30,7 +33,10 @@ internal sealed partial class UserAvatarView : UserControl
     private bool isAttached;
     private bool isInViewport;
     private bool suppressPreviewUntilMove;
+    private bool isAvatarReleaseQueued;
+    private bool needsAvatarRefresh;
     private long activeUserUid;
+    private long lastAvatarRefreshAt;
     private int revision;
     private int previewRevision;
 
@@ -40,6 +46,9 @@ internal sealed partial class UserAvatarView : UserControl
         AvaloniaProperty.Register<UserAvatarView, bool>(nameof(ShowAvatar), true);
     public static readonly StyledProperty<IUserAvatarService?> AvatarServiceProperty =
         AvaloniaProperty.Register<UserAvatarView, IUserAvatarService?>(nameof(AvatarService));
+    internal static readonly AttachedProperty<UserAvatarThumbnailCache?> ThumbnailCacheProperty =
+        AvaloniaProperty.RegisterAttached<UserAvatarView, StyledElement, UserAvatarThumbnailCache?>(
+            "ThumbnailCache", inherits: true);
 
     public IUserAvatarService? AvatarService
     {
@@ -59,8 +68,8 @@ internal sealed partial class UserAvatarView : UserControl
         set => SetValue(ShowAvatarProperty, value);
     }
 
-    internal Bitmap? AvatarImage { get; private set; }
-    internal string CurrentAvatarPath { get; private set; } = "";
+    internal Bitmap? AvatarImage => thumbnail?.Image;
+    internal string CurrentAvatarPath => thumbnail?.Path ?? "";
     internal Task PendingLoad { get; private set; } = Task.CompletedTask;
     internal Task PendingPreviewLoad { get; private set; } = Task.CompletedTask;
 
@@ -81,9 +90,17 @@ internal sealed partial class UserAvatarView : UserControl
         previewTimer.Tick += (_, _) => ShowPreview();
         EffectiveViewportChanged += (_, args) =>
         {
+            if (!isAttached)
+            {
+                return;
+            }
             ClearPreview();
-            isInViewport = args.EffectiveViewport.Intersects(new Rect(Bounds.Size));
-            UpdateActivity();
+            var inViewport = args.EffectiveViewport.Intersects(new Rect(Bounds.Size));
+            if (isInViewport != inViewport)
+            {
+                isInViewport = inViewport;
+                UpdateActivity();
+            }
             SchedulePreview();
         };
     }
@@ -92,36 +109,12 @@ internal sealed partial class UserAvatarView : UserControl
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == AvatarServiceProperty)
-        {
-            if (isAttached && avatars is not null)
-            {
-                avatars.AvatarChanged -= OnAvatarChanged;
-            }
-            avatars = change.GetNewValue<IUserAvatarService?>();
-            if (isAttached)
-            {
-                CancelRequest();
-                activeUserUid = 0;
-                ClearImage();
-                if (avatars is not null)
-                {
-                    avatars.AvatarChanged += OnAvatarChanged;
-                }
-                UpdateActivity();
-            }
-        }
-        else if (change.Property == ShowAvatarProperty)
+        if (change.Property == ShowAvatarProperty)
         {
             IsVisible = ShowAvatar;
-            UpdateActivity();
         }
-        else if (change.Property == UserUidProperty)
-        {
-            ClearImage();
-            UpdateActivity();
-        }
-        else if (change.Property == IsVisibleProperty)
+        if (isAttached && (change.Property == AvatarServiceProperty || change.Property == ShowAvatarProperty ||
+            change.Property == UserUidProperty || change.Property == IsVisibleProperty))
         {
             UpdateActivity();
         }
@@ -183,10 +176,6 @@ internal sealed partial class UserAvatarView : UserControl
     {
         base.OnAttachedToVisualTree(e);
         isAttached = true;
-        if (avatars is not null)
-        {
-            avatars.AvatarChanged += OnAvatarChanged;
-        }
         foreach (var ancestor in this.GetVisualAncestors())
         {
             visibilityAncestors.Add(ancestor);
@@ -200,17 +189,49 @@ internal sealed partial class UserAvatarView : UserControl
     {
         isAttached = false;
         isInViewport = false;
-        if (avatars is not null)
-        {
-            avatars.AvatarChanged -= OnAvatarChanged;
-        }
         foreach (var ancestor in visibilityAncestors)
         {
             ancestor.PropertyChanged -= OnAncestorPropertyChanged;
         }
         visibilityAncestors.Clear();
-        UpdateActivity();
+        refreshTimer.Stop();
+        ClearPreview();
+        if (((ILogical)this).IsAttachedToLogicalTree && (request is not null || AvatarImage is not null))
+        {
+            QueueAvatarRelease();
+        }
+        else
+        {
+            UpdateActivity();
+        }
         base.OnDetachedFromVisualTree(e);
+    }
+
+    /// <inheritdoc />
+    protected override void OnDetachedFromLogicalTree(LogicalTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromLogicalTree(e);
+        if (!isAttached)
+        {
+            UpdateActivity();
+        }
+    }
+
+    private void QueueAvatarRelease()
+    {
+        if (isAvatarReleaseQueued)
+        {
+            return;
+        }
+        isAvatarReleaseQueued = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            isAvatarReleaseQueued = false;
+            if (!isAttached)
+            {
+                UpdateActivity();
+            }
+        }, DispatcherPriority.Loaded);
     }
 
     private void OnAncestorPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs args)
@@ -223,32 +244,54 @@ internal sealed partial class UserAvatarView : UserControl
 
     private void UpdateActivity()
     {
-        var canDisplayAvatar = isAttached && IsEffectivelyVisible && ShowAvatar && UserUid > 0 && avatars is not null;
-        var nextUserUid = canDisplayAvatar && isInViewport ? UserUid : 0;
-        if (nextUserUid <= 0)
+        var source = isAttached && IsEffectivelyVisible && ShowAvatar && UserUid > 0 ? AvatarService : null;
+        var nextUserUid = source is null ? 0 : UserUid;
+        var sourceChanged = !ReferenceEquals(source, activeAvatarService);
+        if (sourceChanged || nextUserUid != activeUserUid)
         {
-            activeUserUid = 0;
-            refreshTimer.Stop();
-            CancelRequest();
-            if (canDisplayAvatar)
+            Volatile.Write(ref activeUserUid, nextUserUid);
+            if (sourceChanged)
             {
-                ClearPreview();
+                if (activeAvatarService is not null)
+                {
+                    activeAvatarService.AvatarChanged -= OnAvatarChanged;
+                }
+                activeAvatarService = source;
+                if (source is not null)
+                {
+                    source.AvatarChanged += OnAvatarChanged;
+                }
+            }
+            CancelRequest();
+            if (source is not null && GetThumbnailCache(source)?.Find(nextUserUid) is { } cached)
+            {
+                ShowThumbnail(cached);
             }
             else
             {
                 ClearImage();
             }
+            needsAvatarRefresh = source is not null;
         }
-        else if (activeUserUid != nextUserUid)
+        if (source is null || !isInViewport)
         {
-            activeUserUid = nextUserUid;
-            refreshTimer.Start();
+            refreshTimer.Stop();
+            ClearPreview();
+            return;
+        }
+        refreshTimer.Start();
+        if (needsAvatarRefresh || Stopwatch.GetElapsedTime(lastAvatarRefreshAt) >= refreshTimer.Interval)
+        {
             RefreshAvatar();
         }
     }
 
     private void OnAvatarChanged(long userUid)
     {
+        if (userUid != Volatile.Read(ref activeUserUid))
+        {
+            return;
+        }
         Dispatcher.UIThread.Post(() =>
         {
             if (activeUserUid == userUid)
@@ -260,13 +303,21 @@ internal sealed partial class UserAvatarView : UserControl
 
     private void RefreshAvatar()
     {
-        if (activeUserUid <= 0)
+        var source = activeAvatarService;
+        if (source is null)
         {
             return;
         }
+        if (!isInViewport)
+        {
+            needsAvatarRefresh = true;
+            return;
+        }
+        needsAvatarRefresh = false;
+        lastAvatarRefreshAt = Stopwatch.GetTimestamp();
         CancelRequest();
         request = new();
-        PendingLoad = LoadAvatarAsync(activeUserUid, revision, request.Token, avatars!);
+        PendingLoad = LoadAvatarAsync(activeUserUid, revision, request.Token, source);
     }
 
     private async Task LoadAvatarAsync(long userUid, int requestRevision, CancellationToken cancellationToken, IUserAvatarService source,
@@ -281,9 +332,20 @@ internal sealed partial class UserAvatarView : UserControl
             {
                 return;
             }
-            var alreadyLoaded = await Dispatcher.UIThread.InvokeAsync(() =>
-                requestRevision != revision || path == CurrentAvatarPath);
-            if (alreadyLoaded)
+            var canSkipDecode = await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (requestRevision != revision || path == CurrentAvatarPath)
+                {
+                    return true;
+                }
+                if (GetThumbnailCache(source)?.Find(userUid, path) is not { } cached)
+                {
+                    return false;
+                }
+                ShowThumbnail(cached);
+                return true;
+            });
+            if (canSkipDecode)
             {
                 return;
             }
@@ -306,15 +368,19 @@ internal sealed partial class UserAvatarView : UserControl
                 {
                     return;
                 }
-                ClearPreview();
-                var previous = AvatarImage;
-                AvatarImage = image;
-                CurrentAvatarPath = path;
-                circle.Fill = new ImageBrush(image) { Stretch = Stretch.UniformToFill };
-                placeholder.IsVisible = false;
+                var cache = GetThumbnailCache(source);
+                if (cache?.Find(userUid, path) is { } cached)
+                {
+                    ShowThumbnail(cached);
+                    return;
+                }
+                var loaded = new UserAvatarThumbnail(path, image!);
+                ShowThumbnail(loaded);
                 image = null;
-                previous?.Dispose();
-                SchedulePreview();
+                if (isAttached)
+                {
+                    cache?.Store(userUid, loaded);
+                }
             });
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -348,7 +414,7 @@ internal sealed partial class UserAvatarView : UserControl
 
     private void SchedulePreview()
     {
-        if (!IsPointerOver || suppressPreviewUntilMove || activeUserUid <= 0 || AvatarImage is null ||
+        if (!IsPointerOver || suppressPreviewUntilMove || !isInViewport || activeUserUid <= 0 || AvatarImage is null ||
             previewTimer.IsEnabled || previewRequest is not null)
         {
             return;
@@ -456,14 +522,35 @@ internal sealed partial class UserAvatarView : UserControl
         request = null;
     }
 
+    private UserAvatarThumbnailCache? GetThumbnailCache(IUserAvatarService source)
+    {
+        var cache = GetValue(ThumbnailCacheProperty);
+        return ReferenceEquals(cache?.Source, source) ? cache : null;
+    }
+
+    private void ShowThumbnail(UserAvatarThumbnail value)
+    {
+        if (ReferenceEquals(thumbnail, value))
+        {
+            return;
+        }
+        ClearPreview();
+        var previous = thumbnail;
+        value.Retain();
+        thumbnail = value;
+        circle.Fill = new ImageBrush(value.Image) { Stretch = Stretch.UniformToFill };
+        placeholder.IsVisible = false;
+        previous?.Release();
+        SchedulePreview();
+    }
+
     private void ClearImage()
     {
         ClearPreview();
-        var previous = AvatarImage;
-        AvatarImage = null;
-        CurrentAvatarPath = "";
+        var previous = thumbnail;
+        thumbnail = null;
         ResetPlaceholder();
-        previous?.Dispose();
+        previous?.Release();
     }
 
     private void ResetPlaceholder()

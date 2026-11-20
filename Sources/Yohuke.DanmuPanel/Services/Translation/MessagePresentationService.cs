@@ -106,7 +106,7 @@ internal sealed class MessagePresentationService : IAsyncDisposable
         cancellationToken.ThrowIfCancellationRequested();
         var contentEnabled = record.Kind switch
         {
-            MessageKind.Danmu => options.ShowDanmuPinyin,
+            MessageKind.Danmu => options.ShowDanmuPinyin && PinyinService.CanAnnotateDanmu(record),
             MessageKind.SuperChat => options.ShowSuperChatPinyin,
             MessageKind.Gift => options.ShowGiftPinyin && gift.Length > 0,
             _ => false
@@ -116,12 +116,10 @@ internal sealed class MessagePresentationService : IAsyncDisposable
             : record.Content;
         cancellationToken.ThrowIfCancellationRequested();
         var annotations = contentEnabled ? pinyin.GetAnnotations(content) : [];
-        var translatable = record.Kind is MessageKind.Danmu or MessageKind.SuperChat &&
-            TranslationTextExtractor.Extract(record.Content, record.Emoticons.Select(value => value.Text)).Length > 0;
         var nameRenderPlan = nameAnnotations.Count > 0 ? MessageTextRenderPlan.Create(record.UserName, null, nameAnnotations) : null;
         var contentRenderPlan = annotations.Count > 0 || emoticons is { Count: > 0 }
             ? MessageTextRenderPlan.Create(content, emoticons, annotations) : null;
-        return new(record, options, name, nameAnnotations, gift, annotations, translatable, emoticons,
+        return new(record, options, name, nameAnnotations, gift, annotations, emoticons,
             nameRenderPlan, contentRenderPlan);
     }
 }

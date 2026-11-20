@@ -70,8 +70,19 @@ internal static class FeedCollectionSynchronizer
             }
         }
 
-        var stable = FindStableItems(working, positions);
-        if (stable.Count == working.Count)
+        var retainedInOrder = true;
+        var lastPosition = -1;
+        foreach (var item in working)
+        {
+            var position = positions[item];
+            if (position <= lastPosition)
+            {
+                retainedInOrder = false;
+                break;
+            }
+            lastPosition = position;
+        }
+        if (retainedInOrder)
         {
             for (var index = 0; index < expected.Count; index++)
             {
@@ -97,6 +108,7 @@ internal static class FeedCollectionSynchronizer
             return edits;
         }
 
+        var stable = FindStableItems(working, positions);
         T? next = null;
         for (var index = expected.Count - 1; index >= 0; index--)
         {

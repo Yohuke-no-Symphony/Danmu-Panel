@@ -5,6 +5,7 @@ using Xunit;
 using Yohuke.DanmuPanel.I18n;
 using Yohuke.DanmuPanel.Models.Messages;
 using Yohuke.DanmuPanel.Models.State;
+using Yohuke.DanmuPanel.Models.Workspace;
 using Yohuke.DanmuPanel.Tests.Translation;
 using Yohuke.DanmuPanel.ViewModels;
 
@@ -13,6 +14,22 @@ namespace Yohuke.DanmuPanel.Tests.Windowing;
 /// <summary>验证后台消息投影使用已捕获的本地化设置，在 UI 应用时无需计算拼音。</summary>
 public sealed class MessageRowProjectionTests
 {
+    /// <summary>只更新译文时，原文已准备好的表情渲染计划可继续复用。</summary>
+    [Fact]
+    public void UpdatingTranslationPreservesTheEmoticonRenderPlan()
+    {
+        var display = MessageDisplaySettings.Capture(new() { Translation = new() { Enabled = true } });
+        var record = new MessageRecord { Kind = MessageKind.Danmu, Content = "你好 [笑]" };
+        var row = MessageItemViewModel.CreateDeferred(record, display, new DelegatePinyinService(_ => ""), false);
+        row.Emoticons = [new DanmuEmoticon { Text = "[笑]", ImagePath = "smile.png" }];
+        var plan = Assert.IsType<MessageTextRenderPlan>(row.GetTextRenderPlan(row.Detail, row.Emoticons, row.ContentPinyin));
+
+        row.Apply(record with { Translation = "Hello", TranslationFingerprint = display.TranslationFingerprint }, display);
+
+        Assert.Equal("Hello", row.Translation);
+        Assert.Same(plan, row.GetTextRenderPlan(row.Detail, row.Emoticons, row.ContentPinyin));
+    }
+
     /// <summary>全局语言和数值文化变化期间，后台生成保留提交给它的快照，刷新可原位换成新语言。</summary>
     [AvaloniaFact]
     public async Task BackgroundProjectionUsesCapturedCultureAndStrings()
