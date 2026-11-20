@@ -10,9 +10,42 @@ namespace Yohuke.DanmuPanel.Views;
 public sealed partial class MessageFeedView
 {
     private static readonly TimeSpan PING_DURATION = TimeSpan.FromMilliseconds(1400);
+    private CancellationTokenSource? liveCatchUpRequest;
+    private bool followLiveFromInput;
     private CancellationTokenSource? pingRequest;
     private IDisposable? pingTimer;
     private MessageItemViewModel? pingedItem;
+
+    private void OnLatestReachedByInput()
+    {
+        followLiveFromInput = true;
+        UpdateReadingState(followingLatest: true);
+    }
+
+    private async Task CatchUpLiveDanmuAsync()
+    {
+        using var request = new CancellationTokenSource();
+        liveCatchUpRequest = request;
+        try
+        {
+            await Model.CatchUpLiveDanmuAsync(request.Token);
+        }
+        finally
+        {
+            if (ReferenceEquals(liveCatchUpRequest, request))
+            {
+                liveCatchUpRequest = null;
+            }
+        }
+    }
+
+    private void CancelLiveCatchUp()
+    {
+        followLiveFromInput = false;
+        var request = liveCatchUpRequest;
+        liveCatchUpRequest = null;
+        request?.Cancel();
+    }
 
     /// <inheritdoc />
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)

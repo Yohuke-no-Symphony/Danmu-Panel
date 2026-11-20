@@ -203,7 +203,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
     }
 
     private async Task RefreshCoreAsync(MessageFeedPageDirection? direction = null, bool pagePinned = false,
-        string? targetId = null, CancellationToken requestCancellation = default)
+        string? targetId = null, CancellationToken requestCancellation = default, bool resetPinnedWindow = false)
     {
         if (disposed)
         {
@@ -266,7 +266,8 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
                 var context = CaptureProjectionContext();
                 var watchAnchor = kind == MessageKind.Danmu && hasLoadedRoom && !keepHistoryWindow && direction is null;
                 var anchor = watchAnchor ? GetReadingAnchor() : null;
-                var result = await ReadWindowAsync(current, direction, pagePinned, targetId, anchor, cancellationToken);
+                var result = await ReadWindowAsync(current, direction, pagePinned, targetId, anchor, cancellationToken,
+                    resetPinnedWindow);
                 var snapshot = result.Window;
                 if (!WindowIsCurrent(version, cancellationToken))
                 {
@@ -311,7 +312,7 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
                 displaySettings = context.Display;
                 displayFilterVersion = context.FilterVersion;
                 retentionCount = context.RetentionCount;
-                PublishWindow(result, direction, pagePinned);
+                PublishWindow(result, direction, pagePinned, resetPinnedWindow);
                 return;
 
                 bool ReadingPositionIsCurrent()
@@ -364,13 +365,17 @@ public sealed partial class FeedViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void PublishWindow(MessageFeedWindowResult result, MessageFeedPageDirection? direction, bool pagePinned)
+    private void PublishWindow(MessageFeedWindowResult result, MessageFeedPageDirection? direction, bool pagePinned,
+        bool resetPinnedWindow)
     {
         var snapshot = result.Window;
         if (direction == MessageFeedPageDirection.Latest)
         {
             keepHistoryWindow = false;
-            keepPinnedWindow = false;
+            if (resetPinnedWindow)
+            {
+                keepPinnedWindow = false;
+            }
             showNewest = true;
         }
         else if (direction is MessageFeedPageDirection.Before or MessageFeedPageDirection.After or MessageFeedPageDirection.Around)

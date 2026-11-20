@@ -50,6 +50,7 @@ internal sealed partial class DanmuFeedScrollController : IDisposable
 
     public bool IsFollowingLatest => isFollowingLatest;
     public event Action<bool>? FollowingLatestChanged;
+    internal event Action? LatestReachedByInput;
 
     /// <summary>连接虚拟化列表及滚动宿主，用户输入始终优先于消息更新。</summary>
     public DanmuFeedScrollController(ScrollViewer scrollViewer, ItemsControl itemsControl, bool followNewMessages = true,
@@ -460,6 +461,7 @@ internal sealed partial class DanmuFeedScrollController : IDisposable
         canFollowFromUserScroll = false;
         hasUserScrollInput = false;
         SetFollowingLatest(true);
+        LatestReachedByInput?.Invoke();
         if (followNewMessages)
         {
             QueueFollowLatest();
@@ -501,14 +503,15 @@ internal sealed partial class DanmuFeedScrollController : IDisposable
         scrollingPointer = null;
         CancelPendingFollow();
         readingItem = null;
-        SetFollowingLatest(IsAtLatest());
-        if (viewportUpdateDepth > 0 && !isFollowingLatest)
+        if (IsAtLatest())
+        {
+            FollowLatestFromInput();
+            return;
+        }
+        SetFollowingLatest(false);
+        if (viewportUpdateDepth > 0)
         {
             CaptureReadingAnchor();
-        }
-        if (isFollowingLatest && followNewMessages)
-        {
-            QueueFollowLatest();
         }
     }
 

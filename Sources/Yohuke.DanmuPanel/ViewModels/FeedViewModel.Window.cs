@@ -30,7 +30,13 @@ public sealed partial class FeedViewModel
     internal Task ShowLatestAsync()
     {
         CancelHistoryPage();
-        return RefreshCoreAsync(MessageFeedPageDirection.Latest);
+        return RefreshCoreAsync(MessageFeedPageDirection.Latest, resetPinnedWindow: true);
+    }
+
+    internal Task CatchUpLiveDanmuAsync(CancellationToken cancellationToken)
+    {
+        CancelHistoryPage();
+        return RefreshCoreAsync(MessageFeedPageDirection.Latest, requestCancellation: cancellationToken);
     }
 
     internal void CancelHistoryPage()
@@ -65,9 +71,9 @@ public sealed partial class FeedViewModel
         return IsReadingHistory ? ReadVisibleAnchor?.Invoke() : null;
     }
 
-    private Task<MessageFeedWindowResult> ReadWindowAsync(
-        RoomTabState current, MessageFeedPageDirection? direction,
-        bool pagePinned, string? targetId, MessageItemViewModel? anchor, CancellationToken cancellationToken)
+    private Task<MessageFeedWindowResult> ReadWindowAsync(RoomTabState current, MessageFeedPageDirection? direction,
+        bool pagePinned, string? targetId, MessageItemViewModel? anchor, CancellationToken cancellationToken,
+        bool resetPinnedWindow)
     {
         var settings = runtime.Configuration.Settings;
         var requestedRetentionCount = settings.MessageRetentionCount;
@@ -116,7 +122,7 @@ public sealed partial class FeedViewModel
         MessageFeedPageRequest? pinned = null;
         if (kind == MessageKind.Danmu)
         {
-            pinned = keepPinnedWindow && !resetToLatest && retainedPins is { } currentPins
+            pinned = keepPinnedWindow && !resetPinnedWindow && retainedPins is { } currentPins
                 ? currentPins with { Limit = HISTORY_PAGE_SIZE }
                 : new(HISTORY_PAGE_SIZE, MessageFeedPageDirection.Oldest);
         }

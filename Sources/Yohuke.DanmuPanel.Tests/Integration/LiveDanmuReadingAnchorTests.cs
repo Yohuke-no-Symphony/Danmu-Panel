@@ -136,6 +136,74 @@ public sealed class LiveDanmuReadingAnchorTests
         }
     }
 
+    /// <summary>滚到历史窗口底部时补齐最新记录，随后继续接收实时弹幕。</summary>
+    [AvaloniaFact]
+    public async Task ScrollingToTheBottomOfAnOlderPageRestoresLiveDanmu()
+    {
+        const int LIVE_COUNT = 100;
+        const int HISTORY_COUNT = LIVE_COUNT + 400;
+        using var directory = new MessageStoreTestDirectory();
+        var configuration = new PanelConfiguration();
+        var settings = configuration.Settings;
+        settings.MessageRetentionCount = LIVE_COUNT;
+        settings.Translation.Enabled = false;
+        settings.CompactDanmuDisplay = true;
+        settings.ShowUserPinyin = false;
+        settings.ShowDanmuPinyin = false;
+        settings.ShowUserAvatars = false;
+        await using var runtime = new PanelRuntime(new(directory.Path), configuration);
+        await runtime.Messages.AppendTestMessagesAsync(Enumerable.Range(0, HISTORY_COUNT)
+            .Select(index => Message(index) with { IsTest = true }).ToArray(), settings.Reading);
+        var errors = new List<Exception>();
+        var view = new MessageFeedView(runtime, MessageKind.Danmu, errors.Add);
+        var model = view.Model;
+        var window = new Window { Width = 560, Height = 380, Content = view };
+        try
+        {
+            await model.SelectRoomAsync(new() { Id = "room", RoomId = "123" });
+            window.Show();
+            await SettleAsync(window);
+            var list = Assert.Single(view.GetVisualDescendants().OfType<ListBox>(), control => control.Name == "ScrollingMessages");
+            var viewer = Assert.Single(list.GetVisualDescendants().OfType<ScrollViewer>(), control => control.TemplatedParent == list);
+            var presenter = Assert.Single(viewer.GetVisualDescendants().OfType<ScrollContentPresenter>(),
+                control => control.TemplatedParent == viewer);
+
+            ScrollBy(presenter, -viewer.Offset.Y - 20);
+            await WaitForAsync(model, () => !model.IsLoadingHistory && model.ScrollingItems.Count == LIVE_COUNT + 100);
+            for (var page = 0; page < 3; page++)
+            {
+                await model.LoadMoreAsync().WaitAsync(TEST_TIMEOUT);
+            }
+            await SettleAsync(window);
+            Assert.True(model.IsReadingHistory);
+            Assert.True(model.HasNewerHistory);
+            Assert.Equal(MessageId(HISTORY_COUNT - 101), model.ScrollingItems[^1].Record.Id);
+
+            await PublishAsync(runtime, HISTORY_COUNT, 1);
+            ScrollBy(presenter, viewer.ScrollBarMaximum.Y - viewer.Offset.Y + 20);
+            await WaitForAsync(model, () => !model.HasNewerHistory && model.ScrollingItems[^1].Record.Id == MessageId(HISTORY_COUNT));
+            await SettleAsync(window);
+            Assert.Equal(Enumerable.Range(HISTORY_COUNT - LIVE_COUNT + 1, LIVE_COUNT).Select(MessageId),
+                model.ScrollingItems.Select(item => item.Record.Id));
+            Assert.False(model.IsReadingHistory);
+            Assert.InRange(Math.Abs(viewer.ScrollBarMaximum.Y - viewer.Offset.Y), 0, 1);
+
+            await PublishAsync(runtime, HISTORY_COUNT + 1, 1);
+            await WaitForAsync(model, () => model.ScrollingItems[^1].Record.Id == MessageId(HISTORY_COUNT + 1));
+            await SettleAsync(window);
+            Assert.Equal(LIVE_COUNT, model.ScrollingItems.Count);
+            Assert.False(model.HasNewerHistory);
+            Assert.False(model.IsReadingHistory);
+            Assert.InRange(Math.Abs(viewer.ScrollBarMaximum.Y - viewer.Offset.Y), 0, 1);
+            Assert.Empty(errors);
+        }
+        finally
+        {
+            model.Dispose();
+            window.Close();
+        }
+    }
+
     private static (MessageItemViewModel Item, double Y, double Height) FirstVisible(ListBox list, ScrollViewer viewer)
     {
         var first = list.GetRealizedContainers()

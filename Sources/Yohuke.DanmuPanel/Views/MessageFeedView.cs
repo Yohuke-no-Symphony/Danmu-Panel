@@ -110,6 +110,7 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
         {
             if (args.PropertyName is nameof(FeedViewModel.SelectedRoom) or nameof(FeedViewModel.ReadFilter) or nameof(FeedViewModel.SortOrder))
             {
+                CancelLiveCatchUp();
                 scroll?.CancelOlderPageInput();
                 if (args.PropertyName == nameof(FeedViewModel.SelectedRoom) || pingedItem is not null)
                 {
@@ -341,12 +342,21 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
         if (followingLatest)
         {
             Model.ResumeLiveDanmuAtLatest();
+            if (followLiveFromInput && Model.HasNewerHistory && liveCatchUpRequest is null &&
+                !Header.BackToLatestCommand.IsRunning)
+            {
+                _ = RunAsync(CatchUpLiveDanmuAsync);
+            }
         }
     }
 
     private void OnFollowingLatestChanged(bool followingLatest)
     {
-        if (messageKind == MessageKind.Danmu && followingLatest && !Model.HasNewerHistory && Header.LoadMoreCommand.IsRunning)
+        if (!followingLatest)
+        {
+            CancelLiveCatchUp();
+        }
+        else if (messageKind == MessageKind.Danmu && !Model.HasNewerHistory && Header.LoadMoreCommand.IsRunning)
         {
             Model.CancelHistoryPage();
         }
@@ -421,6 +431,7 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
             if (isDanmu)
             {
                 Model.ReadVisibleAnchor = scroll.GetVisibleReadingAnchor;
+                scroll.LatestReachedByInput += OnLatestReachedByInput;
             }
             scroll.FollowingLatestChanged += OnFollowingLatestChanged;
             scroll.Attach(Model.ScrollingRows);
@@ -593,6 +604,7 @@ public sealed partial class MessageFeedView : UserControl, IWorkbenchHeaderActio
 
     private async Task ScrollToLatestAsync()
     {
+        CancelLiveCatchUp();
         scroll?.CancelOlderPageInput();
         var version = Model.WindowRevision;
         await Model.ShowLatestAsync();
