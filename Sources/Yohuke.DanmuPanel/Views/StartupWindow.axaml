@@ -1,0 +1,57 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Yohuke.DanmuPanel.ViewModels"
+        x:Class="Yohuke.DanmuPanel.Views.StartupWindow"
+        x:DataType="vm:StartupViewModel"
+        Title="{Loc Key=Panel.Startup.Title}"
+        Width="336"
+        Height="448"
+        SystemDecorations="None"
+        CanResize="False"
+        CanMaximize="False"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        TransparencyBackgroundFallback="#130B30"
+        RequestedThemeVariant="Dark"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Border CornerRadius="42" BorderBrush="#34B8A2FF" BorderThickness="1"
+                PointerPressed="OnDragSurfacePointerPressed">
+            <Border.Background>
+                <RadialGradientBrush Center="50%,31%" GradientOrigin="50%,27%" RadiusX="77%" RadiusY="70%">
+                    <GradientStop Color="#322456" Offset="0" />
+                    <GradientStop Color="#201541" Offset="0.49" />
+                    <GradientStop Color="#130B30" Offset="1" />
+                </RadialGradientBrush>
+            </Border.Background>
+            <StackPanel Margin="32,72,32,32" VerticalAlignment="Top" IsHitTestVisible="False">
+                <Image Source="avares://Yohuke.DanmuPanel/Assets/favicon.png"
+                       Width="188" Height="188" HorizontalAlignment="Center"
+                       RenderOptions.BitmapInterpolationMode="HighQuality" />
+                <TextBlock Text="{Loc Key=Panel.Startup.Loading}"
+                           Margin="0,20,0,0" TextAlignment="Center"
+                           FontSize="30" FontWeight="SemiBold" LetterSpacing="2" Foreground="#F5F0FF" />
+                <ProgressBar x:Name="StartupProgressBar" IsIndeterminate="True"
+                             Margin="0,24,0,0" Width="216" Height="6" HorizontalAlignment="Center"
+                             CornerRadius="3" Background="#463660" Foreground="#7FE8CE"
+                             AutomationProperties.Name="{Binding StatusText}" />
+                <TextBlock x:Name="StartupStatusText" Text="{Binding StatusText}"
+                           Margin="0,14,0,0" TextAlignment="Center" TextWrapping="Wrap"
+                           FontSize="14" Foreground="#C9C0DF" />
+            </StackPanel>
+        </Border>
+        <Button x:Name="CancelStartupButton" Width="40" Height="40" Margin="0,17,17,0"
+                HorizontalAlignment="Right" VerticalAlignment="Top"
+                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                Background="Transparent" Foreground="#E9E2F9" BorderThickness="0" CornerRadius="12" Padding="0"
+                ToolTip.Tip="{Loc Key=Panel.Cancel}" AutomationProperties.Name="{Loc Key=Panel.Cancel}"
+                IsEnabled="{Binding CanCancel}" IsCancel="True" Click="OnCancelClicked">
+            <Button.Resources>
+                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#2BE0CCFF" />
+                <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#43E0CCFF" />
+                <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="Transparent" />
+            </Button.Resources>
+            <LucideIcon Kind="X" Size="20" />
+        </Button>
+    </Grid>
+</Window>
