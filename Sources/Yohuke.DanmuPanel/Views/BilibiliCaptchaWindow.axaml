@@ -1,0 +1,32 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Yohuke.DanmuPanel.Views.BilibiliCaptchaWindow"
+        Title="{Loc Key=UI.BilibiliCaptchaWindow.Title}"
+        Width="384"
+        Height="556"
+        MinWidth="372"
+        MinHeight="520"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+    <Grid Classes="rootSurface" RowDefinitions="*,Auto" Margin="12,8,12,12" RowSpacing="8">
+        <Border x:Name="BrowserHost" />
+        <StackPanel x:Name="ImageChallengePanel" IsVisible="False" Spacing="12"
+                    Width="220" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <Image x:Name="CaptchaImage" Height="68" Stretch="Uniform"
+                   AutomationProperties.Name="{Loc Key=UI.BilibiliCaptchaWindow.Image}" />
+            <TextBox x:Name="ImageCode" MaxLength="128"
+                     Watermark="{Loc Key=UI.BilibiliCaptchaWindow.ImageCode}"
+                     AutomationProperties.Name="{Loc Key=UI.BilibiliCaptchaWindow.ImageCode}" />
+            <Button x:Name="SubmitImageCode" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                    Classes="primaryButton" Content="{Loc Key=UI.BilibiliCaptchaWindow.Verify}"
+                    IsDefault="True" Click="SubmitImageCode_OnClick" />
+        </StackPanel>
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <TextBlock x:Name="CaptchaStatus" Text="{Loc Key=UI.BilibiliCaptchaWindow.Loading}"
+                       Classes="muted" TextWrapping="Wrap" VerticalAlignment="Center"
+                       AutomationProperties.LiveSetting="Polite" />
+            <Button Grid.Column="1" Content="{Loc Key=UI.BrowserCookieLoginWindow.Cancel}"
+                    IsCancel="True" Click="Cancel_OnClick" />
+        </Grid>
+    </Grid>
+</Window>

@@ -33,6 +33,7 @@
         <PackageReference Include="Dock.Avalonia.Themes.Fluent" Version="11.3.12.1" />
         <PackageReference Include="Dock.Model.Mvvm" Version="11.3.12.1" />
         <PackageReference Include="Lucide.Avalonia" Version="0.2.0" />
+        <PackageReference Include="Net.Codecrete.QrCodeGenerator" Version="3.2.1" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
 
 

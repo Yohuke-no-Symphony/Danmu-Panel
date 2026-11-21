@@ -12,7 +12,7 @@
             <StackPanel Spacing="10">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                     <TextBlock Text="{Loc Key=Settings.Accounts}" Classes="sectionTitle" VerticalAlignment="Center" />
-                    <Button x:Name="BrowserAddAccount" Command="{Binding AddAccountCommand}" Grid.Column="1">
+                    <Button x:Name="AddAccount" Command="{Binding AddAccountCommand}" Grid.Column="1">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <LucideIcon Kind="UserPlus" />
                             <TextBlock Text="{Loc Key=Panel.AddAccount}" />

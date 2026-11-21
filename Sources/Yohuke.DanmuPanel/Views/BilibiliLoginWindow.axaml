@@ -1,0 +1,116 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Yohuke.DanmuPanel.ViewModels.Settings"
+        x:Class="Yohuke.DanmuPanel.Views.BilibiliLoginWindow"
+        Width="424"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+    <Window.Styles>
+        <Style Selector="TextBox#SmsCodeInput /template/ TextBlock#PART_Watermark">
+            <Setter Property="Foreground" Value="{DynamicResource AppMutedTextBrush}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="Button#ResendSmsButton:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource AppMutedTextBrush}" />
+        </Style>
+    </Window.Styles>
+    <Grid Classes="rootSurface" RowDefinitions="Auto,Auto" RowSpacing="16" Margin="20,10,20,16">
+        <TabControl x:Name="LoginMethodTabs" SelectedIndex="0"
+                    Background="Transparent" Padding="0" HorizontalContentAlignment="Stretch"
+                    SelectionChanged="LoginMethodTabs_OnSelectionChanged">
+            <TabControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Rows="1" Columns="2" />
+                </ItemsPanelTemplate>
+            </TabControl.ItemsPanel>
+            <TabControl.Styles>
+                <Style Selector="TabItem">
+                    <Setter Property="FontSize" Value="{DynamicResource AppFontSizeCaption}" />
+                    <Setter Property="MinHeight" Value="34" />
+                    <Setter Property="HorizontalContentAlignment" Value="Center" />
+                    <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}" />
+                    <Setter Property="Padding" Value="0,0,0,3" />
+                </Style>
+                <Style Selector="TabItem:selected">
+                    <Setter Property="Foreground" Value="{DynamicResource AppPrimaryBrush}" />
+                </Style>
+                <Style Selector="TabItem /template/ Border#PART_SelectedPipe">
+                    <Setter Property="Background" Value="{DynamicResource AppPrimaryBrush}" />
+                    <Setter Property="Margin" Value="0" />
+                </Style>
+            </TabControl.Styles>
+            <TabItem Header="{Loc Key=UI.BilibiliLoginWindow.QrTab}">
+                <Grid x:Name="QrForm" x:DataType="vm:BilibiliQrLoginViewModel" MinHeight="266" Margin="0,14,0,0">
+                    <StackPanel Spacing="14" VerticalAlignment="Center">
+                        <Border Background="White" CornerRadius="12" Width="220" Height="220"
+                                HorizontalAlignment="Center"
+                                IsVisible="{Binding QrImage, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <Image Source="{Binding QrImage}" Width="208" Height="208"
+                                   RenderOptions.BitmapInterpolationMode="None"
+                                   AutomationProperties.Name="{Loc Key=UI.BilibiliLoginWindow.QrImage}" />
+                        </Border>
+                        <TextBlock Text="{Binding StatusText}" TextAlignment="Center" TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite" />
+                        <Button Classes="primaryButton" HorizontalAlignment="Center"
+                                Content="{Loc Key=UI.BilibiliLoginWindow.QrRefresh}" Command="{Binding RefreshQrCommand}"
+                                IsVisible="{Binding !RefreshQrCommand.IsRunning}" />
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+            <TabItem Header="{Loc Key=UI.BilibiliLoginWindow.SmsTab}">
+                <StackPanel x:Name="SmsForm" x:DataType="vm:BilibiliSmsLoginViewModel" Margin="0,14,0,0" Spacing="10">
+                    <StackPanel IsVisible="{Binding IsPhoneStep}" Spacing="14">
+                        <Grid ColumnDefinitions="86,*" ColumnSpacing="10">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{Loc Key=UI.BilibiliLoginWindow.SmsCountryCode}" Classes="muted" />
+                                <TextBox Text="{Binding CountryCode}" MaxLength="6" IsEnabled="{Binding !IsBusy}"
+                                         AutomationProperties.Name="{Loc Key=UI.BilibiliLoginWindow.SmsCountryCode}">
+                                    <TextBox.InnerLeftContent>
+                                        <TextBlock Text="+" Classes="muted" Margin="9,0,2,0" VerticalAlignment="Center" />
+                                    </TextBox.InnerLeftContent>
+                                </TextBox>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="4">
+                                <TextBlock Text="{Loc Key=UI.BilibiliLoginWindow.SmsPhone}" Classes="muted" />
+                                <TextBox x:Name="SmsPhoneInput" Text="{Binding Phone}" MaxLength="20" IsEnabled="{Binding !IsBusy}"
+                                         AutomationProperties.Name="{Loc Key=UI.BilibiliLoginWindow.SmsPhone}" />
+                            </StackPanel>
+                        </Grid>
+                        <Button Classes="primaryButton" HorizontalAlignment="Stretch"
+                                Content="{Binding RequestButtonText}" Command="{Binding RequestSmsCommand}" />
+                    </StackPanel>
+                    <Button Classes="primaryButton" HorizontalAlignment="Stretch"
+                            Content="{Loc Key=UI.BilibiliLoginWindow.SmsVerify}"
+                            IsVisible="{Binding IsChallengeStep}" Command="{Binding CompleteChallengeCommand}" />
+                    <StackPanel IsVisible="{Binding IsCodeStep}" Spacing="14">
+                        <TextBox x:Name="SmsCodeInput" Text="{Binding Code}" MaxLength="6" IsEnabled="{Binding !IsBusy}"
+                                 Watermark="{Loc Key=UI.BilibiliLoginWindow.SmsCode}"
+                                 AutomationProperties.Name="{Loc Key=UI.BilibiliLoginWindow.SmsCode}" />
+                        <Button Classes="primaryButton" IsDefault="True" HorizontalAlignment="Stretch"
+                                Content="{Loc Key=UI.BilibiliLoginWindow.SmsSignIn}" Command="{Binding CompleteSmsCommand}" />
+                    </StackPanel>
+                    <Button Classes="primaryButton" HorizontalAlignment="Stretch"
+                            Content="{Loc Key=UI.BilibiliLoginWindow.VerifyAccount}"
+                            IsVisible="{Binding VerificationUri, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            Click="VerifyAccount_OnClick" />
+                    <TextBlock Text="{Binding StatusText}" IsVisible="{Binding HasStatus}" TextWrapping="Wrap"
+                               AutomationProperties.LiveSetting="Polite" />
+                    <Grid ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding !IsPhoneStep}">
+                        <Button Background="Transparent" IsEnabled="{Binding !IsBusy}"
+                                Content="{Loc Key=UI.BilibiliLoginWindow.SmsChangePhone}" Command="{Binding ChangePhoneCommand}" />
+                        <Button x:Name="ResendSmsButton" Grid.Column="2" Background="Transparent" IsVisible="{Binding IsCodeStep}"
+                                Content="{Binding RequestButtonText}" Command="{Binding RequestSmsCommand}" />
+                    </Grid>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+            <Button Background="Transparent" Content="{Loc Key=Panel.BrowserLogin}" Click="OpenBrowser_OnClick" />
+            <Button Grid.Column="2" Background="Transparent" Content="{Loc Key=UI.BilibiliLoginWindow.Close}"
+                    IsCancel="True" Click="Cancel_OnClick" />
+        </Grid>
+    </Grid>
+</Window>

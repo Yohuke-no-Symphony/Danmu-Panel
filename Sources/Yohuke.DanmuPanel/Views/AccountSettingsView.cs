@@ -12,7 +12,7 @@ using Yohuke.DanmuPanel.Views.Settings;
 
 namespace Yohuke.DanmuPanel.Views;
 
-/// <summary>复用 B 站浏览器登录和 Cookie 验证，管理独立账号配置。</summary>
+/// <summary>管理独立的 B 站账号、登录和凭据校验。</summary>
 public sealed class AccountSettingsView : UserControl
 {
     private readonly AccountSettingsSurface surface = new();
@@ -22,6 +22,7 @@ public sealed class AccountSettingsView : UserControl
     private readonly CancellationTokenSource lifetime = new();
     private bool initialized;
     private bool closed;
+    private bool loginDialogOpen;
     private Exception? statusError;
 
     internal Task Initialization { get; private set; } = Task.CompletedTask;
@@ -37,7 +38,7 @@ public sealed class AccountSettingsView : UserControl
         Content = surface;
         this.runtime = runtime;
         this.accountSessions = accountSessions;
-        Model = new(() => BrowserLoginAsync(null), () => EditCookieAsync(null), Report);
+        Model = new(() => LoginAsync(null), () => EditCookieAsync(null), Report);
         surface.DataContext = Model;
         RefreshRows();
         AttachedToVisualTree += OnAttached;
@@ -140,7 +141,7 @@ public sealed class AccountSettingsView : UserControl
         {
             if (!rows.ContainsKey(account))
             {
-                var row = new AccountSettingsRowViewModel(account, () => BrowserLoginAsync(account), () => SetDefaultAsync(account),
+                var row = new AccountSettingsRowViewModel(account, () => LoginAsync(account), () => SetDefaultAsync(account),
                     () => SaveAndValidateAsync(account), () => DeleteAsync(account), () => EditCookieAsync(account),
                     () => EditCookieAsync(null), Report);
                 rows.Add(account, row);
@@ -214,24 +215,57 @@ public sealed class AccountSettingsView : UserControl
         await ValidateAsync(account);
     }
 
-    private async Task BrowserLoginAsync(BilibiliAccount? account)
+    private async Task LoginAsync(BilibiliAccount? account)
     {
-        if (account is not null)
-        {
-            rows[account].CommitEdits();
-        }
-        var dialog = new BrowserCookieLoginWindow(BrowserLoginPlatform.Bilibili);
-        var result = await dialog.ShowDialog<BrowserCookieLoginResult?>(Owner);
-        if (closed || result is null)
+        if (closed || loginDialogOpen || TopLevel.GetTopLevel(this) is not Window owner)
         {
             return;
         }
+
+        loginDialogOpen = true;
+        try
+        {
+            var dialog = new BilibiliLoginWindow(relogin: account is not null);
+            var cookie = await dialog.ShowDialog<string?>(owner);
+            if (closed || !owner.IsVisible)
+            {
+                return;
+            }
+
+            if (dialog.BrowserLoginRequested)
+            {
+                var browser = new BrowserCookieLoginWindow(BrowserLoginPlatform.Bilibili);
+                cookie = (await browser.ShowDialog<BrowserCookieLoginResult?>(owner))?.Cookie;
+            }
+
+            if (!closed && !string.IsNullOrWhiteSpace(cookie))
+            {
+                await ApplyLoginCookieAsync(account, cookie);
+            }
+        }
+        finally
+        {
+            loginDialogOpen = false;
+        }
+    }
+
+    private async Task ApplyLoginCookieAsync(BilibiliAccount? account, string cookie)
+    {
         if (account is null)
         {
             account = new() { Name = Localization.Get("Panel.NewAccount"), AutoNameOnLogin = true };
             runtime.Configuration.Accounts.Add(account);
         }
-        var captured = ApiCookieHelper.Parse(result.Cookie);
+        else if (rows.TryGetValue(account, out var row))
+        {
+            row.CommitEdits();
+        }
+        else
+        {
+            return;
+        }
+
+        var captured = ApiCookieHelper.Parse(cookie);
         var previous = ApiCookieHelper.Parse(account.Cookie);
         foreach (var deviceField in new[] { "buvid4", "buvid_fp" })
         {

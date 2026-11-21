@@ -41,8 +41,8 @@
                          Watermark="{Loc Key=Panel.Name}" AutomationProperties.Name="{Loc Key=Panel.Name}" />
             </Grid>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <Button x:Name="AccountBrowserLogin" Command="{Binding LoginCommand}" Classes="iconButton"
-                        ToolTip.Tip="{Loc Key=Panel.BrowserLogin}" AutomationProperties.Name="{Loc Key=Panel.BrowserLogin}">
+                <Button x:Name="AccountRelogin" Command="{Binding LoginCommand}" Classes="iconButton"
+                        ToolTip.Tip="{Loc Key=Panel.ReloginAccount}" AutomationProperties.Name="{Loc Key=Panel.ReloginAccount}">
                     <LucideIcon Kind="LogIn" />
                 </Button>
                 <RadioButton x:Name="DefaultAccountToggle" Command="{Binding SetDefaultCommand}" Classes="iconButton"

@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src https://*.geetest.com https://*.geetest.com.cn https://*.geevisit.com data: blob:;
+        script-src 'nonce-__NONCE__' https://*.geetest.com https://*.geetest.com.cn https://*.geevisit.com;
+        style-src 'unsafe-inline' https://*.geetest.com https://*.geetest.com.cn https://*.geevisit.com;
+        object-src 'none'; base-uri 'none'; form-action 'none'">
+    <style>
+        :root { color-scheme: light dark; font: 14px system-ui, sans-serif; }
+        body { margin: 0; display: grid; place-items: center; min-height: 100vh; }
+        #verify { font: inherit; padding: 8px 18px; }
+    </style>
+</head>
+<body>
+<button id="verify" type="button" disabled></button>
+<script nonce="__NONCE__">
+    const config = __CONFIG__;
+    const verifyButton = document.getElementById('verify');
+    verifyButton.textContent = config.verifyText;
+
+    let loadStatus = 'loading';
+    const send = (status, proof) => {
+        if (typeof window.invokeCSharpAction === 'function') {
+            window.invokeCSharpAction(JSON.stringify({ nonce: config.nonce, status, proof }));
+        }
+    };
+    window.reportCaptchaStatus = () => {
+        if (loadStatus !== 'loading') {
+            send(loadStatus);
+        }
+    };
+    const setLoadStatus = status => {
+        loadStatus = status;
+        window.reportCaptchaStatus();
+    };
+    const sdk = document.createElement('script');
+    sdk.src = config.v4
+        ? 'https://static.geetest.com/v4/gt4.js'
+        : 'https://static.geetest.com/static/tools/gt.js';
+    sdk.onerror = () => setLoadStatus('error');
+    sdk.onload = () => {
+        const initialize = config.v4 ? window.initGeetest4 : window.initGeetest;
+        if (typeof initialize !== 'function') {
+            setLoadStatus('error');
+            return;
+        }
+
+        const options = config.v4
+            ? { captchaId: config.gt, product: 'bind', language: config.lang4, protocol: 'https://' }
+            : { gt: config.gt, challenge: config.challenge, product: 'bind', lang: config.lang3,
+                offline: false, new_captcha: true, https: true };
+
+        try {
+            initialize(options, instance => {
+                instance.onReady(() => {
+                    verifyButton.disabled = false;
+                    setLoadStatus('ready');
+                });
+                instance.onError(() => setLoadStatus('error'));
+                instance.onClose?.(() => { verifyButton.disabled = false; });
+                instance.onSuccess(() => {
+                    const result = instance.getValidate();
+                    if (result) {
+                        send('verified', config.v4
+                            ? { lot_number: result.lot_number, captcha_output: result.captcha_output,
+                                pass_token: result.pass_token, gen_time: String(result.gen_time ?? '') }
+                            : { geetest_challenge: result.geetest_challenge,
+                                geetest_validate: result.geetest_validate, geetest_seccode: result.geetest_seccode });
+                    }
+                });
+                verifyButton.onclick = () => {
+                    verifyButton.disabled = true;
+                    if (config.v4) {
+                        instance.showCaptcha();
+                    } else {
+                        instance.verify();
+                    }
+                };
+            });
+        } catch {
+            setLoadStatus('error');
+        }
+    };
+    document.head.append(sdk);
+</script>
+</body>
+</html>
